@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useShireStore } from "@/lib/store";
-import { AuthShell } from "@/components/layout/auth-shell";
 import { JobDraftForm } from "@/components/jobs/job-draft-form";
 import { StakeDialog } from "@/components/stake/stake-dialog";
+import { PageHeader } from "@/components/shared/page-header";
 import type { Job } from "@/lib/types";
 import type { JobDraftValues } from "@/lib/schemas";
 
@@ -33,15 +33,14 @@ export default function NewJobPage() {
   }
 
   return (
-    <AuthShell back={{ href: "/recruiter/jobs", label: "My jobs" }}>
-      <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-        <h1 className="text-xl font-semibold tracking-tight">Post a new job</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Stake cUSD to activate the listing — no stake, no spam.
-        </p>
-        <div className="mt-6">
-          <JobDraftForm onSubmit={handleFormSubmit} />
-        </div>
+    <div className="space-y-6 p-4 sm:p-6">
+      <PageHeader
+        title="Post a new job"
+        description="Stake cUSD to activate the listing — no stake, no spam."
+      />
+
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <JobDraftForm onSubmit={handleFormSubmit} />
       </div>
 
       {draft && (
@@ -59,6 +58,6 @@ export default function NewJobPage() {
           onConfirm={handleStakeConfirm}
         />
       )}
-    </AuthShell>
+    </div>
   );
 }

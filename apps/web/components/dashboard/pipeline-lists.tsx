@@ -55,7 +55,7 @@ function ListCard({ title, items }: { title: string; items: LineItem[] }) {
 
 export function PipelineLists() {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="flex gap-4">
       <ListCard title="Candidate pipeline" items={candidatePipeline} />
       <ListCard title="Company actions" items={companyActions} />
     </div>
