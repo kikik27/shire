@@ -9,6 +9,7 @@ import { ActivityChart } from "@/components/dashboard/activity-chart";
 import { MatchDonut } from "@/components/dashboard/match-donut";
 import { PipelineOverview } from "@/components/dashboard/pipeline-overview";
 import { PipelineLists } from "@/components/dashboard/pipeline-lists";
+import { RecruiterRecommendations } from "@/components/dashboard/recommendation-list";
 
 export default function RecruiterPage() {
   return (
@@ -39,6 +40,8 @@ export default function RecruiterPage() {
         <PipelineOverview />
         <PipelineLists />
       </div>
+
+      <RecruiterRecommendations />
     </div>
   );
 }
