@@ -87,16 +87,20 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
     "file:./.data/shire-agent-knowledge.db";
   const agentKnowledgeAuthToken =
     input.SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN?.trim() || undefined;
-  const defaultChatModels = parseRequiredModelChain(input.SHIRE_MODEL_DEFAULT, [
-    "openrouter/nex-agi/nex-n2-pro:free",
-    "openrouter/openai/gpt-oss-20b:free",
-  ]);
+  const defaultChatModels = parseRequiredModelChain(
+    input.SHIRE_TEXT_MODEL ?? input.SHIRE_MODEL_DEFAULT,
+    ["MiniMax-M3"],
+  );
+  const textBaseUrl =
+    input.SHIRE_TEXT_BASE_URL?.trim() || "https://api.tokenrouter.com/v1";
   const defaultEmbeddingModel =
+    input.SHIRE_EMBEDDING_MODEL?.trim() ||
     input.SHIRE_EMBEDDING_MODEL_DEFAULT?.trim() ||
     "qwen/qwen3-embedding-8b";
   const defaultEmbeddingBaseUrl = normalizeBaseUrl(
-    input.SHIRE_EMBEDDING_BASE_URL_DEFAULT?.trim() ||
-      "https://openrouter.ai/api/v1",
+    input.SHIRE_EMBEDDING_BASE_URL?.trim() ||
+      input.SHIRE_EMBEDDING_BASE_URL_DEFAULT?.trim() ||
+      "https://api.tokenrouter.com/v1",
   );
 
   return {
@@ -122,6 +126,14 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
     autonomyMode: parseAutonomyMode(input.SHIRE_AUTONOMY_MODE),
     logLevel: input.SHIRE_LOG_LEVEL?.trim() || (nodeEnv === "development" ? "debug" : "info"),
     prettyLogs: parseBoolean(input.SHIRE_PRETTY_LOGS, nodeEnv !== "production"),
+    textModelProvider:
+      input.SHIRE_TEXT_PROVIDER?.trim() || "tokenrouter",
+    textModelBaseUrl: normalizeBaseUrl(textBaseUrl),
+    textModelApiKey:
+      input.SHIRE_TEXT_API_KEY?.trim() ||
+      input.TOKENROUTER_API_KEY?.trim() ||
+      input.OPENAI_API_KEY?.trim() ||
+      undefined,
     chatModelChains: {
       default: defaultChatModels,
       productQna: parseModelChain(input.SHIRE_MODEL_PRODUCT_QNA, defaultChatModels),
@@ -185,6 +197,13 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
           defaultEmbeddingBaseUrl,
       ),
     },
+    embeddingProvider:
+      input.SHIRE_EMBEDDING_PROVIDER?.trim() || "tokenrouter",
+    embeddingApiKey:
+      input.SHIRE_EMBEDDING_API_KEY?.trim() ||
+      input.TOKENROUTER_API_KEY?.trim() ||
+      input.OPENROUTER_API_KEY?.trim() ||
+      undefined,
     embeddingEnabled: parseBoolean(input.SHIRE_EMBEDDING_ENABLED, true),
     workingMemoryEnabled: parseBoolean(
       input.SHIRE_WORKING_MEMORY_ENABLED,
@@ -211,10 +230,10 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
     ),
     securityGuardEnabled: parseBoolean(input.SHIRE_SECURITY_GUARD_ENABLED, true),
     securityGuardMode: parseSecurityGuardMode(input.SHIRE_SECURITY_GUARD_MODE),
-    securityGuardModels: parseModelChain(input.SHIRE_SECURITY_GUARD_MODELS, [
-      "openrouter/nex-agi/nex-n2-pro:free",
-      "openrouter/openai/gpt-oss-20b:free",
-    ]),
+    securityGuardModels: parseModelChain(
+      input.SHIRE_SECURITY_GUARD_MODELS,
+      defaultChatModels,
+    ),
     securityGuardThreshold: parseUnitInterval(
       input.SHIRE_SECURITY_GUARD_THRESHOLD,
       0.85,

@@ -17,10 +17,7 @@ test("defaults autonomy mode to semi-autonomous", () => {
 test("defaults capability model, memory, and knowledge config", () => {
   const env = createEnv({});
 
-  assert.deepEqual(env.chatModelChains.default, [
-    "openrouter/nex-agi/nex-n2-pro:free",
-    "openrouter/openai/gpt-oss-20b:free",
-  ]);
+  assert.deepEqual(env.chatModelChains.default, ["MiniMax-M3"]);
   assert.deepEqual(
     env.chatModelChains.productQna,
     env.chatModelChains.default,
@@ -39,15 +36,20 @@ test("defaults capability model, memory, and knowledge config", () => {
     env.embeddingModels.repositoryKnowledge,
     "qwen/qwen3-embedding-8b",
   );
-  assert.equal(env.embeddingBaseUrls.default, "https://openrouter.ai/api/v1");
-  assert.equal(env.embeddingBaseUrls.memory, "https://openrouter.ai/api/v1");
+  assert.equal(env.textModelProvider, "tokenrouter");
+  assert.equal(env.textModelBaseUrl, "https://api.tokenrouter.com/v1");
+  assert.equal(env.textModelApiKey, undefined);
+  assert.equal(env.embeddingProvider, "tokenrouter");
+  assert.equal(env.embeddingApiKey, undefined);
+  assert.equal(env.embeddingBaseUrls.default, "https://api.tokenrouter.com/v1");
+  assert.equal(env.embeddingBaseUrls.memory, "https://api.tokenrouter.com/v1");
   assert.equal(
     env.embeddingBaseUrls.productKnowledge,
-    "https://openrouter.ai/api/v1",
+    "https://api.tokenrouter.com/v1",
   );
   assert.equal(
     env.embeddingBaseUrls.repositoryKnowledge,
-    "https://openrouter.ai/api/v1",
+    "https://api.tokenrouter.com/v1",
   );
   assert.equal(env.embeddingEnabled, true);
   assert.equal(env.workingMemoryEnabled, false);
@@ -78,8 +80,7 @@ test("defaults bounded chat security config", () => {
   assert.equal(env.securityGuardEnabled, true);
   assert.equal(env.securityGuardMode, "suspicious-only");
   assert.deepEqual(env.securityGuardModels, [
-    "openrouter/nex-agi/nex-n2-pro:free",
-    "openrouter/openai/gpt-oss-20b:free",
+    "MiniMax-M3",
   ]);
   assert.equal(env.securityGuardThreshold, 0.85);
   assert.equal(env.outputMaxCharacters, 12_000);
@@ -98,32 +99,43 @@ test("defaults durable job and CV upload config", () => {
 
 test("parses chat model capabilities from env", () => {
   const env = createEnv({
-    SHIRE_MODEL_DEFAULT: "openrouter/default-a,openrouter/default-b",
+    SHIRE_TEXT_MODEL: "tokenrouter/default-a,tokenrouter/default-b",
     SHIRE_MODEL_PRODUCT_QNA: "openrouter/product",
     SHIRE_MODEL_DISPUTE_SUMMARY: "openrouter/dispute",
+    SHIRE_TEXT_API_KEY: "text-key",
   });
 
   assert.deepEqual(env.chatModelChains.default, [
-    "openrouter/default-a",
-    "openrouter/default-b",
+    "tokenrouter/default-a",
+    "tokenrouter/default-b",
   ]);
+  assert.equal(env.textModelApiKey, "text-key");
   assert.deepEqual(env.chatModelChains.productQna, ["openrouter/product"]);
   assert.deepEqual(env.chatModelChains.disputeSummary, [
     "openrouter/dispute",
   ]);
   assert.deepEqual(env.chatModelChains.cvNormalization, [
-    "openrouter/default-a",
-    "openrouter/default-b",
+    "tokenrouter/default-a",
+    "tokenrouter/default-b",
   ]);
+});
+
+test("keeps SHIRE_MODEL_DEFAULT as a legacy text model alias", () => {
+  const env = createEnv({
+    SHIRE_MODEL_DEFAULT: "legacy/default",
+  });
+
+  assert.deepEqual(env.chatModelChains.default, ["legacy/default"]);
 });
 
 test("parses embedding capabilities from env", () => {
   const env = createEnv({
-    SHIRE_MODEL_DEFAULT: "openrouter/default",
-    SHIRE_EMBEDDING_MODEL_DEFAULT: "embedding/default",
+    SHIRE_TEXT_MODEL: "tokenrouter/default",
+    SHIRE_EMBEDDING_MODEL: "embedding/default",
     SHIRE_EMBEDDING_MODEL_MEMORY: "embedding/memory",
-    SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://example.test/v1/",
+    SHIRE_EMBEDDING_BASE_URL: "https://example.test/v1/",
     SHIRE_EMBEDDING_BASE_URL_PRODUCT_KNOWLEDGE: "https://product.test/v1/",
+    SHIRE_EMBEDDING_API_KEY: "embedding-key",
   });
 
   assert.equal(env.embeddingModels.default, "embedding/default");
@@ -138,6 +150,7 @@ test("parses embedding capabilities from env", () => {
     env.embeddingBaseUrls.repositoryKnowledge,
     "https://example.test/v1",
   );
+  assert.equal(env.embeddingApiKey, "embedding-key");
 });
 
 test("parses persistent libsql storage config from env", () => {

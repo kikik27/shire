@@ -6,6 +6,12 @@ import { env } from "../env";
 (globalThis as { AI_SDK_LOG_WARNINGS?: boolean }).AI_SDK_LOG_WARNINGS = false;
 
 type RuntimeEnv = typeof env;
+type EmbeddingRuntimeConfig = Pick<
+  RuntimeEnv,
+  "embeddingModels" | "embeddingBaseUrls" | "embeddingProvider"
+> & {
+  embeddingApiKey?: string;
+};
 
 export type EmbeddingCapability =
   | "memory"
@@ -14,31 +20,38 @@ export type EmbeddingCapability =
 
 export interface EmbeddingModelConfig {
   modelId?: string;
+  providerId?: string;
   baseUrl?: string;
   apiKey?: string;
 }
 
 export function resolveEmbeddingConfig(
   capability: EmbeddingCapability,
-  runtime: Pick<RuntimeEnv, "embeddingModels" | "embeddingBaseUrls"> = env,
+  runtime: EmbeddingRuntimeConfig = env,
 ) {
   if (capability === "memory") {
     return {
       modelId: runtime.embeddingModels.memory,
+      providerId: runtime.embeddingProvider,
       baseUrl: runtime.embeddingBaseUrls.memory,
+      apiKey: runtime.embeddingApiKey,
     };
   }
 
   if (capability === "product-knowledge") {
     return {
       modelId: runtime.embeddingModels.productKnowledge,
+      providerId: runtime.embeddingProvider,
       baseUrl: runtime.embeddingBaseUrls.productKnowledge,
+      apiKey: runtime.embeddingApiKey,
     };
   }
 
   return {
     modelId: runtime.embeddingModels.repositoryKnowledge,
+    providerId: runtime.embeddingProvider,
     baseUrl: runtime.embeddingBaseUrls.repositoryKnowledge,
+    apiKey: runtime.embeddingApiKey,
   };
 }
 
@@ -46,16 +59,20 @@ export function createEmbeddingModel(
   config: EmbeddingModelConfig = {},
 ) {
   return new ModelRouterEmbeddingModel({
-    providerId: "openrouter",
+    providerId: config.providerId ?? env.embeddingProvider,
     modelId: config.modelId ?? env.embeddingModels.default,
     url: config.baseUrl ?? env.embeddingBaseUrls.default,
-    apiKey: config.apiKey ?? process.env.OPENROUTER_API_KEY,
+    apiKey:
+      config.apiKey ??
+      env.embeddingApiKey ??
+      process.env.TOKENROUTER_API_KEY ??
+      process.env.OPENROUTER_API_KEY,
   });
 }
 
 export function createEmbeddingModelFor(
   capability: EmbeddingCapability,
-  runtime: Pick<RuntimeEnv, "embeddingModels" | "embeddingBaseUrls"> = env,
+  runtime: EmbeddingRuntimeConfig = env,
 ) {
   return createEmbeddingModel(resolveEmbeddingConfig(capability, runtime));
 }

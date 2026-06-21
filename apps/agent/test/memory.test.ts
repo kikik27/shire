@@ -77,7 +77,7 @@ test("agent memory config includes vector recall and working memory", () => {
   assert.equal(config.options.generateTitle, false);
   assert.equal(typeof config.embedder, "object");
   assert.equal(typeof config.embedder.doEmbed, "function");
-  assert.equal(config.embedder.provider, "openrouter");
+  assert.equal(config.embedder.provider, "tokenrouter");
   assert.equal(config.embedder.modelId, "qwen/qwen3-embedding-8b");
 
   const aliasConfig = createAgentMemoryConfig({
@@ -88,7 +88,7 @@ test("agent memory config includes vector recall and working memory", () => {
   assert.ok(aliasConfig.storage instanceof LibSQLStore);
   assert.ok(aliasConfig.vector instanceof LibSQLVector);
   assert.equal(aliasConfig.options.generateTitle, config.options.generateTitle);
-  assert.equal(aliasConfig.embedder.provider, "openrouter");
+  assert.equal(aliasConfig.embedder.provider, "tokenrouter");
   assert.equal(aliasConfig.embedder.modelId, "qwen/qwen3-embedding-8b");
 });
 

@@ -16,6 +16,8 @@ export interface AgentMemoryRuntimeConfig {
   agentKnowledgeIndex: string;
   embeddingModels: typeof env.embeddingModels;
   embeddingBaseUrls: typeof env.embeddingBaseUrls;
+  embeddingProvider: typeof env.embeddingProvider;
+  embeddingApiKey?: string;
   embeddingEnabled: boolean;
   workingMemoryEnabled: boolean;
 }
@@ -95,6 +97,8 @@ function normalizeAgentMemoryRuntime(
       runtime.agentKnowledgeIndex?.trim() || env.agentKnowledgeIndex,
     embeddingModels: runtime.embeddingModels ?? env.embeddingModels,
     embeddingBaseUrls: runtime.embeddingBaseUrls ?? env.embeddingBaseUrls,
+    embeddingProvider: runtime.embeddingProvider ?? env.embeddingProvider,
+    embeddingApiKey: runtime.embeddingApiKey ?? env.embeddingApiKey,
     embeddingEnabled:
       runtime.embeddingEnabled ?? env.embeddingEnabled,
     workingMemoryEnabled:

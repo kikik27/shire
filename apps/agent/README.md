@@ -12,9 +12,23 @@ Background orchestration service for Shire.
 
 ## Capability model configuration
 
-Chat model chains are configured directly per capability:
+Daily model configuration is intentionally small:
 
-- `SHIRE_MODEL_DEFAULT`: fallback chain used by any unset capability
+```env
+SHIRE_TEXT_PROVIDER=tokenrouter
+SHIRE_TEXT_MODEL=MiniMax-M3
+SHIRE_TEXT_BASE_URL=https://api.tokenrouter.com/v1
+SHIRE_TEXT_API_KEY=...
+
+SHIRE_EMBEDDING_PROVIDER=tokenrouter
+SHIRE_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
+SHIRE_EMBEDDING_BASE_URL=https://api.tokenrouter.com/v1
+SHIRE_EMBEDDING_API_KEY=...
+```
+
+All chat capabilities use `SHIRE_TEXT_MODEL` unless an advanced capability
+override is configured. Comma-separated fallback chains are still supported:
+
 - `SHIRE_MODEL_PRODUCT_QNA`: public product assistant on the landing page
 - `SHIRE_MODEL_ROLE_AWARE_CHAT`: authenticated candidate/recruiter chat
 - `SHIRE_MODEL_CV_NORMALIZATION`: CV parsing and profile normalization
@@ -26,24 +40,20 @@ Chat model chains are configured directly per capability:
 - `SHIRE_MODEL_DISPUTE_SUMMARY`: dispute evidence summaries
 - `SHIRE_MODEL_SECURITY_GUARD`: LLM-backed security guard checks
 
-Embedding models are configured per retrieval surface:
+Embedding-specific overrides are also optional:
 
-- `SHIRE_EMBEDDING_MODEL_DEFAULT`
 - `SHIRE_EMBEDDING_MODEL_MEMORY`
 - `SHIRE_EMBEDDING_MODEL_PRODUCT_KNOWLEDGE`
 - `SHIRE_EMBEDDING_MODEL_REPOSITORY_KNOWLEDGE`
-- `SHIRE_EMBEDDING_BASE_URL_DEFAULT`
 - `SHIRE_EMBEDDING_BASE_URL_MEMORY`
 - `SHIRE_EMBEDDING_BASE_URL_PRODUCT_KNOWLEDGE`
 - `SHIRE_EMBEDDING_BASE_URL_REPOSITORY_KNOWLEDGE`
 - `SHIRE_EMBEDDING_ENABLED`: enable semantic memory and vector retrieval
 - `SHIRE_WORKING_MEMORY_ENABLED`: enable tool-based persistent working memory
 
-Chat and embeddings use `OPENROUTER_API_KEY`. Embeddings default to
-`qwen/qwen3-embedding-8b` through OpenRouter's embeddings endpoint. Working
-memory remains disabled because OpenRouter's free chat router may not select
-models that support tool calls; recent conversation history and semantic recall
-remain enabled.
+`SHIRE_TEXT_API_KEY` and `SHIRE_EMBEDDING_API_KEY` default to
+`TOKENROUTER_API_KEY` when unset. Working memory remains disabled by default;
+recent conversation history and semantic recall remain enabled.
 
 Memory and repository knowledge use libSQL URLs. Local development defaults to
 `file:` databases under `.data`; production should use remote libSQL/Turso URLs
@@ -67,11 +77,9 @@ If `SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL` is omitted, it defaults to
 
 ## Runtime policy
 
-All chat capabilities default to verified, explicit OpenRouter free models
-instead of the dynamic free router. This avoids transient routing to broken
-provider endpoints. Override individual capability env values with
-comma-separated fallback chains when a capability needs stronger or more
-reliable models.
+All chat capabilities default to the configured text model. Override individual
+capability env values with comma-separated fallback chains only when a
+capability needs a different model.
 
 CV extraction produces a Zod-validated draft. Embedding is a separate
 TokenRouter request resolved by Mastra over canonical profile search text. Raw
@@ -135,8 +143,8 @@ npm run job:cv-parse --workspace=@shire/agent
 ```
 
 This command now uses the real CV processor. It requires a valid
-`OPENROUTER_API_KEY` and fails instead of reporting fixture usage when the LLM
-or embedding provider is unavailable.
+`SHIRE_TEXT_API_KEY` or `TOKENROUTER_API_KEY` and fails instead of reporting
+fixture usage when the LLM or embedding provider is unavailable.
 
 The live worker test is opt-in:
 

@@ -1,4 +1,3 @@
-process.env.OPENROUTER_API_KEY ??= "test-openrouter-api-key";
 process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
 
 await Promise.all([

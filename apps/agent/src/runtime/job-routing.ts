@@ -1,5 +1,8 @@
 import type { ChatModelCapability } from "./model-policy";
-import { resolveModelChain } from "./model-router";
+import {
+  describeModelForTelemetry,
+  resolveModelChain,
+} from "./model-router";
 
 export const jobCapabilities = {
   "cv-parse": "cv-normalization",
@@ -18,7 +21,7 @@ export function createJobRouting(
   const routing = {
     capability,
     attemptedModels: resolveModelChain({ capability }).map(
-      (entry) => entry.model,
+      (entry) => describeModelForTelemetry(entry.model),
     ),
     ...(escalationReason ? { escalationReason } : {}),
   };

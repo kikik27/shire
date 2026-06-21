@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 process.env.OPENAI_API_KEY ??= "test-openai-api-key";
-process.env.OPENROUTER_API_KEY ??= "test-openrouter-api-key";
+process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
 
 const {
   chatRouteVersion,
@@ -16,7 +16,7 @@ test("exports the role-aware chat agent", () => {
   assert.equal(roleAwareChatAgent.name, "Role-Aware Chat Agent");
 });
 
-test("role-aware chat does not expose tools to free OpenRouter models", async () => {
+test("role-aware chat does not expose tools to the configured text model", async () => {
   assert.deepEqual(await roleAwareChatAgent.listTools(), {});
 });
 
