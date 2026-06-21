@@ -1,5 +1,6 @@
 import {
   boolean,
+  customType,
   integer,
   jsonb,
   numeric,
@@ -10,6 +11,21 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import {
+  PROFILE_STATUSES,
+  RECOMMENDATION_STATUSES,
+  RECOMMENDATION_TYPES,
+} from "@shire/shared";
+
+// Postgres bytea column. drizzle-orm has no built-in bytea builder in this
+// version, so define one via customType. Used only for the diagnostic
+// candidate embedding cache.
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const userTypeEnum = pgEnum("user_type", ["USER", "ADMIN"]);
 export const userModeEnum = pgEnum("user_mode", [
@@ -41,6 +57,15 @@ export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "PARTIAL",
 ]);
 
+// Matching enums — sourced from @shire/shared so both apps agree on the values.
+export const profileStatusEnum = pgEnum("profile_status", [...PROFILE_STATUSES]);
+export const recommendationTypeEnum = pgEnum("recommendation_type", [
+  ...RECOMMENDATION_TYPES,
+]);
+export const recommendationStatusEnum = pgEnum("recommendation_status", [
+  ...RECOMMENDATION_STATUSES,
+]);
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -69,6 +94,14 @@ export const candidateProfiles = pgTable("candidate_profiles", {
     .$type<Record<string, unknown>>()
     .default({})
     .notNull(),
+  // Matching eligibility gate. The matching hard-filter requires CONFIRMED
+  // before a candidate participates in job/talent matching.
+  profileStatus: profileStatusEnum("profile_status").default("DRAFT").notNull(),
+  // Diagnostic cache of the embedding the agent computed for retrieval. The
+  // authoritative vector index lives in the agent's libSQL store; this column
+  // mirrors it for inspection/debugging only.
+  embeddingText: text("embedding_text"),
+  embedding: bytea("embedding"),
   ...timestamps,
 }).enableRLS();
 
@@ -147,3 +180,45 @@ export const agentRuns = pgTable("agent_runs", {
   latencyMs: integer("latency_ms"),
   ...timestamps,
 }).enableRLS();
+
+/**
+ * Persisted matching recommendations. Written by apps/agent after the
+ * Filter → Rule Score → Rerank pipeline; read by apps/web dashboards.
+ *
+ * A recommendation is unique per (candidate, job, type): re-running matching
+ * upserts the row instead of duplicating. The `recommendedAction` column stores
+ * the MatchingOutput action discriminator (SUGGEST_APPLY / SUGGEST_INVITE /
+ * SAVE_ONLY / IGNORE); rows are only persisted when action != IGNORE.
+ */
+export const recommendations = pgTable(
+  "recommendations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    type: recommendationTypeEnum("type").notNull(),
+    candidateUserId: uuid("candidate_user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    recruiterUserId: uuid("recruiter_user_id").references(() => appUsers.id, {
+      onDelete: "cascade",
+    }),
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+    matchScore: integer("match_score").default(0).notNull(),
+    confidence: numeric("confidence", { precision: 3, scale: 2 }),
+    reasons: jsonb("reasons").$type<string[]>().default([]).notNull(),
+    missingRequirements: jsonb("missing_requirements")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+    recommendedAction: text("recommended_action").notNull(),
+    status: recommendationStatusEnum("status").default("NEW").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("recommendations_candidate_job_type_unique").on(
+      table.candidateUserId,
+      table.jobId,
+      table.type,
+    ),
+  ],
+).enableRLS();
