@@ -14,19 +14,41 @@ test("defaults autonomy mode to semi-autonomous", () => {
   assert.equal("tokenRouterApiKey" in env, false);
 });
 
-test("defaults cost-aware model, memory, and knowledge config", () => {
+test("defaults capability model, memory, and knowledge config", () => {
   const env = createEnv({});
 
-  assert.deepEqual(env.modelChains.cheap, [
+  assert.deepEqual(env.chatModelChains.default, [
     "openrouter/nex-agi/nex-n2-pro:free",
     "openrouter/openai/gpt-oss-20b:free",
   ]);
-  assert.deepEqual(env.modelChains.heavy, [
-    "openrouter/openai/gpt-oss-20b:free",
-    "openrouter/nex-agi/nex-n2-pro:free",
-  ]);
-  assert.equal(env.embeddingModel, "qwen/qwen3-embedding-8b");
-  assert.equal(env.embeddingBaseUrl, "https://openrouter.ai/api/v1");
+  assert.deepEqual(
+    env.chatModelChains.productQna,
+    env.chatModelChains.default,
+  );
+  assert.deepEqual(
+    env.chatModelChains.disputeSummary,
+    env.chatModelChains.default,
+  );
+  assert.equal(env.embeddingModels.default, "qwen/qwen3-embedding-8b");
+  assert.equal(env.embeddingModels.memory, "qwen/qwen3-embedding-8b");
+  assert.equal(
+    env.embeddingModels.productKnowledge,
+    "qwen/qwen3-embedding-8b",
+  );
+  assert.equal(
+    env.embeddingModels.repositoryKnowledge,
+    "qwen/qwen3-embedding-8b",
+  );
+  assert.equal(env.embeddingBaseUrls.default, "https://openrouter.ai/api/v1");
+  assert.equal(env.embeddingBaseUrls.memory, "https://openrouter.ai/api/v1");
+  assert.equal(
+    env.embeddingBaseUrls.productKnowledge,
+    "https://openrouter.ai/api/v1",
+  );
+  assert.equal(
+    env.embeddingBaseUrls.repositoryKnowledge,
+    "https://openrouter.ai/api/v1",
+  );
   assert.equal(env.embeddingEnabled, true);
   assert.equal(env.workingMemoryEnabled, false);
   assert.equal(env.agentMemoryUrl, "file:./.data/shire-agent-memory.db");
@@ -67,16 +89,48 @@ test("defaults durable job and CV upload config", () => {
   assert.equal(env.cvMaxFileBytes, 5 * 1024 * 1024);
 });
 
-test("accepts comma-separated model chain overrides", () => {
+test("parses chat model capabilities from env", () => {
   const env = createEnv({
-    SHIRE_MODEL_CHEAP:
-      "openrouter/qwen/qwen3-4b:free,openrouter/free",
+    SHIRE_MODEL_DEFAULT: "openrouter/default-a,openrouter/default-b",
+    SHIRE_MODEL_PRODUCT_QNA: "openrouter/product",
+    SHIRE_MODEL_DISPUTE_SUMMARY: "openrouter/dispute",
   });
 
-  assert.deepEqual(env.modelChains.cheap, [
-    "openrouter/qwen/qwen3-4b:free",
-    "openrouter/free",
+  assert.deepEqual(env.chatModelChains.default, [
+    "openrouter/default-a",
+    "openrouter/default-b",
   ]);
+  assert.deepEqual(env.chatModelChains.productQna, ["openrouter/product"]);
+  assert.deepEqual(env.chatModelChains.disputeSummary, [
+    "openrouter/dispute",
+  ]);
+  assert.deepEqual(env.chatModelChains.cvNormalization, [
+    "openrouter/default-a",
+    "openrouter/default-b",
+  ]);
+});
+
+test("parses embedding capabilities from env", () => {
+  const env = createEnv({
+    SHIRE_MODEL_DEFAULT: "openrouter/default",
+    SHIRE_EMBEDDING_MODEL_DEFAULT: "embedding/default",
+    SHIRE_EMBEDDING_MODEL_MEMORY: "embedding/memory",
+    SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://example.test/v1/",
+    SHIRE_EMBEDDING_BASE_URL_PRODUCT_KNOWLEDGE: "https://product.test/v1/",
+  });
+
+  assert.equal(env.embeddingModels.default, "embedding/default");
+  assert.equal(env.embeddingModels.memory, "embedding/memory");
+  assert.equal(env.embeddingModels.productKnowledge, "embedding/default");
+  assert.equal(env.embeddingBaseUrls.default, "https://example.test/v1");
+  assert.equal(
+    env.embeddingBaseUrls.productKnowledge,
+    "https://product.test/v1",
+  );
+  assert.equal(
+    env.embeddingBaseUrls.repositoryKnowledge,
+    "https://example.test/v1",
+  );
 });
 
 test("parses a valid autonomy mode from SHIRE_AUTONOMY_MODE", () => {
@@ -94,10 +148,10 @@ test("parses custom agent config from environment variables", () => {
     NODE_ENV: "production",
     SHIRE_LOG_LEVEL: "warn",
     SHIRE_PRETTY_LOGS: "false",
-    SHIRE_MODEL_HEAVY: "openai/gpt-5.1",
+    SHIRE_MODEL_DISPUTE_SUMMARY: "openai/gpt-5.1",
     SHIRE_EMBEDDING_ENABLED: "true",
     SHIRE_WORKING_MEMORY_ENABLED: "true",
-    SHIRE_EMBEDDING_BASE_URL: "https://embedding.example/v1/",
+    SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://embedding.example/v1/",
     SHIRE_WORKER_ENABLED: "false",
     SHIRE_LIVE_LLM_TESTS: "true",
     REDIS_URL: "rediss://redis.example:6379",
@@ -110,10 +164,10 @@ test("parses custom agent config from environment variables", () => {
 
   assert.equal(env.logLevel, "warn");
   assert.equal(env.prettyLogs, false);
-  assert.deepEqual(env.modelChains.heavy, ["openai/gpt-5.1"]);
+  assert.deepEqual(env.chatModelChains.disputeSummary, ["openai/gpt-5.1"]);
   assert.equal(env.embeddingEnabled, true);
   assert.equal(env.workingMemoryEnabled, true);
-  assert.equal(env.embeddingBaseUrl, "https://embedding.example/v1");
+  assert.equal(env.embeddingBaseUrls.default, "https://embedding.example/v1");
   assert.equal(env.workerEnabled, false);
   assert.equal(env.liveLlmTestsEnabled, true);
   assert.equal(env.redisUrl, "rediss://redis.example:6379");

@@ -27,6 +27,13 @@ function parseModelChain(value: string | undefined, defaults: readonly string[])
   return models?.length ? models : [...defaults];
 }
 
+function parseRequiredModelChain(
+  value: string | undefined,
+  defaults: readonly string[],
+) {
+  return parseModelChain(value, defaults);
+}
+
 function parseUnitInterval(value: string | undefined, fallback: number) {
   if (value === undefined || value.trim() === "") {
     return fallback;
@@ -73,6 +80,17 @@ function normalizeBaseUrl(value: string) {
 
 export function createEnv(input: NodeJS.ProcessEnv = process.env) {
   const nodeEnv = input.NODE_ENV ?? "development";
+  const defaultChatModels = parseRequiredModelChain(input.SHIRE_MODEL_DEFAULT, [
+    "openrouter/nex-agi/nex-n2-pro:free",
+    "openrouter/openai/gpt-oss-20b:free",
+  ]);
+  const defaultEmbeddingModel =
+    input.SHIRE_EMBEDDING_MODEL_DEFAULT?.trim() ||
+    "qwen/qwen3-embedding-8b";
+  const defaultEmbeddingBaseUrl = normalizeBaseUrl(
+    input.SHIRE_EMBEDDING_BASE_URL_DEFAULT?.trim() ||
+      "https://openrouter.ai/api/v1",
+  );
 
   return {
     nodeEnv,
@@ -89,23 +107,69 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
     autonomyMode: parseAutonomyMode(input.SHIRE_AUTONOMY_MODE),
     logLevel: input.SHIRE_LOG_LEVEL?.trim() || (nodeEnv === "development" ? "debug" : "info"),
     prettyLogs: parseBoolean(input.SHIRE_PRETTY_LOGS, nodeEnv !== "production"),
-    modelChains: {
-      cheap: parseModelChain(input.SHIRE_MODEL_CHEAP, [
-        "openrouter/nex-agi/nex-n2-pro:free",
-        "openrouter/openai/gpt-oss-20b:free",
-      ]),
-      balanced: parseModelChain(input.SHIRE_MODEL_BALANCED, [
-        "openrouter/nex-agi/nex-n2-pro:free",
-        "openrouter/openai/gpt-oss-20b:free",
-      ]),
-      heavy: parseModelChain(input.SHIRE_MODEL_HEAVY, [
-        "openrouter/openai/gpt-oss-20b:free",
-        "openrouter/nex-agi/nex-n2-pro:free",
-      ]),
+    chatModelChains: {
+      default: defaultChatModels,
+      productQna: parseModelChain(input.SHIRE_MODEL_PRODUCT_QNA, defaultChatModels),
+      roleAwareChat: parseModelChain(
+        input.SHIRE_MODEL_ROLE_AWARE_CHAT,
+        defaultChatModels,
+      ),
+      cvNormalization: parseModelChain(
+        input.SHIRE_MODEL_CV_NORMALIZATION,
+        defaultChatModels,
+      ),
+      knowledgeSynthesis: parseModelChain(
+        input.SHIRE_MODEL_KNOWLEDGE_SYNTHESIS,
+        defaultChatModels,
+      ),
+      jobRerank: parseModelChain(input.SHIRE_MODEL_JOB_RERANK, defaultChatModels),
+      talentRerank: parseModelChain(
+        input.SHIRE_MODEL_TALENT_RERANK,
+        defaultChatModels,
+      ),
+      recommendationExplanation: parseModelChain(
+        input.SHIRE_MODEL_RECOMMENDATION_EXPLANATION,
+        defaultChatModels,
+      ),
+      workflowSummary: parseModelChain(
+        input.SHIRE_MODEL_WORKFLOW_SUMMARY,
+        defaultChatModels,
+      ),
+      disputeSummary: parseModelChain(
+        input.SHIRE_MODEL_DISPUTE_SUMMARY,
+        defaultChatModels,
+      ),
+      securityGuard: parseModelChain(
+        input.SHIRE_MODEL_SECURITY_GUARD,
+        defaultChatModels,
+      ),
     },
-    embeddingModel:
-      input.SHIRE_EMBEDDING_MODEL?.trim() ||
-      "qwen/qwen3-embedding-8b",
+    embeddingModels: {
+      default: defaultEmbeddingModel,
+      memory:
+        input.SHIRE_EMBEDDING_MODEL_MEMORY?.trim() || defaultEmbeddingModel,
+      productKnowledge:
+        input.SHIRE_EMBEDDING_MODEL_PRODUCT_KNOWLEDGE?.trim() ||
+        defaultEmbeddingModel,
+      repositoryKnowledge:
+        input.SHIRE_EMBEDDING_MODEL_REPOSITORY_KNOWLEDGE?.trim() ||
+        defaultEmbeddingModel,
+    },
+    embeddingBaseUrls: {
+      default: defaultEmbeddingBaseUrl,
+      memory: normalizeBaseUrl(
+        input.SHIRE_EMBEDDING_BASE_URL_MEMORY?.trim() ||
+          defaultEmbeddingBaseUrl,
+      ),
+      productKnowledge: normalizeBaseUrl(
+        input.SHIRE_EMBEDDING_BASE_URL_PRODUCT_KNOWLEDGE?.trim() ||
+          defaultEmbeddingBaseUrl,
+      ),
+      repositoryKnowledge: normalizeBaseUrl(
+        input.SHIRE_EMBEDDING_BASE_URL_REPOSITORY_KNOWLEDGE?.trim() ||
+          defaultEmbeddingBaseUrl,
+      ),
+    },
     embeddingEnabled: parseBoolean(input.SHIRE_EMBEDDING_ENABLED, true),
     workingMemoryEnabled: parseBoolean(
       input.SHIRE_WORKING_MEMORY_ENABLED,
@@ -143,10 +207,6 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
     outputMaxCharacters: parsePositiveInteger(
       input.SHIRE_OUTPUT_MAX_CHARACTERS,
       12_000,
-    ),
-    embeddingBaseUrl: normalizeBaseUrl(
-      input.SHIRE_EMBEDDING_BASE_URL?.trim() ||
-        "https://openrouter.ai/api/v1",
     ),
     agentMemoryUrl:
       input.SHIRE_AGENT_MEMORY_URL?.trim() || "file:./.data/shire-agent-memory.db",
