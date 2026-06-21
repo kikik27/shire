@@ -20,10 +20,11 @@ SHIRE_TEXT_MODEL=MiniMax-M3
 SHIRE_TEXT_BASE_URL=https://api.tokenrouter.com/v1
 SHIRE_TEXT_API_KEY=...
 
-SHIRE_EMBEDDING_PROVIDER=tokenrouter
-SHIRE_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
-SHIRE_EMBEDDING_BASE_URL=https://api.tokenrouter.com/v1
+SHIRE_EMBEDDING_PROVIDER=openai
+SHIRE_EMBEDDING_MODEL=text-embedding-3-small
+SHIRE_EMBEDDING_BASE_URL=https://api.openai.com/v1
 SHIRE_EMBEDDING_API_KEY=...
+SHIRE_EMBEDDING_ENABLED=true
 ```
 
 All chat capabilities use `SHIRE_TEXT_MODEL` unless an advanced capability
@@ -51,9 +52,13 @@ Embedding-specific overrides are also optional:
 - `SHIRE_EMBEDDING_ENABLED`: enable semantic memory and vector retrieval
 - `SHIRE_WORKING_MEMORY_ENABLED`: enable tool-based persistent working memory
 
-`SHIRE_TEXT_API_KEY` and `SHIRE_EMBEDDING_API_KEY` default to
-`TOKENROUTER_API_KEY` when unset. Working memory remains disabled by default;
-recent conversation history and semantic recall remain enabled.
+`SHIRE_TEXT_API_KEY` defaults to `TOKENROUTER_API_KEY` when unset.
+`SHIRE_EMBEDDING_API_KEY` defaults to `OPENAI_API_KEY` or `OPENROUTER_API_KEY`
+when unset. TokenRouter is kept for text generation because its model list does
+not expose embedding channels for `qwen/qwen3-embedding-8b`. Working memory
+remains disabled by default; recent conversation history remains enabled.
+Semantic recall is enabled only when `SHIRE_EMBEDDING_ENABLED=true` with a
+provider/model that supports embeddings.
 
 Memory and repository knowledge use libSQL URLs. Local development defaults to
 `file:` databases under `.data`; production should use remote libSQL/Turso URLs

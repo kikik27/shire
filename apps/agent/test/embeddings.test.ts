@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
+process.env.OPENAI_API_KEY ??= "test-openai-api-key";
 
 const { createEnv } = await import("../src/env");
 const {
@@ -16,16 +16,16 @@ test("disables known AI SDK compatibility warning logs", () => {
   );
 });
 
-test("creates Qwen embeddings through TokenRouter", () => {
+test("creates OpenAI-compatible embeddings through the configured provider", () => {
   const model = createEmbeddingModel({
-    modelId: "qwen/qwen3-embedding-8b",
-    providerId: "tokenrouter",
-    baseUrl: "https://api.tokenrouter.com/v1",
-    apiKey: "test-tokenrouter-api-key",
+    modelId: "text-embedding-3-small",
+    providerId: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    apiKey: "test-openai-api-key",
   });
 
-  assert.equal(model.provider, "tokenrouter");
-  assert.equal(model.modelId, "qwen/qwen3-embedding-8b");
+  assert.equal(model.provider, "openai");
+  assert.equal(model.modelId, "text-embedding-3-small");
   assert.equal(typeof model.doEmbed, "function");
 });
 

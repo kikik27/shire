@@ -26,32 +26,32 @@ test("defaults capability model, memory, and knowledge config", () => {
     env.chatModelChains.disputeSummary,
     env.chatModelChains.default,
   );
-  assert.equal(env.embeddingModels.default, "qwen/qwen3-embedding-8b");
-  assert.equal(env.embeddingModels.memory, "qwen/qwen3-embedding-8b");
+  assert.equal(env.embeddingModels.default, "text-embedding-3-small");
+  assert.equal(env.embeddingModels.memory, "text-embedding-3-small");
   assert.equal(
     env.embeddingModels.productKnowledge,
-    "qwen/qwen3-embedding-8b",
+    "text-embedding-3-small",
   );
   assert.equal(
     env.embeddingModels.repositoryKnowledge,
-    "qwen/qwen3-embedding-8b",
+    "text-embedding-3-small",
   );
   assert.equal(env.textModelProvider, "tokenrouter");
   assert.equal(env.textModelBaseUrl, "https://api.tokenrouter.com/v1");
   assert.equal(env.textModelApiKey, undefined);
-  assert.equal(env.embeddingProvider, "tokenrouter");
+  assert.equal(env.embeddingProvider, "openai");
   assert.equal(env.embeddingApiKey, undefined);
-  assert.equal(env.embeddingBaseUrls.default, "https://api.tokenrouter.com/v1");
-  assert.equal(env.embeddingBaseUrls.memory, "https://api.tokenrouter.com/v1");
+  assert.equal(env.embeddingBaseUrls.default, "https://api.openai.com/v1");
+  assert.equal(env.embeddingBaseUrls.memory, "https://api.openai.com/v1");
   assert.equal(
     env.embeddingBaseUrls.productKnowledge,
-    "https://api.tokenrouter.com/v1",
+    "https://api.openai.com/v1",
   );
   assert.equal(
     env.embeddingBaseUrls.repositoryKnowledge,
-    "https://api.tokenrouter.com/v1",
+    "https://api.openai.com/v1",
   );
-  assert.equal(env.embeddingEnabled, true);
+  assert.equal(env.embeddingEnabled, false);
   assert.equal(env.workingMemoryEnabled, false);
   assert.equal(env.agentMemoryUrl, "file:./.data/shire-agent-memory.db");
   assert.equal(env.agentMemoryAuthToken, undefined);
@@ -151,6 +151,17 @@ test("parses embedding capabilities from env", () => {
     "https://example.test/v1",
   );
   assert.equal(env.embeddingApiKey, "embedding-key");
+  assert.equal(env.embeddingEnabled, true);
+});
+
+test("does not treat a TokenRouter text key as an embedding key", () => {
+  const env = createEnv({
+    TOKENROUTER_API_KEY: "text-only-key",
+  });
+
+  assert.equal(env.textModelApiKey, "text-only-key");
+  assert.equal(env.embeddingApiKey, undefined);
+  assert.equal(env.embeddingEnabled, false);
 });
 
 test("parses persistent libsql storage config from env", () => {

@@ -96,11 +96,11 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
   const defaultEmbeddingModel =
     input.SHIRE_EMBEDDING_MODEL?.trim() ||
     input.SHIRE_EMBEDDING_MODEL_DEFAULT?.trim() ||
-    "qwen/qwen3-embedding-8b";
+    "text-embedding-3-small";
   const defaultEmbeddingBaseUrl = normalizeBaseUrl(
     input.SHIRE_EMBEDDING_BASE_URL?.trim() ||
       input.SHIRE_EMBEDDING_BASE_URL_DEFAULT?.trim() ||
-      "https://api.tokenrouter.com/v1",
+      "https://api.openai.com/v1",
   );
 
   return {
@@ -198,13 +198,20 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
       ),
     },
     embeddingProvider:
-      input.SHIRE_EMBEDDING_PROVIDER?.trim() || "tokenrouter",
+      input.SHIRE_EMBEDDING_PROVIDER?.trim() || "openai",
     embeddingApiKey:
       input.SHIRE_EMBEDDING_API_KEY?.trim() ||
-      input.TOKENROUTER_API_KEY?.trim() ||
+      input.OPENAI_API_KEY?.trim() ||
       input.OPENROUTER_API_KEY?.trim() ||
       undefined,
-    embeddingEnabled: parseBoolean(input.SHIRE_EMBEDDING_ENABLED, true),
+    embeddingEnabled: parseBoolean(
+      input.SHIRE_EMBEDDING_ENABLED,
+      Boolean(
+        input.SHIRE_EMBEDDING_API_KEY?.trim() ||
+          input.OPENAI_API_KEY?.trim() ||
+          input.OPENROUTER_API_KEY?.trim(),
+      ),
+    ),
     workingMemoryEnabled: parseBoolean(
       input.SHIRE_WORKING_MEMORY_ENABLED,
       false,
