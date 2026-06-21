@@ -103,6 +103,14 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
     nodeEnv,
     port: Number(input.PORT ?? 3010),
     redisUrl: input.REDIS_URL?.trim() || undefined,
+    // The agent reads candidate/job profiles and writes recommendations to the
+    // same Postgres the web app owns. Defaulting to DATABASE_URL keeps a single
+    // config knob in standard deployments; SHIRE_AGENT_DATABASE_URL lets the
+    // agent use a separate connection/pooler when needed.
+    agentDatabaseUrl:
+      input.SHIRE_AGENT_DATABASE_URL?.trim() ||
+      input.DATABASE_URL?.trim() ||
+      undefined,
     agentServiceToken: input.SHIRE_AGENT_SERVICE_TOKEN?.trim() || undefined,
     jobQueueName: input.SHIRE_JOB_QUEUE_NAME?.trim() || "shire-agent-jobs",
     jobAttempts: parsePositiveInteger(input.SHIRE_JOB_ATTEMPTS, 3),
