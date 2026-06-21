@@ -24,6 +24,7 @@ import type {
 } from "./runtime/knowledge";
 import type { answerProductQuestion } from "./runtime/product-qna";
 import type { guardSecurityPrompt } from "./runtime/security-guard";
+import type { confirmSecurityRiskWithLlm } from "./runtime/security-guard-llm";
 import type { classifySecurityIndicator } from "./runtime/security-indicators";
 import type { RateLimiter } from "./runtime/rate-limit";
 import { createInMemoryRateLimiter } from "./runtime/rate-limit";
@@ -46,6 +47,7 @@ export type RuntimeHttpServerDependencies = {
   now?: () => number;
   securityIndicatorClassifier?: typeof classifySecurityIndicator;
   securityGuard?: typeof guardSecurityPrompt;
+  confirmSecurityRisk?: typeof confirmSecurityRiskWithLlm;
   jobQueue?: JobQueue;
   processJob?: (
     job: ProcessableJob,
@@ -147,6 +149,7 @@ export async function createRuntimeHttpServer(
     now: dependencies.now,
     securityIndicatorClassifier: dependencies.securityIndicatorClassifier,
     securityGuard: dependencies.securityGuard,
+    confirmSecurityRisk: dependencies.confirmSecurityRisk,
     searchProductKnowledge: dependencies.searchProductKnowledge,
   });
 

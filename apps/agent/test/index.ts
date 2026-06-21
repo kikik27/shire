@@ -31,6 +31,7 @@ await Promise.all([
   import("./output-validation.test"),
   import("./chat-output-processor.test"),
   import("./security-guard.test"),
+  import("./security-guard-llm.test"),
   import("./security-policy.test"),
   import("./job-contracts.test"),
   import("./in-memory-job-queue.test"),

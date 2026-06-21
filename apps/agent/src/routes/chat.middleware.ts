@@ -14,6 +14,7 @@ import { enrichChatRequestWithProductKnowledge } from "../runtime/product-knowle
 import { validateChatRequest } from "../runtime/chat-validation";
 import type { RateLimiter } from "../runtime/rate-limit";
 import { guardSecurityPrompt } from "../runtime/security-guard";
+import { confirmSecurityRiskWithLlm } from "../runtime/security-guard-llm";
 import { evaluateSecurityPolicy } from "../runtime/security-policy";
 import { hasValidServiceToken } from "../runtime/internal-auth";
 
@@ -25,6 +26,11 @@ export interface ChatMiddlewareDependencies {
   now?: () => number;
   securityIndicatorClassifier?: typeof classifySecurityIndicator;
   securityGuard?: typeof guardSecurityPrompt;
+  /**
+   * LLM confirmation for inputs the regex layer flags as suspicious-but-ambiguous.
+   * Production path; tests can stub it to avoid real model calls.
+   */
+  confirmSecurityRisk?: typeof confirmSecurityRiskWithLlm;
   searchProductKnowledge?: typeof searchProductKnowledge;
 }
 
@@ -238,14 +244,17 @@ async function applySecurityGuard(
 ) {
   const securityIndicatorClassifier =
     dependencies.securityIndicatorClassifier ?? classifySecurityIndicator;
-  const securityGuard = dependencies.securityGuard ?? guardSecurityPrompt;
   const existingSecurityIndicator = securityIndicatorClassifier(request.body);
   if (existingSecurityIndicator.level !== "suspicious") {
     return;
   }
 
   try {
-    const securityGuardDecision = await securityGuard(request.body);
+    const securityGuardDecision = await resolveSecurityGuardDecision(
+      request.body,
+      existingSecurityIndicator.text,
+      dependencies,
+    );
     const securityPolicyDecision = evaluateSecurityPolicy(
       securityGuardDecision,
     );
@@ -286,6 +295,42 @@ async function applySecurityGuard(
       "security guard unavailable, continuing with fallback policy",
     );
   }
+}
+
+/**
+ * Resolve the final security decision for a suspicious input.
+ *
+ * - When a `securityGuard` override is supplied (tests / explicit wiring), use
+ *   it directly so existing synchronous behavior and tests are preserved.
+ * - Otherwise run the deterministic regex layer first. If the regex is already
+ *   confident (high risk, clear category), block without spending an LLM call.
+ *   If the regex is ambiguous (medium risk), ask the security-guard capability
+ *   model to confirm; on any LLM failure fall back to the regex decision.
+ */
+async function resolveSecurityGuardDecision(
+  body: unknown,
+  suspiciousText: string,
+  dependencies: ChatMiddlewareDependencies,
+) {
+  if (dependencies.securityGuard) {
+    return dependencies.securityGuard(body);
+  }
+
+  const regexDecision = guardSecurityPrompt(body);
+
+  // Clear high-risk regex hit: block immediately, no LLM call needed.
+  if (
+    regexDecision.risk === "high" &&
+    regexDecision.category !== "none" &&
+    regexDecision.category !== "other"
+  ) {
+    return regexDecision;
+  }
+
+  // Ambiguous (medium/low-confidence suspicious): confirm with the LLM.
+  const confirm = dependencies.confirmSecurityRisk ?? confirmSecurityRiskWithLlm;
+  const llmDecision = await confirm(suspiciousText);
+  return llmDecision ?? regexDecision;
 }
 
 async function enrichWithProductKnowledge(
