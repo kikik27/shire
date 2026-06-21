@@ -33,6 +33,7 @@ await Promise.all([
   import("./security-guard.test"),
   import("./security-guard-llm.test"),
   import("./security-policy.test"),
+  import("./storage-diagnostics.test"),
   import("./job-contracts.test"),
   import("./in-memory-job-queue.test"),
   import("./job-processors.test"),

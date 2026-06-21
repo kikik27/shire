@@ -6,7 +6,7 @@ import express from "express";
 import { MastraServer } from "@mastra/express";
 import { logger } from "./runtime/logger";
 import { jobRegistry, resolveJobName } from "./runtime/job-registry";
-import { getStorageDiagnostics } from "./runtime/storage-diagnostics";
+import { getStorageDiagnostics, probeStorageReadiness } from "./runtime/storage-diagnostics";
 import { AgentWorker } from "./runtime/jobs/agent-worker";
 import type {
   JobResult,
@@ -57,6 +57,8 @@ export type RuntimeHttpServerDependencies = {
   serviceToken?: string;
   extractCvDocument?: (file: CvDocumentFile | undefined) => Promise<string>;
   answerProductQuestion?: typeof answerProductQuestion;
+  /** Override the /ready readiness probe (tests stub this to avoid real I/O). */
+  checkReady?: () => Promise<ReadinessResult>;
 };
 
 export function getRuntimeBootstrapOutput() {
@@ -70,15 +72,17 @@ export function getRuntimeBootstrapOutput() {
 }
 
 /**
- * Probes runtime dependencies for the /ready route. Currently always ready;
- * real Redis/libSQL reachability checks are added when those stores are wired
- * for production. Kept injectable via `now` for test determinism.
+ * Probes runtime dependencies for the /ready route. Local file: stores are
+ * always ready; remote libSQL stores are pinged with SELECT 1.
+ *
+ * Redis is intentionally not probed here: it is optional (the runtime falls
+ * back to an in-memory queue when REDIS_URL is unset, and BullMQ owns its own
+ * connection with its own retry/backoff). Failing /ready on a Redis hiccup
+ * would needlessly flip the service down even though it can still serve chat
+ * and jobs. The durable job runtime reports its own health in logs.
  */
 async function checkRuntimeReadiness(): Promise<ReadinessResult> {
-  // No external store probe is wired yet (libsql/redis are lazily connected on
-  // first use). Returning ready keeps behaviour identical to today while the
-  // seam exists for production wiring.
-  return { ready: true };
+  return probeStorageReadiness();
 }
 
 export async function createRuntimeHttpServer(
@@ -137,7 +141,7 @@ export async function createRuntimeHttpServer(
 
   mountHealthRoutes(app, {
     bootstrap,
-    checkReady: checkRuntimeReadiness,
+    checkReady: dependencies.checkReady ?? checkRuntimeReadiness,
   });
 
   // --- Chat middleware chain (order matters: auth → logging → guard) ---
