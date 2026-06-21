@@ -7,8 +7,6 @@ import {
 import type { CandidateProfileStore } from "./data/candidate-profile-store";
 import { normalizeModelUsage } from "./usage";
 
-export type CvNormalizationTier = "cheap" | "balanced";
-
 export type CvGenerationResult = {
   profile: unknown;
   model: string;
@@ -23,21 +21,20 @@ export async function normalizeCvWithFallback(input: {
   rawCv: string;
   generate: (request: {
     rawCv: string;
-    tier: CvNormalizationTier;
   }) => Promise<CvGenerationResult>;
 }) {
-  const attempts: Array<{ tier: CvNormalizationTier; error?: string }> = [];
+  const attempts: Array<{ attempt: number; error?: string }> = [];
   let lastError: unknown;
 
-  for (const tier of ["cheap", "cheap", "balanced"] as const) {
+  for (const attempt of [1, 2, 3] as const) {
     try {
-      const result = await input.generate({ rawCv: input.rawCv, tier });
+      const result = await input.generate({ rawCv: input.rawCv });
       const profile = CandidateProfileDraftSchema.parse(result.profile);
       return { profile, result, attempts };
     } catch (error) {
       lastError = error;
       attempts.push({
-        tier,
+        attempt,
         error:
           error instanceof Error
             ? error.message
@@ -64,7 +61,6 @@ export async function processCandidateCv(input: {
   store: CandidateProfileStore;
   generate: (request: {
     rawCv: string;
-    tier: CvNormalizationTier;
   }) => Promise<CvGenerationResult>;
   embed: (value: string) => Promise<{ embedding: number[] }>;
 }) {
@@ -76,20 +72,17 @@ export async function processCandidateCv(input: {
   });
   const embeddingText = buildCandidateEmbeddingText(normalized.profile);
   const { embedding } = await input.embed(embeddingText);
-  const tier =
-    normalized.attempts.length >= 2
-      ? ("balanced" as const)
-      : ("cheap" as const);
   const usage = normalizeModelUsage({
     runId: randomUUID(),
-    workload: "cv-normalization",
-    tier,
+    capability: "cv-normalization",
     model: normalized.result.model,
     usage: normalized.result.usage,
     latencyMs: Math.round(performance.now() - startedAt),
     retryCount: normalized.attempts.length,
     escalationReason:
-      tier === "balanced" ? "schema-validation-failure" : undefined,
+      normalized.attempts.length >= 2
+        ? "schema-validation-failure"
+        : undefined,
   });
   const record = {
     id: input.candidateId,

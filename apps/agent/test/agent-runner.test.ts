@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { runAgentWithContext } from "../src/runtime/agent-runner";
 
-test("forwards bounded knowledge, memory ids, and workload context", async () => {
+test("forwards bounded knowledge, memory ids, and model capability context", async () => {
   const calls: unknown[] = [];
   const agent = {
     generate: async (messages: unknown, options: unknown) => {
@@ -17,7 +17,7 @@ test("forwards bounded knowledge, memory ids, and workload context", async () =>
 
   const result = await runAgentWithContext({
     agent,
-    workload: "knowledge-synthesis",
+    capability: "knowledge-synthesis",
     threadId: "thread-1",
     resourceId: "user-1",
     query: "matching rules",
@@ -39,7 +39,7 @@ test("forwards bounded knowledge, memory ids, and workload context", async () =>
   assert.equal(call.options.memory.thread, "thread-1");
   assert.equal(call.options.memory.resource, "user-1");
   assert.equal(
-    call.options.requestContext.get("workload"),
+    call.options.requestContext.get("model-capability"),
     "knowledge-synthesis",
   );
   assert.match(call.messages[0].content, /Use hard filters/);

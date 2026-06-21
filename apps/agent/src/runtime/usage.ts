@@ -1,9 +1,8 @@
-import type { AgentWorkload, ModelTier } from "./model-policy";
+import type { ChatModelCapability } from "./model-policy";
 
 export type ModelUsageRecord = {
   runId: string;
-  workload: AgentWorkload;
-  tier: ModelTier;
+  capability: ChatModelCapability;
   provider: string;
   model: string;
   inputTokens?: number;
@@ -16,8 +15,7 @@ export type ModelUsageRecord = {
 
 export function normalizeModelUsage(input: {
   runId: string;
-  workload: AgentWorkload;
-  tier: ModelTier;
+  capability: ChatModelCapability;
   model: string;
   usage?: {
     inputTokens?: number;
@@ -30,8 +28,7 @@ export function normalizeModelUsage(input: {
 }): ModelUsageRecord {
   const record: ModelUsageRecord = {
     runId: input.runId,
-    workload: input.workload,
-    tier: input.tier,
+    capability: input.capability,
     provider: input.model.split("/", 1)[0],
     model: input.model,
     inputTokens: input.usage?.inputTokens,

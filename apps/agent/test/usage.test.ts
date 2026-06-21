@@ -7,8 +7,7 @@ test("normalizes provider usage into an AgentRun-compatible record", () => {
   assert.deepEqual(
     normalizeModelUsage({
       runId: "run-1",
-      workload: "cv-normalization",
-      tier: "cheap",
+      capability: "cv-normalization",
       model: "openrouter/qwen",
       usage: {
         inputTokens: 120,
@@ -20,8 +19,7 @@ test("normalizes provider usage into an AgentRun-compatible record", () => {
     }),
     {
       runId: "run-1",
-      workload: "cv-normalization",
-      tier: "cheap",
+      capability: "cv-normalization",
       provider: "openrouter",
       model: "openrouter/qwen",
       inputTokens: 120,

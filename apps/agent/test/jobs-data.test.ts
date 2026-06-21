@@ -41,31 +41,27 @@ test("cv parse job returns data from the local source", async () => {
   assert.equal(result.agent, "cv-profile-agent");
   assert.equal(result.workflow, "parse-cv-workflow");
   assert.deepEqual(result.data, jobRunnerData["cv-parse"]);
-  assert.equal(result.routing.workload, "cv-normalization");
-  assert.equal(result.routing.tier, "cheap");
+  assert.equal(result.routing.capability, "cv-normalization");
   assert.deepEqual(result.usage, []);
 });
 
 test("job matching job returns data from the local source", async () => {
   const result = await runJobMatchingJob();
 
-  assert.equal(result.routing.workload, "job-rerank");
-  assert.equal(result.routing.tier, "cheap");
+  assert.equal(result.routing.capability, "job-rerank");
   assert.deepEqual(result.usage, []);
 });
 
 test("talent matching job returns data from the local source", async () => {
   const result = await runTalentMatchingJob();
 
-  assert.equal(result.routing.workload, "talent-rerank");
-  assert.equal(result.routing.tier, "cheap");
+  assert.equal(result.routing.capability, "talent-rerank");
   assert.deepEqual(result.usage, []);
 });
 
 test("dispute summary job returns data from the local source", async () => {
   const result = await runDisputeSummaryJob();
 
-  assert.equal(result.routing.workload, "dispute-summary");
-  assert.equal(result.routing.tier, "heavy");
+  assert.equal(result.routing.capability, "dispute-summary");
   assert.deepEqual(result.usage, []);
 });

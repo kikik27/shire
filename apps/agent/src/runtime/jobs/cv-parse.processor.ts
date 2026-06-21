@@ -13,7 +13,6 @@ export type CvParseProcessorDependencies = {
     candidateId: string;
     jobId: string;
     rawCv: string;
-    tier: "cheap" | "balanced";
   }) => Promise<CvGenerationResult>;
   embed: (value: string) => Promise<{ embedding: number[] }>;
   store: CandidateProfileStore;
@@ -40,12 +39,11 @@ export function createCvParseProcessor(
         candidateId: payload.candidateId,
         rawCv: payload.rawCv,
         store: dependencies.store,
-        generate: ({ rawCv, tier }) =>
+        generate: ({ rawCv }) =>
           dependencies.generate({
             candidateId: payload.candidateId,
             jobId: context.jobId,
             rawCv,
-            tier,
           }),
         embed: dependencies.embed,
       });

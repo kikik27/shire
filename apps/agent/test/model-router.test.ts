@@ -1,28 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createEnv, env } from "../src/env";
 import {
-  getWorkloadPolicy,
+  getCapabilityPolicy,
   shouldEscalate,
 } from "../src/runtime/model-policy";
 import {
   createModelFallbackChain,
   dynamicAgentModel,
+  resolveModelChain,
   resolveRuntimeAgentModelId,
 } from "../src/runtime/model-router";
 
-test("routes routine CV normalization to the cheap tier", () => {
-  assert.equal(getWorkloadPolicy("cv-normalization").tier, "cheap");
-});
-
-test("routes dispute summaries directly to the heavy tier", () => {
-  assert.equal(getWorkloadPolicy("dispute-summary").tier, "heavy");
+test("keeps CV confidence policy without model tiers", () => {
+  assert.equal(
+    getCapabilityPolicy("cv-normalization").confidenceThreshold,
+    0.7,
+  );
+  assert.equal(getCapabilityPolicy("dispute-summary").maxOutputTokens, 2_000);
 });
 
 test("escalates invalid CV output only after two schema failures", () => {
   assert.equal(
     shouldEscalate({
-      workload: "cv-normalization",
+      capability: "cv-normalization",
       schemaFailureCount: 1,
       confidence: 0.4,
     }),
@@ -30,7 +32,7 @@ test("escalates invalid CV output only after two schema failures", () => {
   );
   assert.equal(
     shouldEscalate({
-      workload: "cv-normalization",
+      capability: "cv-normalization",
       schemaFailureCount: 2,
       confidence: 0.4,
     }),
@@ -41,7 +43,7 @@ test("escalates invalid CV output only after two schema failures", () => {
 test("escalates a schema-valid CV profile with low confidence", () => {
   assert.equal(
     shouldEscalate({
-      workload: "cv-normalization",
+      capability: "cv-normalization",
       schemaFailureCount: 0,
       confidence: 0.4,
     }),
@@ -60,21 +62,34 @@ test("creates a Mastra fallback entry for each configured model", () => {
   );
 });
 
-test("uses a verified free OpenRouter model when workload is missing", () => {
+test("resolves model chain by capability", () => {
+  const runtime = createEnv({
+    SHIRE_MODEL_DEFAULT: "openrouter/default",
+    SHIRE_MODEL_PRODUCT_QNA: "openrouter/product",
+  } as NodeJS.ProcessEnv);
+
+  assert.deepEqual(resolveModelChain({ capability: "product-qna", runtime }), [
+    { model: "openrouter/product", maxRetries: 1 },
+  ]);
+  assert.deepEqual(
+    resolveModelChain({ capability: "cv-normalization", runtime }),
+    [{ model: "openrouter/default", maxRetries: 1 }],
+  );
+});
+
+test("uses the default configured model when capability is missing", () => {
   const result = resolveRuntimeAgentModelId();
 
   assert.equal(result, "openrouter/nex-agi/nex-n2-pro:free");
 });
 
-test("provides the configured fallback chain to dynamic agents", () => {
+test("dynamic agent model reads model-capability request context", () => {
+  const requestContext = new Map<string, unknown>();
+  requestContext.set("model-capability", "product-qna");
+
   const result = dynamicAgentModel({
-    requestContext: {
-      get: () => undefined,
-    },
+    requestContext: { get: (key: string) => requestContext.get(key) },
   });
 
-  assert.deepEqual(result, [
-    { model: "openrouter/nex-agi/nex-n2-pro:free", maxRetries: 1 },
-    { model: "openrouter/openai/gpt-oss-20b:free", maxRetries: 1 },
-  ]);
+  assert.equal(result[0]?.model, env.chatModelChains.productQna[0]);
 });

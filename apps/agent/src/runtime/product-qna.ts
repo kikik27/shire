@@ -9,7 +9,7 @@ import {
   type KnowledgeResult,
   type ProductKnowledgeRole,
 } from "./knowledge";
-import { getWorkloadPolicy } from "./model-policy";
+import { getCapabilityPolicy } from "./model-policy";
 
 type AgentMessage = {
   role: "system" | "user" | "assistant";
@@ -171,7 +171,7 @@ export async function answerProductQuestion(
     ? buildKnowledgeSystemMessage(knowledge)
     : "No Shire product knowledge matched this public product question.";
   const requestContext = new RequestContext();
-  requestContext.set("workload", "knowledge-synthesis");
+  requestContext.set("model-capability", "product-qna");
 
   const agent = dependencies.agent ?? (productQnaAgent as unknown as ProductQnaAgent);
   const response = await agent.generate(
@@ -190,7 +190,7 @@ export async function answerProductQuestion(
     {
       requestContext,
       runId: `product-qna:${randomUUID()}`,
-      maxOutputTokens: getWorkloadPolicy("knowledge-synthesis").maxOutputTokens,
+      maxOutputTokens: getCapabilityPolicy("product-qna").maxOutputTokens,
     },
   );
   const answer = extractText(response);

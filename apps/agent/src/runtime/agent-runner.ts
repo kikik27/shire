@@ -7,8 +7,8 @@ import {
   buildKnowledgeSystemMessage,
   searchKnowledge,
 } from "./knowledge";
-import type { AgentWorkload, ModelTier } from "./model-policy";
-import { getWorkloadPolicy } from "./model-policy";
+import type { ChatModelCapability } from "./model-policy";
+import { getCapabilityPolicy } from "./model-policy";
 import { resolveModelChain } from "./model-router";
 import { normalizeModelUsage } from "./usage";
 
@@ -36,19 +36,15 @@ export async function runAgentWithContext(input: {
       options?: unknown,
     ) => Promise<AgentResponse>;
   };
-  workload: AgentWorkload;
+  capability: ChatModelCapability;
   threadId: string;
   resourceId: string;
   query?: string;
-  tierOverride?: ModelTier;
   messages: AgentMessage[];
   search?: (query: string) => Promise<KnowledgeResult[]>;
 }) {
   const requestContext = new RequestContext();
-  requestContext.set("workload", input.workload);
-  if (input.tierOverride) {
-    requestContext.set("tier-override", input.tierOverride);
-  }
+  requestContext.set("model-capability", input.capability);
 
   const search = input.search ?? searchKnowledge;
   const knowledge = input.query?.trim()
@@ -71,21 +67,17 @@ export async function runAgentWithContext(input: {
       thread: input.threadId,
       resource: input.resourceId,
     },
-    maxOutputTokens: getWorkloadPolicy(input.workload).maxOutputTokens,
+    maxOutputTokens: getCapabilityPolicy(input.capability).maxOutputTokens,
   });
-  const tier =
-    input.tierOverride ?? getWorkloadPolicy(input.workload).tier;
   const configuredModel = resolveModelChain({
-    workload: input.workload,
-    tierOverride: input.tierOverride,
+    capability: input.capability,
   })[0].model;
 
   return {
     response,
     usage: normalizeModelUsage({
       runId: randomUUID(),
-      workload: input.workload,
-      tier,
+      capability: input.capability,
       model: response.response?.modelId ?? configuredModel,
       usage: response.usage,
       latencyMs: Math.round(performance.now() - startedAt),

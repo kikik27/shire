@@ -5,6 +5,7 @@ import {
   buildKnowledgeFilter,
   buildKnowledgeSystemMessage,
   limitKnowledgeResults,
+  syncKnowledgeBase,
   searchProductKnowledge,
 } from "../src/runtime/knowledge";
 import {
@@ -226,4 +227,30 @@ test("product retrieval falls back when an existing index has no role metadata",
       ".agent/knowledge/product/shire-recruiter.md",
     ],
   );
+});
+
+test("knowledge sync exposes corpus to embedding selection", async () => {
+  const embeddedCorpora: string[] = [];
+  const upserts: unknown[] = [];
+  const vector = {
+    listIndexes: async () => [],
+    deleteVectors: async () => undefined,
+    createIndex: async () => undefined,
+    upsert: async (input: unknown) => {
+      upserts.push(input);
+    },
+  };
+
+  const result = await syncKnowledgeBase({
+    vector: vector as never,
+    embed: async (values, corpus) => {
+      embeddedCorpora.push(corpus);
+      return { embeddings: values.map(() => [0.1, 0.2]) };
+    },
+  });
+
+  assert.ok(result.indexedChunks > 0);
+  assert.ok(upserts.length > 0);
+  assert.ok(embeddedCorpora.includes("repository"));
+  assert.ok(embeddedCorpora.includes("product"));
 });

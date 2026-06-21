@@ -96,7 +96,7 @@ test("dispatches a known job from cli args", async () => {
   assert.equal(result.agent, "cv-profile-agent");
   assert.equal(result.workflow, "parse-cv-workflow");
   assert.deepEqual(result.data, jobRunnerData["cv-parse"]);
-  assert.equal(result.routing.workload, "cv-normalization");
+  assert.equal(result.routing.capability, "cv-normalization");
   assert.deepEqual(result.usage, []);
 });
 
