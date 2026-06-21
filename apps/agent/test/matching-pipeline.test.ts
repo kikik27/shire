@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createInMemoryMatchingRepository } from "../src/runtime/matching/repository";
+import {
+  createInMemoryMatchingRepository,
+  mapCandidateProfileForMatching,
+} from "../src/runtime/matching/repository";
 import {
   runJobMatchingForCandidate,
   runTalentMatchingForJob,
@@ -168,6 +171,33 @@ test("talent matching skips an inactive job", async () => {
 
   assert.equal(result.evaluated, 0);
   assert.equal(result.saved.length, 0);
+});
+
+test("matching maps web-saved candidate profile fields", () => {
+  const mapped = mapCandidateProfileForMatching({
+    userId: "candidate-1",
+    profileStatus: "CONFIRMED",
+    profile: {
+      displayName: "Maya Okafor",
+      bio: "Senior frontend engineer",
+      skills: ["TypeScript", "React"],
+      roleTargets: ["Frontend Engineer"],
+      experienceLevel: "SENIOR",
+      salaryExpectation: "$120k-$160k",
+      location: "Jakarta",
+      portfolioUrl: "https://maya.example",
+    },
+  });
+
+  assert.equal(mapped.fullName, "Maya Okafor");
+  assert.equal(mapped.summary, "Senior frontend engineer");
+  assert.deepEqual(mapped.preferredRoles, ["Frontend Engineer"]);
+  assert.equal(mapped.yearsExperience, 5);
+  assert.deepEqual(mapped.expectedSalary, {
+    min: 120000,
+    max: 160000,
+    currency: undefined,
+  });
 });
 
 test("fallback output derives the recommended action from the rule score", () => {

@@ -29,33 +29,81 @@ function asStringArray(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === "string");
 }
 
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    const text = asString(value);
+    if (text) {
+      return text;
+    }
+  }
+  return undefined;
+}
+
+function webExperienceLevelToYears(value: unknown) {
+  const level = asString(value)?.toUpperCase();
+  if (level === "INTERN") return 0;
+  if (level === "JUNIOR") return 1;
+  if (level === "MID") return 3;
+  if (level === "SENIOR") return 5;
+  if (level === "LEAD") return 8;
+  return undefined;
+}
+
+function parseSalaryExpectation(value: unknown) {
+  const text = asString(value);
+  if (!text) {
+    return undefined;
+  }
+
+  const matches = text.toLowerCase().match(/(\d+(\.\d+)?)(k)?/g) ?? [];
+  const values = matches.map((match) => {
+    const numeric = Number(match.replace(/k$/, ""));
+    return match.endsWith("k") ? numeric * 1000 : numeric;
+  });
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  const [min, max] = values;
+  return { min, max, currency: undefined };
+}
+
 /** Extract the structured fields the scorer reads from the loose profile jsonb. */
-function mapCandidate(
-  row: typeof candidateProfiles.$inferSelect,
+export function mapCandidateProfileForMatching(
+  row: Pick<
+    typeof candidateProfiles.$inferSelect,
+    "profile" | "profileStatus" | "userId"
+  >,
 ): CandidateMatchInput {
   const profile = (row.profile ?? {}) as Record<string, unknown>;
   const salary = profile.expectedSalary as Record<string, unknown> | undefined;
+  const webSalary = parseSalaryExpectation(profile.salaryExpectation);
 
   return {
     userId: row.userId,
-    fullName: asString(profile.fullName),
-    headline: asString(profile.headline),
-    summary: asString(profile.summary),
+    fullName: firstString(profile.fullName, profile.displayName),
+    headline: firstString(profile.headline, profile.bio),
+    summary: firstString(profile.summary, profile.bio),
     skills: asStringArray(profile.skills),
-    preferredRoles: asStringArray(profile.preferredRoles),
+    preferredRoles:
+      asStringArray(profile.preferredRoles).length > 0
+        ? asStringArray(profile.preferredRoles)
+        : asStringArray(profile.roleTargets),
     expectedSalary: salary
       ? {
           min: asNumber(salary.min),
           max: asNumber(salary.max),
           currency: asString(salary.currency),
         }
-      : undefined,
+      : webSalary,
     location: asString(profile.location),
     workPreference: asString(profile.workPreference),
     portfolioUrl: asString(profile.portfolioUrl),
     githubUrl: asString(profile.githubUrl),
     linkedinUrl: asString(profile.linkedinUrl),
-    yearsExperience: asNumber(profile.yearsExperience),
+    yearsExperience:
+      asNumber(profile.yearsExperience) ??
+      webExperienceLevelToYears(profile.experienceLevel),
     profileStatus: row.profileStatus,
   };
 }
@@ -92,7 +140,7 @@ export function createDrizzleMatchingRepository(
       if (!row || row.profileStatus !== "CONFIRMED") {
         return null;
       }
-      return mapCandidate(row);
+      return mapCandidateProfileForMatching(row);
     },
 
     async listConfirmedCandidates() {
@@ -100,7 +148,7 @@ export function createDrizzleMatchingRepository(
         .select()
         .from(candidateProfiles)
         .where(eq(candidateProfiles.profileStatus, "CONFIRMED"));
-      return rows.map(mapCandidate);
+      return rows.map(mapCandidateProfileForMatching);
     },
 
     async listActiveJobs(options) {
