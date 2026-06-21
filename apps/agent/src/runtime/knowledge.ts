@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { createClient } from "@libsql/client";
 import { LibSQLVector } from "@mastra/libsql";
 import { MDocument } from "@mastra/rag";
 
@@ -16,6 +17,7 @@ import {
   productKnowledgeSources,
   type ProductKnowledgeAudience,
 } from "./knowledge-sources";
+import { buildLibSQLRuntimeConfig } from "./libsql-config";
 
 export type KnowledgeResult = {
   path: string;
@@ -50,6 +52,11 @@ export type KnowledgeSearchDependencies = {
 };
 
 type KnowledgeState = Record<string, string>;
+
+export type KnowledgeManifestStore = {
+  read: () => Promise<KnowledgeState>;
+  write: (state: KnowledgeState) => Promise<void>;
+};
 
 type ProductKnowledgeDocument = {
   audience: ProductKnowledgeAudience;
@@ -180,40 +187,95 @@ function createKnowledgeVector() {
     mkdirSync(dirname(localPath), { recursive: true });
   }
 
-  return new LibSQLVector({
+  return new LibSQLVector(buildLibSQLRuntimeConfig({
     id: "shire-agent-knowledge",
     url: env.agentKnowledgeUrl,
-  });
+    authToken: env.agentKnowledgeAuthToken,
+  }));
 }
 
-function getStatePath() {
-  const localPath = localPathFromFileUrl(env.agentKnowledgeUrl);
+function getStatePath(url = env.agentKnowledgeManifestUrl) {
+  const localPath = localPathFromFileUrl(url);
   return localPath ? `${localPath}.manifest.json` : null;
 }
 
-function readKnowledgeState(): KnowledgeState {
-  const statePath = getStatePath();
-  if (!statePath || !existsSync(statePath)) {
-    return {};
-  }
+function createLocalKnowledgeManifestStore(statePath: string): KnowledgeManifestStore {
+  return {
+    async read() {
+      if (!existsSync(statePath)) {
+        return {};
+      }
 
-  return JSON.parse(readFileSync(statePath, "utf8")) as KnowledgeState;
+      return JSON.parse(readFileSync(statePath, "utf8")) as KnowledgeState;
+    },
+    async write(state) {
+      mkdirSync(dirname(statePath), { recursive: true });
+      writeFileSync(statePath, JSON.stringify(state, null, 2));
+    },
+  };
 }
 
-function writeKnowledgeState(state: KnowledgeState) {
-  const statePath = getStatePath();
-  if (!statePath) {
-    return;
+function createRemoteKnowledgeManifestStore(): KnowledgeManifestStore {
+  const tableName = "shire_knowledge_manifest";
+  const client = createClient({
+    url: env.agentKnowledgeManifestUrl,
+    authToken: env.agentKnowledgeManifestAuthToken,
+  });
+
+  async function ensureTable() {
+    await client.execute({
+      sql: `CREATE TABLE IF NOT EXISTS ${tableName} (
+        path TEXT PRIMARY KEY,
+        content_hash TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      args: [],
+    });
   }
 
-  mkdirSync(dirname(statePath), { recursive: true });
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  return {
+    async read() {
+      await ensureTable();
+      const result = await client.execute({
+        sql: `SELECT path, content_hash FROM ${tableName}`,
+        args: [],
+      });
+
+      return Object.fromEntries(
+        result.rows.map((row) => [
+          String(row.path),
+          String(row.content_hash),
+        ]),
+      );
+    },
+    async write(state) {
+      await ensureTable();
+      await client.batch([
+        {
+          sql: `DELETE FROM ${tableName}`,
+          args: [],
+        },
+        ...Object.entries(state).map(([path, contentHash]) => ({
+          sql: `INSERT INTO ${tableName} (path, content_hash, updated_at) VALUES (?, ?, ?)`,
+          args: [path, contentHash, new Date().toISOString()],
+        })),
+      ]);
+    },
+  };
+}
+
+export function createKnowledgeManifestStore(): KnowledgeManifestStore {
+  const statePath = getStatePath();
+  return statePath
+    ? createLocalKnowledgeManifestStore(statePath)
+    : createRemoteKnowledgeManifestStore();
 }
 
 export async function syncKnowledgeBase(input?: {
   repoRoot?: string;
   vector?: LibSQLVector;
   embed?: KnowledgeEmbedMany;
+  manifestStore?: KnowledgeManifestStore;
 }) {
   const repoRoot = input?.repoRoot ?? resolveRepoRoot();
   const vector = input?.vector ?? createKnowledgeVector();
@@ -228,7 +290,8 @@ export async function syncKnowledgeBase(input?: {
       ));
   const indexes = await vector.listIndexes();
   const indexExists = indexes.includes(env.agentKnowledgeIndex);
-  const previousState = indexExists ? readKnowledgeState() : {};
+  const manifestStore = input?.manifestStore ?? createKnowledgeManifestStore();
+  const previousState = indexExists ? await manifestStore.read() : {};
   const nextState: KnowledgeState = {};
   let indexedDocuments = 0;
   let indexedChunks = 0;
@@ -309,7 +372,7 @@ export async function syncKnowledgeBase(input?: {
     indexedChunks += chunks.length;
   }
 
-  writeKnowledgeState(nextState);
+  await manifestStore.write(nextState);
 
   return {
     indexedDocuments,

@@ -57,13 +57,13 @@ SHIRE_AGENT_KNOWLEDGE_URL=file:./.data/shire-agent-knowledge.db
 - Modify: `apps/agent/test/env.test.ts`
 - Modify: `apps/agent/.env.example`
 
-- [ ] Add env parsing for `SHIRE_AGENT_MEMORY_AUTH_TOKEN`,
+- [x] Add env parsing for `SHIRE_AGENT_MEMORY_AUTH_TOKEN`,
   `SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN`,
   `SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL`, and
   `SHIRE_AGENT_KNOWLEDGE_MANIFEST_AUTH_TOKEN`.
-- [ ] Default manifest URL to `SHIRE_AGENT_KNOWLEDGE_URL`.
-- [ ] Keep local `file:` defaults for development.
-- [ ] Test that remote URLs preserve auth tokens and local file URLs work
+- [x] Default manifest URL to `SHIRE_AGENT_KNOWLEDGE_URL`.
+- [x] Keep local `file:` defaults for development.
+- [x] Test that remote URLs preserve auth tokens and local file URLs work
   without auth tokens.
 
 ## Task 2: Pass Auth Tokens To LibSQL Store And Vector
@@ -74,11 +74,11 @@ SHIRE_AGENT_KNOWLEDGE_URL=file:./.data/shire-agent-knowledge.db
 - Test: `apps/agent/test/memory.test.ts`
 - Test: `apps/agent/test/knowledge.test.ts`
 
-- [ ] Add small factory helpers for `LibSQLStore` and `LibSQLVector`
+- [x] Add small factory helpers for `LibSQLStore` and `LibSQLVector`
   configuration.
-- [ ] Pass auth tokens only when present.
-- [ ] Keep local directory creation only for `file:` URLs.
-- [ ] Test local config and remote config without opening real network
+- [x] Pass auth tokens only when present.
+- [x] Keep local directory creation only for `file:` URLs.
+- [x] Test local config and remote config without opening real network
   connections.
 
 ## Task 3: Persist Knowledge Sync Manifest Remotely
@@ -87,10 +87,10 @@ SHIRE_AGENT_KNOWLEDGE_URL=file:./.data/shire-agent-knowledge.db
 - Modify: `apps/agent/src/runtime/knowledge.ts`
 - Test: `apps/agent/test/knowledge.test.ts`
 
-- [ ] Replace local sidecar manifest-only behavior with a manifest adapter.
-- [ ] For local `file:` URLs, current JSON sidecar may remain as a dev fallback.
-- [ ] For remote libSQL, store source path and content hash in a table.
-- [ ] Ensure changed docs re-index, unchanged docs skip, and removed docs delete
+- [x] Replace local sidecar manifest-only behavior with a manifest adapter.
+- [x] For local `file:` URLs, current JSON sidecar may remain as a dev fallback.
+- [x] For remote libSQL, store source path and content hash in a table.
+- [x] Ensure changed docs re-index, unchanged docs skip, and removed docs delete
   vectors.
 
 ## Task 4: Add Storage Diagnostics
@@ -100,15 +100,15 @@ SHIRE_AGENT_KNOWLEDGE_URL=file:./.data/shire-agent-knowledge.db
 - Modify: `apps/agent/test/runtime.test.ts`
 - Modify: `apps/agent/README.md`
 
-- [ ] Expose storage mode in `/health` and `/ready` without revealing tokens.
-- [ ] Report whether memory and knowledge URLs are `file`, `libsql`, or another
+- [x] Expose storage mode in `/health` and `/ready` without revealing tokens.
+- [x] Report whether memory and knowledge URLs are `file`, `libsql`, or another
   supported scheme.
-- [ ] Document production guidance: remote storage required for deployed
+- [x] Document production guidance: remote storage required for deployed
   environments with ephemeral filesystems.
 
 ## Task 5: Verification
 
-- [ ] Run `npm.cmd run test --workspace=@shire/agent`.
-- [ ] Run `npm.cmd run typecheck --workspace=@shire/agent`.
-- [ ] Run `npm.cmd run build --workspace=@shire/agent`.
-- [ ] Confirm no auth token value is logged or returned by HTTP endpoints.
+- [x] Run `npm.cmd run test --workspace=@shire/agent`.
+- [x] Run `npm.cmd run typecheck --workspace=@shire/agent`.
+- [x] Run `npm.cmd run build --workspace=@shire/agent`.
+- [x] Confirm no auth token value is logged or returned by HTTP endpoints.

@@ -232,6 +232,7 @@ test("product retrieval falls back when an existing index has no role metadata",
 test("knowledge sync exposes corpus to embedding selection", async () => {
   const embeddedCorpora: string[] = [];
   const upserts: unknown[] = [];
+  let writtenState: Record<string, string> | undefined;
   const vector = {
     listIndexes: async () => [],
     deleteVectors: async () => undefined,
@@ -243,6 +244,14 @@ test("knowledge sync exposes corpus to embedding selection", async () => {
 
   const result = await syncKnowledgeBase({
     vector: vector as never,
+    manifestStore: {
+      read: async () => {
+        throw new Error("manifest should not be read when index does not exist");
+      },
+      write: async (state) => {
+        writtenState = state;
+      },
+    },
     embed: async (values, corpus) => {
       embeddedCorpora.push(corpus);
       return { embeddings: values.map(() => [0.1, 0.2]) };
@@ -251,6 +260,38 @@ test("knowledge sync exposes corpus to embedding selection", async () => {
 
   assert.ok(result.indexedChunks > 0);
   assert.ok(upserts.length > 0);
+  assert.ok(writtenState);
+  assert.ok(Object.keys(writtenState).includes(knowledgeSources[0].path));
   assert.ok(embeddedCorpora.includes("repository"));
   assert.ok(embeddedCorpora.includes("product"));
+});
+
+test("knowledge sync deletes vectors for removed manifest paths", async () => {
+  const deletedFilters: unknown[] = [];
+  const vector = {
+    listIndexes: async () => ["shire_context"],
+    deleteVectors: async (input: unknown) => {
+      deletedFilters.push(input);
+    },
+    createIndex: async () => undefined,
+    upsert: async () => undefined,
+  };
+
+  await syncKnowledgeBase({
+    vector: vector as never,
+    manifestStore: {
+      read: async () => ({ ".agent/knowledge/removed.md": "old-hash" }),
+      write: async () => undefined,
+    },
+    embed: async (values) => ({
+      embeddings: values.map(() => [0.1, 0.2]),
+    }),
+  });
+
+  assert.deepEqual(deletedFilters, [
+    {
+      indexName: "shire_context",
+      filter: { path: ".agent/knowledge/removed.md" },
+    },
+  ]);
 });
