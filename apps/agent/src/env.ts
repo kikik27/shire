@@ -80,6 +80,13 @@ function normalizeBaseUrl(value: string) {
 
 export function createEnv(input: NodeJS.ProcessEnv = process.env) {
   const nodeEnv = input.NODE_ENV ?? "development";
+  const agentMemoryUrl =
+    input.SHIRE_AGENT_MEMORY_URL?.trim() || "file:./.data/shire-agent-memory.db";
+  const agentKnowledgeUrl =
+    input.SHIRE_AGENT_KNOWLEDGE_URL?.trim() ||
+    "file:./.data/shire-agent-knowledge.db";
+  const agentKnowledgeAuthToken =
+    input.SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN?.trim() || undefined;
   const defaultChatModels = parseRequiredModelChain(input.SHIRE_MODEL_DEFAULT, [
     "openrouter/nex-agi/nex-n2-pro:free",
     "openrouter/openai/gpt-oss-20b:free",
@@ -208,11 +215,16 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
       input.SHIRE_OUTPUT_MAX_CHARACTERS,
       12_000,
     ),
-    agentMemoryUrl:
-      input.SHIRE_AGENT_MEMORY_URL?.trim() || "file:./.data/shire-agent-memory.db",
-    agentKnowledgeUrl:
-      input.SHIRE_AGENT_KNOWLEDGE_URL?.trim() ||
-      "file:./.data/shire-agent-knowledge.db",
+    agentMemoryUrl,
+    agentMemoryAuthToken:
+      input.SHIRE_AGENT_MEMORY_AUTH_TOKEN?.trim() || undefined,
+    agentKnowledgeUrl,
+    agentKnowledgeAuthToken,
+    agentKnowledgeManifestUrl:
+      input.SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL?.trim() || agentKnowledgeUrl,
+    agentKnowledgeManifestAuthToken:
+      input.SHIRE_AGENT_KNOWLEDGE_MANIFEST_AUTH_TOKEN?.trim() ||
+      agentKnowledgeAuthToken,
     agentKnowledgeIndex:
       input.SHIRE_AGENT_KNOWLEDGE_INDEX?.trim() || "shire_context",
     ragTopK: parsePositiveInteger(input.SHIRE_RAG_TOP_K, 5),

@@ -17,6 +17,7 @@
     "job:dispute-summary": "node --env-file-if-exists=.env --import tsx src/jobs/run-dispute-summary.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "@mastra/ai-sdk": "^1.4.4",
     "@mastra/core": "latest",
     "@mastra/express": "^1.3.29",

@@ -109,6 +109,23 @@ test("returns bootstrap output when no job is provided", async () => {
     nodeEnv: env.nodeEnv,
     port: env.port,
     jobs: Object.keys(jobRegistry),
+    storage: {
+      memory: {
+        scheme: "file",
+        persistent: false,
+        authConfigured: false,
+      },
+      knowledge: {
+        scheme: "file",
+        persistent: false,
+        authConfigured: false,
+      },
+      knowledgeManifest: {
+        scheme: "file",
+        persistent: false,
+        authConfigured: false,
+      },
+    },
   });
 });
 

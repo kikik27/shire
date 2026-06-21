@@ -52,7 +52,14 @@ test("defaults capability model, memory, and knowledge config", () => {
   assert.equal(env.embeddingEnabled, true);
   assert.equal(env.workingMemoryEnabled, false);
   assert.equal(env.agentMemoryUrl, "file:./.data/shire-agent-memory.db");
+  assert.equal(env.agentMemoryAuthToken, undefined);
   assert.equal(env.agentKnowledgeUrl, "file:./.data/shire-agent-knowledge.db");
+  assert.equal(env.agentKnowledgeAuthToken, undefined);
+  assert.equal(
+    env.agentKnowledgeManifestUrl,
+    "file:./.data/shire-agent-knowledge.db",
+  );
+  assert.equal(env.agentKnowledgeManifestAuthToken, undefined);
   assert.equal(env.agentKnowledgeIndex, "shire_context");
   assert.equal(env.ragTopK, 5);
   assert.equal(env.ragMaxCharacters, 8_000);
@@ -131,6 +138,47 @@ test("parses embedding capabilities from env", () => {
     env.embeddingBaseUrls.repositoryKnowledge,
     "https://example.test/v1",
   );
+});
+
+test("parses persistent libsql storage config from env", () => {
+  const env = createEnv({
+    SHIRE_AGENT_MEMORY_URL: "libsql://shire-agent-memory-labsmula.aws-ap-northeast-1.turso.io",
+    SHIRE_AGENT_MEMORY_AUTH_TOKEN: "memory-token",
+    SHIRE_AGENT_KNOWLEDGE_URL: "libsql://shire-agent-knowledge.example.turso.io",
+    SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN: "knowledge-token",
+    SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL:
+      "libsql://shire-agent-manifest.example.turso.io",
+    SHIRE_AGENT_KNOWLEDGE_MANIFEST_AUTH_TOKEN: "manifest-token",
+  });
+
+  assert.equal(
+    env.agentMemoryUrl,
+    "libsql://shire-agent-memory-labsmula.aws-ap-northeast-1.turso.io",
+  );
+  assert.equal(env.agentMemoryAuthToken, "memory-token");
+  assert.equal(
+    env.agentKnowledgeUrl,
+    "libsql://shire-agent-knowledge.example.turso.io",
+  );
+  assert.equal(env.agentKnowledgeAuthToken, "knowledge-token");
+  assert.equal(
+    env.agentKnowledgeManifestUrl,
+    "libsql://shire-agent-manifest.example.turso.io",
+  );
+  assert.equal(env.agentKnowledgeManifestAuthToken, "manifest-token");
+});
+
+test("defaults knowledge manifest storage to knowledge storage", () => {
+  const env = createEnv({
+    SHIRE_AGENT_KNOWLEDGE_URL: "libsql://shire-agent-knowledge.example.turso.io",
+    SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN: "knowledge-token",
+  });
+
+  assert.equal(
+    env.agentKnowledgeManifestUrl,
+    "libsql://shire-agent-knowledge.example.turso.io",
+  );
+  assert.equal(env.agentKnowledgeManifestAuthToken, "knowledge-token");
 });
 
 test("parses a valid autonomy mode from SHIRE_AUTONOMY_MODE", () => {

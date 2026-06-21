@@ -24,6 +24,7 @@ import { validateChatRequest } from "./runtime/chat-validation";
 import { createInMemoryRateLimiter, type RateLimiter } from "./runtime/rate-limit";
 import { guardSecurityPrompt } from "./runtime/security-guard";
 import { evaluateSecurityPolicy } from "./runtime/security-policy";
+import { getStorageDiagnostics } from "./runtime/storage-diagnostics";
 import { AgentWorker } from "./runtime/jobs/agent-worker";
 import { parseJobRequest } from "./runtime/jobs/job-contracts";
 import type {
@@ -70,6 +71,7 @@ export function getRuntimeBootstrapOutput() {
     nodeEnv: env.nodeEnv,
     port: env.port,
     jobs: Object.keys(jobRegistry),
+    storage: getStorageDiagnostics(),
   } as const;
 }
 

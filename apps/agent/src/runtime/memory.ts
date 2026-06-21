@@ -6,10 +6,13 @@ import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 
 import { env } from "../env";
 import { createEmbeddingModelFor } from "./embeddings";
+import { buildLibSQLRuntimeConfig } from "./libsql-config";
 
 export interface AgentMemoryRuntimeConfig {
   agentMemoryUrl: string;
+  agentMemoryAuthToken?: string;
   agentKnowledgeUrl: string;
+  agentKnowledgeAuthToken?: string;
   agentKnowledgeIndex: string;
   embeddingModels: typeof env.embeddingModels;
   embeddingBaseUrls: typeof env.embeddingBaseUrls;
@@ -83,7 +86,11 @@ function normalizeAgentMemoryRuntime(
 ): AgentMemoryRuntimeConfig {
   return {
     agentMemoryUrl: runtime.agentMemoryUrl?.trim() || env.agentMemoryUrl,
+    agentMemoryAuthToken:
+      runtime.agentMemoryAuthToken?.trim() || env.agentMemoryAuthToken,
     agentKnowledgeUrl: runtime.agentKnowledgeUrl?.trim() || env.agentKnowledgeUrl,
+    agentKnowledgeAuthToken:
+      runtime.agentKnowledgeAuthToken?.trim() || env.agentKnowledgeAuthToken,
     agentKnowledgeIndex:
       runtime.agentKnowledgeIndex?.trim() || env.agentKnowledgeIndex,
     embeddingModels: runtime.embeddingModels ?? env.embeddingModels,
@@ -102,19 +109,21 @@ export function buildAgentMemoryConfig(
 
   const embeddingConfig = normalizedRuntime.embeddingEnabled
     ? {
-        vector: new LibSQLVector({
+        vector: new LibSQLVector(buildLibSQLRuntimeConfig({
           id: normalizedRuntime.agentKnowledgeIndex,
           url: normalizedRuntime.agentKnowledgeUrl,
-        }),
+          authToken: normalizedRuntime.agentKnowledgeAuthToken,
+        })),
         embedder: createEmbeddingModelFor("memory", normalizedRuntime),
       }
     : {};
 
   return {
-    storage: new LibSQLStore({
+    storage: new LibSQLStore(buildLibSQLRuntimeConfig({
       id: "shire-agent-memory-storage",
       url: normalizedRuntime.agentMemoryUrl,
-    }),
+      authToken: normalizedRuntime.agentMemoryAuthToken,
+    })),
     ...embeddingConfig,
     options: {
       lastMessages: 20,

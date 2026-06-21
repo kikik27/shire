@@ -10,6 +10,7 @@ const [{ createEnv }, memoryModule] = await Promise.all([
   import("../src/env"),
   import("../src/runtime/memory"),
 ]);
+const { buildLibSQLRuntimeConfig } = await import("../src/runtime/libsql-config");
 
 const {
   agentMemory,
@@ -24,6 +25,32 @@ const runtime = {
   agentMemoryUrl: "file:./.data/test-agent-memory.db",
   agentKnowledgeUrl: "file:./.data/test-agent-knowledge.db",
 };
+
+test("libsql runtime config includes auth token only when configured", () => {
+  assert.deepEqual(
+    buildLibSQLRuntimeConfig({
+      id: "memory",
+      url: "libsql://shire-agent-memory-labsmula.aws-ap-northeast-1.turso.io",
+      authToken: " turso-token ",
+    }),
+    {
+      id: "memory",
+      url: "libsql://shire-agent-memory-labsmula.aws-ap-northeast-1.turso.io",
+      authToken: "turso-token",
+    },
+  );
+
+  assert.deepEqual(
+    buildLibSQLRuntimeConfig({
+      id: "memory",
+      url: "file:./.data/test-agent-memory.db",
+    }),
+    {
+      id: "memory",
+      url: "file:./.data/test-agent-memory.db",
+    },
+  );
+});
 
 test("agent memory config includes vector recall and working memory", () => {
   const config = buildAgentMemoryConfig({

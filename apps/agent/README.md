@@ -45,9 +45,23 @@ memory remains disabled because OpenRouter's free chat router may not select
 models that support tool calls; recent conversation history and semantic recall
 remain enabled.
 
-Memory and repository knowledge use separate libSQL URLs. Retrieval defaults to
-five results and an 8,000-character context budget; configure these with
-`SHIRE_AGENT_MEMORY_URL`, `SHIRE_AGENT_KNOWLEDGE_URL`,
+Memory and repository knowledge use libSQL URLs. Local development defaults to
+`file:` databases under `.data`; production should use remote libSQL/Turso URLs
+so deployments do not lose memory or vector sync state:
+
+```env
+SHIRE_AGENT_MEMORY_URL=libsql://shire-agent-memory-labsmula.aws-ap-northeast-1.turso.io
+SHIRE_AGENT_MEMORY_AUTH_TOKEN=...
+SHIRE_AGENT_KNOWLEDGE_URL=libsql://shire-agent-knowledge.example.turso.io
+SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN=...
+SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL=libsql://shire-agent-knowledge.example.turso.io
+SHIRE_AGENT_KNOWLEDGE_MANIFEST_AUTH_TOKEN=...
+```
+
+If `SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL` is omitted, it defaults to
+`SHIRE_AGENT_KNOWLEDGE_URL`; if the manifest token is omitted, it defaults to
+`SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN`. Retrieval defaults to five results and an
+8,000-character context budget; configure these with
 `SHIRE_AGENT_KNOWLEDGE_INDEX`, `SHIRE_RAG_TOP_K`, and
 `SHIRE_RAG_MAX_CHARACTERS`.
 
@@ -228,3 +242,10 @@ When the vector index is available, product retrieval uses the configured
 back to deterministic role-filtered retrieval from the curated local Markdown
 files. If retrieval still fails, chat continues without product chunks and the
 agent must not invent unavailable product behavior.
+
+Knowledge sync stores a content-hash manifest next to the vector index. With a
+remote manifest URL, the manifest is stored in the `shire_knowledge_manifest`
+libSQL table, letting repeated deploys skip unchanged documents and delete
+vectors for documents removed from the approved source registry. `/health` and
+`/ready` expose storage diagnostics by scheme, persistence, and auth presence
+only; URLs and tokens are intentionally omitted.
