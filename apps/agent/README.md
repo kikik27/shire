@@ -10,15 +10,32 @@ Background orchestration service for Shire.
 - `src/server.ts` is the local runtime entrypoint
 - `src/env.ts` centralizes runtime environment access
 
-## Cost-aware configuration
+## Capability model configuration
 
-Language models are configured as comma-separated fallback chains:
+Chat model chains are configured directly per capability:
 
-- `SHIRE_MODEL_CHEAP`: routine extraction, summaries, and reranking
-- `SHIRE_MODEL_BALANCED`: ambiguous or repeatedly invalid structured output
-- `SHIRE_MODEL_HEAVY`: dispute and conflicting-evidence analysis
-- `SHIRE_EMBEDDING_MODEL`: OpenRouter embedding model
-- `SHIRE_EMBEDDING_BASE_URL`: OpenRouter API root
+- `SHIRE_MODEL_DEFAULT`: fallback chain used by any unset capability
+- `SHIRE_MODEL_PRODUCT_QNA`: public product assistant on the landing page
+- `SHIRE_MODEL_ROLE_AWARE_CHAT`: authenticated candidate/recruiter chat
+- `SHIRE_MODEL_CV_NORMALIZATION`: CV parsing and profile normalization
+- `SHIRE_MODEL_KNOWLEDGE_SYNTHESIS`: internal knowledge synthesis
+- `SHIRE_MODEL_JOB_RERANK`: candidate-to-job reranking
+- `SHIRE_MODEL_TALENT_RERANK`: talent-to-job reranking
+- `SHIRE_MODEL_RECOMMENDATION_EXPLANATION`: recommendation explanations
+- `SHIRE_MODEL_WORKFLOW_SUMMARY`: short workflow summaries
+- `SHIRE_MODEL_DISPUTE_SUMMARY`: dispute evidence summaries
+- `SHIRE_MODEL_SECURITY_GUARD`: LLM-backed security guard checks
+
+Embedding models are configured per retrieval surface:
+
+- `SHIRE_EMBEDDING_MODEL_DEFAULT`
+- `SHIRE_EMBEDDING_MODEL_MEMORY`
+- `SHIRE_EMBEDDING_MODEL_PRODUCT_KNOWLEDGE`
+- `SHIRE_EMBEDDING_MODEL_REPOSITORY_KNOWLEDGE`
+- `SHIRE_EMBEDDING_BASE_URL_DEFAULT`
+- `SHIRE_EMBEDDING_BASE_URL_MEMORY`
+- `SHIRE_EMBEDDING_BASE_URL_PRODUCT_KNOWLEDGE`
+- `SHIRE_EMBEDDING_BASE_URL_REPOSITORY_KNOWLEDGE`
 - `SHIRE_EMBEDDING_ENABLED`: enable semantic memory and vector retrieval
 - `SHIRE_WORKING_MEMORY_ENABLED`: enable tool-based persistent working memory
 
@@ -36,10 +53,11 @@ five results and an 8,000-character context budget; configure these with
 
 ## Runtime policy
 
-All chat tiers default to verified, explicit OpenRouter free models instead of
-the dynamic free router. This avoids transient routing to broken provider
-endpoints. Override individual tiers with comma-separated fallback chains when
-a workload needs stronger or more reliable models.
+All chat capabilities default to verified, explicit OpenRouter free models
+instead of the dynamic free router. This avoids transient routing to broken
+provider endpoints. Override individual capability env values with
+comma-separated fallback chains when a capability needs stronger or more
+reliable models.
 
 CV extraction produces a Zod-validated draft. Embedding is a separate
 TokenRouter request resolved by Mastra over canonical profile search text. Raw
@@ -206,7 +224,7 @@ Candidate chat retrieves `general + candidate` chunks. Recruiter chat retrieves
 before retrieval.
 
 When the vector index is available, product retrieval uses the configured
-embedding provider. If the index is missing, chat falls back to deterministic
-role-filtered retrieval from the curated local Markdown files. If retrieval
-still fails, chat continues without product chunks and the agent must not invent
-unavailable product behavior.
+`product-knowledge` embedding provider. If the index is missing, chat falls
+back to deterministic role-filtered retrieval from the curated local Markdown
+files. If retrieval still fails, chat continues without product chunks and the
+agent must not invent unavailable product behavior.

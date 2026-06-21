@@ -27,18 +27,22 @@ Rules:
 10. Never recommend self-application to a job owned by the same user.
 ```
 
-## Cost-aware runtime configuration
+## Capability runtime configuration
 
-The agent runtime uses deterministic `cheap`, `balanced`, and `heavy` model
-chains configured through `SHIRE_MODEL_CHEAP`, `SHIRE_MODEL_BALANCED`, and
-`SHIRE_MODEL_HEAVY`. Each value is a comma-separated provider/model fallback
-chain. Free OpenRouter model availability changes, so model IDs must remain
-environment configuration.
+The agent runtime uses deterministic model chains configured directly per
+capability. `SHIRE_MODEL_DEFAULT` is the fallback chain, and capability-specific
+env values such as `SHIRE_MODEL_PRODUCT_QNA`,
+`SHIRE_MODEL_CV_NORMALIZATION`, and `SHIRE_MODEL_DISPUTE_SUMMARY` override it.
+Each value is a comma-separated provider/model fallback chain. Free OpenRouter
+model availability changes, so model IDs must remain environment
+configuration.
 
-Embeddings use direct OpenAI configuration through
-`SHIRE_EMBEDDING_MODEL` (default `text-embedding-3-small`). Persistent memory
-and repository knowledge use separate libSQL URLs. Repository retrieval is
-bounded by `SHIRE_RAG_TOP_K` and `SHIRE_RAG_MAX_CHARACTERS`.
+Embeddings are configured per retrieval surface. Memory semantic recall uses
+`SHIRE_EMBEDDING_MODEL_MEMORY`, product knowledge uses
+`SHIRE_EMBEDDING_MODEL_PRODUCT_KNOWLEDGE`, and repository knowledge uses
+`SHIRE_EMBEDDING_MODEL_REPOSITORY_KNOWLEDGE`. Persistent memory and repository
+knowledge use separate libSQL URLs. Repository retrieval is bounded by
+`SHIRE_RAG_TOP_K` and `SHIRE_RAG_MAX_CHARACTERS`.
 
 ## Agent-specific prompts
 
