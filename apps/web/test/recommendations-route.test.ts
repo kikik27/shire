@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+<<<<<<< HEAD
 import {
   AuthenticatedUserError,
 } from "../lib/server/authenticated-user";
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 import { createInMemoryProfileRepository } from "../lib/server/profile-repository";
 import {
   createCandidateRecommendationsRouteHandlers,
   createRecruiterRecommendationsRouteHandlers,
 } from "../lib/server/recommendations-route";
+<<<<<<< HEAD
 import {
   createInMemoryRecommendationsRepository,
   RecommendationsRepositoryError,
 } from "../lib/server/recommendations-repository";
+=======
+import { createInMemoryRecommendationsRepository } from "../lib/server/recommendations-repository";
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 
 function authenticated(privyUserId = "did:privy:candidate") {
   return async () => ({ mode: "privy", privyUserId }) as const;
@@ -32,6 +39,7 @@ function seedRecommendation(
     jobId: string;
     matchScore: number;
     recommendedAction: string;
+<<<<<<< HEAD
     candidate: {
       displayName?: string;
       headline?: string;
@@ -47,6 +55,8 @@ function seedRecommendation(
       experienceLevel: string;
       skillsRequired: string[];
     };
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
   }>,
 ) {
   const now = Date.now();
@@ -65,8 +75,11 @@ function seedRecommendation(
     status: "NEW",
     createdAt: now,
     updatedAt: now,
+<<<<<<< HEAD
     candidate: overrides.candidate,
     job: overrides.job,
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
   });
 }
 
@@ -147,6 +160,7 @@ test("recruiter recommendations GET returns only the recruiter's talent recommen
     recruiterUserId: recruiter.id,
     matchScore: 90,
     recommendedAction: "SUGGEST_INVITE",
+<<<<<<< HEAD
     candidate: {
       displayName: "Sara Lindgren",
       headline: "Frontend Engineer",
@@ -162,6 +176,8 @@ test("recruiter recommendations GET returns only the recruiter's talent recommen
       experienceLevel: "SENIOR",
       skillsRequired: ["React", "TypeScript"],
     },
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
   });
   seedRecommendation(recommendations, {
     type: "TALENT_TO_COMPANY",
@@ -185,6 +201,7 @@ test("recruiter recommendations GET returns only the recruiter's talent recommen
   assert.equal(body.recommendations.length, 1);
   assert.equal(body.recommendations[0].recruiterUserId, recruiter.id);
   assert.equal(body.recommendations[0].recommendedAction, "SUGGEST_INVITE");
+<<<<<<< HEAD
   assert.equal(body.recommendations[0].candidate.displayName, "Sara Lindgren");
   assert.equal(body.recommendations[0].job.title, "Frontend Engineer");
 });
@@ -301,4 +318,6 @@ test("recruiter recommendations GET returns 401 when authentication fails", asyn
   assert.equal(response.status, 401);
   const body = await response.json();
   assert.equal(body.error, "unauthorized");
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 });

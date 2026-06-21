@@ -4,12 +4,17 @@ import {
   createDatabase,
   type Database,
 } from "./db";
+<<<<<<< HEAD
 import { candidateProfiles, jobs, recommendations } from "./db/schema";
+=======
+import { jobs, recommendations } from "./db/schema";
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 import type {
   RecommendationStatus,
   RecommendationType,
 } from "@shire/shared";
 
+<<<<<<< HEAD
 export type RecommendationCandidateSummary = {
   displayName?: string;
   headline?: string;
@@ -27,6 +32,8 @@ export type RecommendationJobSummary = {
   skillsRequired: string[];
 };
 
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 export type PersistedRecommendation = {
   id: string;
   type: RecommendationType;
@@ -42,8 +49,11 @@ export type PersistedRecommendation = {
   status: RecommendationStatus;
   createdAt: number;
   updatedAt: number;
+<<<<<<< HEAD
   candidate?: RecommendationCandidateSummary;
   job?: RecommendationJobSummary;
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 };
 
 export interface RecommendationsRepository {
@@ -69,6 +79,7 @@ function toTimestamp(value: Date | number) {
   return value instanceof Date ? value.getTime() : value;
 }
 
+<<<<<<< HEAD
 function asString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -119,6 +130,10 @@ function mapRecommendation(
     candidate?: typeof candidateProfiles.$inferSelect | null;
     job?: typeof jobs.$inferSelect | null;
   } = {},
+=======
+function mapRecommendation(
+  row: typeof recommendations.$inferSelect,
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 ): PersistedRecommendation {
   return {
     id: row.id,
@@ -135,8 +150,11 @@ function mapRecommendation(
     status: row.status,
     createdAt: toTimestamp(row.createdAt),
     updatedAt: toTimestamp(row.updatedAt),
+<<<<<<< HEAD
     candidate: mapCandidateSummary(details.candidate),
     job: mapJobSummary(details.job),
+=======
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
   };
 }
 
@@ -147,12 +165,17 @@ export function createDrizzleRecommendationsRepository(
     async listRecommendationsForCandidate(candidateUserId) {
       try {
         const rows = await database
+<<<<<<< HEAD
           .select({
             recommendation: recommendations,
             job: jobs,
           })
           .from(recommendations)
           .leftJoin(jobs, eq(recommendations.jobId, jobs.id))
+=======
+          .select()
+          .from(recommendations)
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
           .where(
             and(
               eq(recommendations.candidateUserId, candidateUserId),
@@ -160,9 +183,13 @@ export function createDrizzleRecommendationsRepository(
             ),
           )
           .orderBy(desc(recommendations.matchScore), desc(recommendations.createdAt));
+<<<<<<< HEAD
         return rows.map((row) =>
           mapRecommendation(row.recommendation, { job: row.job }),
         );
+=======
+        return rows.map(mapRecommendation);
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
       } catch (error) {
         throw new RecommendationsRepositoryError(
           "Failed to list candidate recommendations.",
@@ -183,6 +210,7 @@ export function createDrizzleRecommendationsRepository(
         }
 
         const rows = await database
+<<<<<<< HEAD
           .select({
             recommendation: recommendations,
             candidate: candidateProfiles,
@@ -194,6 +222,10 @@ export function createDrizzleRecommendationsRepository(
             eq(recommendations.candidateUserId, candidateProfiles.userId),
           )
           .leftJoin(jobs, eq(recommendations.jobId, jobs.id))
+=======
+          .select()
+          .from(recommendations)
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
           .where(
             and(
               inArray(
@@ -204,12 +236,16 @@ export function createDrizzleRecommendationsRepository(
             ),
           )
           .orderBy(desc(recommendations.matchScore), desc(recommendations.createdAt));
+<<<<<<< HEAD
         return rows.map((row) =>
           mapRecommendation(row.recommendation, {
             candidate: row.candidate,
             job: row.job,
           }),
         );
+=======
+        return rows.map(mapRecommendation);
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
       } catch (error) {
         throw new RecommendationsRepositoryError(
           "Failed to list recruiter recommendations.",

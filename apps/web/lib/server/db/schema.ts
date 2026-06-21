@@ -57,7 +57,11 @@ export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "PARTIAL",
 ]);
 
+<<<<<<< HEAD
 // Matching enums sourced from @shire/shared so both apps agree on the values.
+=======
+// Matching enums — sourced from @shire/shared so both apps agree on the values.
+>>>>>>> bd09cea (feat(shared): matching contracts + recommendations data layer)
 export const profileStatusEnum = pgEnum("profile_status", [...PROFILE_STATUSES]);
 export const recommendationTypeEnum = pgEnum("recommendation_type", [
   ...RECOMMENDATION_TYPES,
