@@ -1,16 +1,9 @@
-// STUB — deterministic placeholder workflow, not the real matching pipeline.
-//
-// The real Talent Matching flow (per .agent/context/agent/workflows.md and
-// matching-pipeline.md) is: Filter (exclude company members as candidates,
-// recently-invited candidates) → Rule Score → AI Rerank → save recommendation
-// at score >= 70, notify company at >= 85. That pipeline depends on a Prisma
-// data layer (Phase 1-7 in tasks.md) that does not exist yet. The score below
-// is derived from input length and is NOT a match signal — it exists only so
-// the workflow can be registered and exercised by the CLI runner and tests
-// while the data layer lands.
-//
-// When the real pipeline lands, replace normalizeTalentMatching with the
-// Filter → Rule Score → Rerank implementation.
+// Matching workflow registration shell. The REAL matching pipeline lives in
+// src/runtime/matching (rule-score → filter → rerank → persist) and is invoked
+// by the talent-matching JobProcessor (POST /jobs { name: "talent-matching" })
+// and runTalentMatchingForJob. This Mastra workflow is kept registered so the
+// CLI runner (runTalentMatchingJob) and existing tests can reference its id;
+// it does not perform matching itself.
 
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";

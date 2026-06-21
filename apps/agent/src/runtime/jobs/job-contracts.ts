@@ -18,9 +18,25 @@ const onchainSyncRequestSchema = z.object({
   }),
 });
 
+const jobMatchingRequestSchema = z.object({
+  name: z.literal("job-matching"),
+  payload: z.object({
+    candidateId: z.string().trim().min(1),
+  }),
+});
+
+const talentMatchingRequestSchema = z.object({
+  name: z.literal("talent-matching"),
+  payload: z.object({
+    jobId: z.string().trim().min(1),
+  }),
+});
+
 export const jobRequestSchema = z.discriminatedUnion("name", [
   cvParseRequestSchema,
   onchainSyncRequestSchema,
+  jobMatchingRequestSchema,
+  talentMatchingRequestSchema,
 ]);
 
 export type JobRequest = z.infer<typeof jobRequestSchema>;
@@ -35,6 +51,17 @@ export type JobStatus =
 export type JobPayloadMap = {
   "cv-parse": Extract<JobRequest, { name: "cv-parse" }>["payload"];
   "onchain-sync": Extract<JobRequest, { name: "onchain-sync" }>["payload"];
+  "job-matching": Extract<JobRequest, { name: "job-matching" }>["payload"];
+  "talent-matching": Extract<JobRequest, { name: "talent-matching" }>["payload"];
+};
+
+export type MatchingJobResult = {
+  status: "ready" | "no-database" | "skipped";
+  saved: number;
+  evaluated: number;
+  strong: number;
+  llmInvoked: boolean;
+  durationMs: number;
 };
 
 export type JobResultMap = {
@@ -51,6 +78,8 @@ export type JobResultMap = {
     chain: "Celo";
     llmInvoked: false;
   };
+  "job-matching": MatchingJobResult;
+  "talent-matching": MatchingJobResult;
 };
 
 export type JobResult = JobResultMap[JobName];

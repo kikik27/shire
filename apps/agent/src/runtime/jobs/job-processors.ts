@@ -1,26 +1,16 @@
 import type {
-  JobPayloadMap,
   JobResult,
-  JobResultMap,
   ProcessableJob,
 } from "./job-contracts";
 import type { JobExecutionContext } from "./job-processor";
 import { cvParseProcessor } from "./cv-parse.processor";
 import { onchainSyncProcessor } from "./onchain-sync.processor";
+import {
+  jobMatchingProcessor,
+  talentMatchingProcessor,
+} from "./matching.processor";
 
-type CvParseProcessor = (
-  payload: JobPayloadMap["cv-parse"],
-  context: JobExecutionContext,
-) => Promise<JobResultMap["cv-parse"]>;
-
-export function createJobProcessors(
-  dependencies: {
-    processCvParse: CvParseProcessor;
-  } = {
-    processCvParse: (payload, context) =>
-      cvParseProcessor.process(payload, context),
-  },
-) {
+export function createJobProcessors() {
   return {
     async process(
       job: ProcessableJob,
@@ -28,17 +18,29 @@ export function createJobProcessors(
     ): Promise<JobResult> {
       const executionContext = { ...context, jobId: job.id };
 
-      if (job.name === "onchain-sync") {
-        return onchainSyncProcessor.process(
-          job.payload as { chain: "Celo" },
-          executionContext,
-        );
+      switch (job.name) {
+        case "onchain-sync":
+          return onchainSyncProcessor.process(
+            job.payload as { chain: "Celo" },
+            executionContext,
+          );
+        case "job-matching":
+          return jobMatchingProcessor.process(
+            job.payload as { candidateId: string },
+            executionContext,
+          );
+        case "talent-matching":
+          return talentMatchingProcessor.process(
+            job.payload as { jobId: string },
+            executionContext,
+          );
+        case "cv-parse":
+        default:
+          return cvParseProcessor.process(
+            job.payload as { candidateId: string; rawCv: string },
+            executionContext,
+          );
       }
-
-      return dependencies.processCvParse(
-        job.payload as { candidateId: string; rawCv: string },
-        executionContext,
-      );
     },
   };
 }
