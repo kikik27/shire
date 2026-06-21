@@ -1,26 +1,23 @@
-import type { AgentWorkload } from "./model-policy";
-import { getWorkloadPolicy } from "./model-policy";
+import type { ChatModelCapability } from "./model-policy";
 import { resolveModelChain } from "./model-router";
 
-export const jobWorkloads = {
+export const jobCapabilities = {
   "cv-parse": "cv-normalization",
   "job-matching": "job-rerank",
   "talent-matching": "talent-rerank",
   "dispute-summary": "dispute-summary",
-} as const satisfies Record<string, AgentWorkload>;
+} as const satisfies Record<string, ChatModelCapability>;
 
-export type RoutedJobName = keyof typeof jobWorkloads;
+export type RoutedJobName = keyof typeof jobCapabilities;
 
 export function createJobRouting(
   job: RoutedJobName,
   escalationReason?: string,
 ) {
-  const workload = jobWorkloads[job];
-  const tier = getWorkloadPolicy(workload).tier;
+  const capability = jobCapabilities[job];
   const routing = {
-    workload,
-    tier,
-    attemptedModels: resolveModelChain({ workload }).map(
+    capability,
+    attemptedModels: resolveModelChain({ capability }).map(
       (entry) => entry.model,
     ),
     ...(escalationReason ? { escalationReason } : {}),

@@ -7,9 +7,8 @@ import {
 } from "./candidate-profile";
 import type {
   CvGenerationResult,
-  CvNormalizationTier,
 } from "./cv-normalizer";
-import { getWorkloadPolicy } from "./model-policy";
+import { getCapabilityPolicy } from "./model-policy";
 import { env } from "../env";
 
 type CvAgentResponse = {
@@ -100,13 +99,14 @@ function groundCandidateProfile(
   });
 }
 
-function resolveReportedModel(modelId: string | undefined, tier: CvNormalizationTier) {
+function resolveReportedModel(modelId: string | undefined) {
+  const chain = env.chatModelChains.cvNormalization;
   if (!modelId) {
-    return env.modelChains[tier][0] ?? `${tier}/unknown`;
+    return chain[0] ?? "cv-normalization/unknown";
   }
 
   return (
-    env.modelChains[tier].find(
+    chain.find(
       (configured) =>
         configured === modelId || configured.endsWith(`/${modelId}`),
     ) ?? modelId
@@ -118,11 +118,9 @@ export async function generateCandidateProfile(input: {
   candidateId: string;
   jobId: string;
   rawCv: string;
-  tier: CvNormalizationTier;
 }): Promise<CvGenerationResult & { profile: CandidateProfileDraft }> {
   const requestContext = new RequestContext();
-  requestContext.set("workload", "cv-normalization");
-  requestContext.set("tier-override", input.tier);
+  requestContext.set("model-capability", "cv-normalization");
   requestContext.set("job-id", input.jobId);
 
   const agent = input.agent ?? (cvProfileAgent as unknown as CvAgent);
@@ -147,7 +145,7 @@ export async function generateCandidateProfile(input: {
         schema: CandidateProfileDraftSchema,
       },
       maxOutputTokens:
-        getWorkloadPolicy("cv-normalization").maxOutputTokens,
+        getCapabilityPolicy("cv-normalization").maxOutputTokens,
     },
   );
 
@@ -158,7 +156,7 @@ export async function generateCandidateProfile(input: {
 
   return {
     profile,
-    model: resolveReportedModel(response.response?.modelId, input.tier),
+    model: resolveReportedModel(response.response?.modelId),
     usage: response.usage,
   };
 }

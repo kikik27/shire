@@ -43,14 +43,14 @@
 6. Save summary to `Dispute.summary`.
 7. Save `AgentRun` log.
 8. Notify admin.
-# Cost-aware execution
+# Capability-based execution
 
-Agent jobs use fixed workload IDs rather than caller-selected model IDs:
+Agent jobs use fixed model capability IDs rather than caller-selected model IDs:
 
-- `cv-parse` -> `cv-normalization` (`cheap`)
-- `job-matching` -> `job-rerank` (`cheap`)
-- `talent-matching` -> `talent-rerank` (`cheap`)
-- `dispute-summary` -> `dispute-summary` (`heavy`)
+- `cv-parse` -> `cv-normalization`
+- `job-matching` -> `job-rerank`
+- `talent-matching` -> `talent-rerank`
+- `dispute-summary` -> `dispute-summary`
 
 Onchain sync never calls an LLM. Each routed job returns attempted models and
 normalized usage records. CV normalization and CV embedding are separate

@@ -1,36 +1,68 @@
-import { env } from "../env";
-import type { AgentWorkload, ModelTier } from "./model-policy";
-import { getWorkloadPolicy } from "./model-policy";
+import { env, type createEnv } from "../env";
+import type { ChatModelCapability } from "./model-policy";
+
+type RuntimeEnv = ReturnType<typeof createEnv>;
 
 export type ModelRequestContext = {
-  workload?: AgentWorkload;
-  tierOverride?: ModelTier;
+  capability?: ChatModelCapability;
+  runtime?: Pick<RuntimeEnv, "chatModelChains">;
 };
 
 export function createModelFallbackChain(models: readonly string[]) {
   return models.map((model) => ({ model, maxRetries: 1 }));
 }
 
-const defaultChatModel = "openrouter/nex-agi/nex-n2-pro:free";
+function toEnvCapabilityKey(capability: ChatModelCapability) {
+  switch (capability) {
+    case "product-qna":
+      return "productQna";
+    case "role-aware-chat":
+      return "roleAwareChat";
+    case "cv-normalization":
+      return "cvNormalization";
+    case "knowledge-synthesis":
+      return "knowledgeSynthesis";
+    case "job-rerank":
+      return "jobRerank";
+    case "talent-rerank":
+      return "talentRerank";
+    case "recommendation-explanation":
+      return "recommendationExplanation";
+    case "workflow-summary":
+      return "workflowSummary";
+    case "dispute-summary":
+      return "disputeSummary";
+    case "security-guard":
+      return "securityGuard";
+  }
+}
+
+function getCapabilityChain(
+  runtime: Pick<RuntimeEnv, "chatModelChains">,
+  capability: ChatModelCapability,
+) {
+  const key = toEnvCapabilityKey(capability);
+  return runtime.chatModelChains[key] ?? runtime.chatModelChains.default;
+}
 
 export function resolveModelChain(input: ModelRequestContext) {
-  if (!input.workload) {
-    throw new Error("A workload is required to resolve the model chain.");
+  const runtime = input.runtime ?? env;
+  if (!input.capability) {
+    return createModelFallbackChain(runtime.chatModelChains.default);
   }
 
-  const tier =
-    input.tierOverride ?? getWorkloadPolicy(input.workload).tier;
-  return createModelFallbackChain(env.modelChains[tier]);
+  return createModelFallbackChain(
+    getCapabilityChain(runtime, input.capability),
+  );
 }
 
 export function resolveRuntimeAgentModelId(input: ModelRequestContext = {}) {
-  if (!input.workload) {
-    return defaultChatModel;
+  const runtime = input.runtime ?? env;
+  if (!input.capability) {
+    return runtime.chatModelChains.default[0];
   }
 
-  const tier =
-    input.tierOverride ?? getWorkloadPolicy(input.workload).tier;
-  return env.modelChains[tier][0] ?? defaultChatModel;
+  return getCapabilityChain(runtime, input.capability)[0];
 }
 
 export const dynamicAgentModel = ({
@@ -38,14 +70,9 @@ export const dynamicAgentModel = ({
 }: {
   requestContext: { get: (key: string) => unknown };
 }) => {
-  const workload = requestContext.get("workload") as AgentWorkload | undefined;
-  const tierOverride = requestContext.get("tier-override") as
-    | ModelTier
+  const capability = requestContext.get("model-capability") as
+    | ChatModelCapability
     | undefined;
 
-  if (!workload) {
-    return createModelFallbackChain(env.modelChains.cheap);
-  }
-
-  return resolveModelChain({ workload, tierOverride });
+  return resolveModelChain({ capability });
 };

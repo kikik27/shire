@@ -5,14 +5,14 @@ import { Memory } from "@mastra/memory";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 
 import { env } from "../env";
-import { createEmbeddingModel } from "./embeddings";
+import { createEmbeddingModelFor } from "./embeddings";
 
 export interface AgentMemoryRuntimeConfig {
   agentMemoryUrl: string;
   agentKnowledgeUrl: string;
   agentKnowledgeIndex: string;
-  embeddingModel: string;
-  embeddingBaseUrl: string;
+  embeddingModels: typeof env.embeddingModels;
+  embeddingBaseUrls: typeof env.embeddingBaseUrls;
   embeddingEnabled: boolean;
   workingMemoryEnabled: boolean;
 }
@@ -20,7 +20,7 @@ export interface AgentMemoryRuntimeConfig {
 export interface AgentMemoryConfig {
   storage: LibSQLStore;
   vector?: LibSQLVector;
-  embedder?: ReturnType<typeof createEmbeddingModel>;
+  embedder?: ReturnType<typeof createEmbeddingModelFor>;
   options: {
     lastMessages: number;
     semanticRecall:
@@ -86,9 +86,8 @@ function normalizeAgentMemoryRuntime(
     agentKnowledgeUrl: runtime.agentKnowledgeUrl?.trim() || env.agentKnowledgeUrl,
     agentKnowledgeIndex:
       runtime.agentKnowledgeIndex?.trim() || env.agentKnowledgeIndex,
-    embeddingModel: runtime.embeddingModel?.trim() || env.embeddingModel,
-    embeddingBaseUrl:
-      runtime.embeddingBaseUrl?.trim() || env.embeddingBaseUrl,
+    embeddingModels: runtime.embeddingModels ?? env.embeddingModels,
+    embeddingBaseUrls: runtime.embeddingBaseUrls ?? env.embeddingBaseUrls,
     embeddingEnabled:
       runtime.embeddingEnabled ?? env.embeddingEnabled,
     workingMemoryEnabled:
@@ -107,10 +106,7 @@ export function buildAgentMemoryConfig(
           id: normalizedRuntime.agentKnowledgeIndex,
           url: normalizedRuntime.agentKnowledgeUrl,
         }),
-        embedder: createEmbeddingModel({
-          modelId: normalizedRuntime.embeddingModel,
-          baseUrl: normalizedRuntime.embeddingBaseUrl,
-        }),
+        embedder: createEmbeddingModelFor("memory", normalizedRuntime),
       }
     : {};
 

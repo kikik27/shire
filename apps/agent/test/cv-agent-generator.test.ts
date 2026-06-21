@@ -11,7 +11,7 @@ const profile = CandidateProfileDraftSchema.parse({
   profileConfidence: 0.9,
 });
 
-test("generates a structured candidate profile with workload context", async () => {
+test("generates a structured candidate profile with model capability context", async () => {
   const calls: Array<{ messages: unknown; options: any }> = [];
   const result = await generateCandidateProfile({
     agent: {
@@ -27,14 +27,13 @@ test("generates a structured candidate profile with workload context", async () 
     candidateId: "candidate-001",
     jobId: "job-1",
     rawCv: "Maya Okafor. Senior TypeScript engineer",
-    tier: "cheap",
   });
 
   assert.equal(result.profile.fullName, "Maya Okafor");
   assert.equal(result.model, "openrouter/test-model");
   assert.equal(result.usage?.totalTokens, 42);
   assert.equal(
-    calls[0]?.options.requestContext.get("workload"),
+    calls[0]?.options.requestContext.get("model-capability"),
     "cv-normalization",
   );
   assert.equal(calls[0]?.options.memory.thread, "cv-parse:candidate-001");
@@ -61,7 +60,6 @@ test("removes profile facts that are not grounded in the CV", async () => {
     candidateId: "candidate-001",
     jobId: "job-1",
     rawCv: "Maya Okafor. Frontend Engineer. TypeScript.",
-    tier: "cheap",
   });
 
   assert.deepEqual(result.profile.skills, ["TypeScript"]);

@@ -6,8 +6,12 @@ import { LibSQLVector } from "@mastra/libsql";
 import { MDocument } from "@mastra/rag";
 
 import { env } from "../env";
-import { embedText, embedTexts } from "./embeddings";
 import {
+  embedTextFor,
+  embedTextsFor,
+} from "./embeddings";
+import {
+  type KnowledgeCorpus,
   knowledgeSources,
   productKnowledgeSources,
   type ProductKnowledgeAudience,
@@ -52,6 +56,11 @@ type ProductKnowledgeDocument = {
   path: string;
   text: string;
 };
+
+type KnowledgeEmbedMany = (
+  values: string[],
+  corpus: KnowledgeCorpus,
+) => Promise<{ embeddings: number[][] }>;
 
 function getSourceAudience(source: (typeof knowledgeSources)[number]) {
   return "audience" in source ? source.audience : "";
@@ -204,11 +213,19 @@ function writeKnowledgeState(state: KnowledgeState) {
 export async function syncKnowledgeBase(input?: {
   repoRoot?: string;
   vector?: LibSQLVector;
-  embed?: typeof embedTexts;
+  embed?: KnowledgeEmbedMany;
 }) {
   const repoRoot = input?.repoRoot ?? resolveRepoRoot();
   const vector = input?.vector ?? createKnowledgeVector();
-  const embed = input?.embed ?? embedTexts;
+  const embed =
+    input?.embed ??
+    ((values: string[], corpus: KnowledgeCorpus) =>
+      embedTextsFor(
+        corpus === "product"
+          ? "product-knowledge"
+          : "repository-knowledge",
+        values,
+      ));
   const indexes = await vector.listIndexes();
   const indexExists = indexes.includes(env.agentKnowledgeIndex);
   const previousState = indexExists ? readKnowledgeState() : {};
@@ -251,7 +268,10 @@ export async function syncKnowledgeBase(input?: {
         ["###", "subsection"],
       ],
     });
-    const { embeddings } = await embed(chunks.map((chunk) => chunk.text));
+    const { embeddings } = await embed(
+      chunks.map((chunk) => chunk.text),
+      source.corpus,
+    );
 
     if (!indexExists && indexedDocuments === 0 && embeddings[0]) {
       await vector.createIndex({
@@ -317,7 +337,11 @@ async function searchKnowledgeWithFilter(
     return onNoResults?.() ?? [];
   }
 
-  const { embedding } = await (dependencies?.embed ?? embedText)(query);
+  const defaultEmbed =
+    "audience" in filter
+      ? (value: string) => embedTextFor("product-knowledge", value)
+      : (value: string) => embedTextFor("repository-knowledge", value);
+  const { embedding } = await (dependencies?.embed ?? defaultEmbed)(query);
   const queryVector =
     dependencies?.query ??
     ((input: {

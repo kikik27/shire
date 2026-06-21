@@ -52,20 +52,20 @@ test("stores a pending-review profile and its embedding separately", async () =>
   assert.equal((await store.getById("candidate-1"))?.status, "PENDING_REVIEW");
 });
 
-test("retries cheap normalization once before balanced escalation", async () => {
-  const tiers: string[] = [];
+test("retries CV normalization twice before failing over to the final attempt", async () => {
+  const attempts: string[] = [];
   const result = await normalizeCvWithFallback({
     rawCv: "Maya CV",
-    generate: async ({ tier }) => {
-      tiers.push(tier);
-      if (tiers.length < 3) {
-        return { profile: {}, model: `${tier}/model` };
+    generate: async () => {
+      attempts.push("attempt");
+      if (attempts.length < 3) {
+        return { profile: {}, model: "openrouter/model" };
       }
-      return { profile, model: `${tier}/model` };
+      return { profile, model: "openrouter/model" };
     },
   });
 
-  assert.deepEqual(tiers, ["cheap", "cheap", "balanced"]);
+  assert.equal(attempts.length, 3);
   assert.equal(result.profile.fullName, "Maya Okafor");
   assert.equal(result.attempts.length, 2);
 });
@@ -89,6 +89,7 @@ test("normalizes, embeds, and stores a reviewable profile without raw CV", async
   assert.deepEqual(saved?.embedding, [0.1, 0.2]);
   assert.doesNotMatch(saved?.embeddingText ?? "", /RAW PRIVATE CV/);
   assert.equal(saved?.usage[0]?.provider, "openrouter");
+  assert.equal(saved?.usage[0]?.capability, "cv-normalization");
 });
 
 test("CV parse job exposes persisted profile and embedding metadata", async () => {
