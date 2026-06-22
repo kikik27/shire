@@ -254,6 +254,14 @@ export function createEnv(input: NodeJS.ProcessEnv = process.env) {
       false,
     ),
     workerEnabled: parseBoolean(input.SHIRE_WORKER_ENABLED, true),
+    recommendationSchedulerEnabled: parseBoolean(
+      input.SHIRE_RECOMMENDATION_SCHEDULER_ENABLED,
+      true,
+    ),
+    recommendationSchedulerIntervalMs: parsePositiveInteger(
+      input.SHIRE_RECOMMENDATION_SCHEDULER_INTERVAL_MS,
+      15 * 60 * 1000,
+    ),
     liveLlmTestsEnabled: parseBoolean(
       input.SHIRE_LIVE_LLM_TESTS,
       false,

@@ -66,6 +66,8 @@ test("defaults capability model, memory, and knowledge config", () => {
   assert.equal(env.ragTopK, 5);
   assert.equal(env.ragMaxCharacters, 8_000);
   assert.equal(env.workerEnabled, true);
+  assert.equal(env.recommendationSchedulerEnabled, true);
+  assert.equal(env.recommendationSchedulerIntervalMs, 15 * 60 * 1000);
   assert.equal(env.liveLlmTestsEnabled, false);
 });
 
@@ -225,6 +227,8 @@ test("parses custom agent config from environment variables", () => {
     SHIRE_WORKING_MEMORY_ENABLED: "true",
     SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://embedding.example/v1/",
     SHIRE_WORKER_ENABLED: "false",
+    SHIRE_RECOMMENDATION_SCHEDULER_ENABLED: "false",
+    SHIRE_RECOMMENDATION_SCHEDULER_INTERVAL_MS: "60000",
     SHIRE_LIVE_LLM_TESTS: "true",
     REDIS_URL: "rediss://redis.example:6379",
     SHIRE_AGENT_SERVICE_TOKEN: "secret",
@@ -241,6 +245,8 @@ test("parses custom agent config from environment variables", () => {
   assert.equal(env.workingMemoryEnabled, true);
   assert.equal(env.embeddingBaseUrls.default, "https://embedding.example/v1");
   assert.equal(env.workerEnabled, false);
+  assert.equal(env.recommendationSchedulerEnabled, false);
+  assert.equal(env.recommendationSchedulerIntervalMs, 60_000);
   assert.equal(env.liveLlmTestsEnabled, true);
   assert.equal(env.redisUrl, "rediss://redis.example:6379");
   assert.equal(env.agentServiceToken, "secret");
