@@ -72,7 +72,7 @@ export const steps: Step[] = [
   {
     num: "01",
     title: "Sign in & upload",
-    body: "Sign in with email or Google — Shire sets up your account — then drop in your CV or open role. No long forms, no crypto setup.",
+    body: "Sign in with email or Google. Shire sets up your account, then you drop in your CV or open role. No long forms, no crypto setup.",
   },
   {
     num: "02",
@@ -93,11 +93,11 @@ export type Feature = {
   match?: { score: number; skills: string[] };
 };
 
-/** Editorial feature grid — title + one line, no heavy cards. */
+/** Editorial feature grid with title and one line, no heavy cards. */
 export const features: Feature[] = [
   {
     title: "AI match engine",
-    body: "Skill overlap plus reasoning surfaces the matches that fit — with the reasons attached.",
+    body: "Skill overlap plus reasoning surfaces the matches that fit, with the reasons attached.",
     match: { score: 94, skills: ["React", "TypeScript", "Celo"] },
   },
   {
@@ -110,7 +110,7 @@ export const features: Feature[] = [
   },
   {
     title: "Live tracking",
-    body: "Every application's status, stake, and next step in one dashboard — no inbox archaeology.",
+    body: "Every application's status, stake, and next step in one dashboard. No inbox archaeology.",
   },
   {
     title: "Fair dispute resolution",
@@ -118,7 +118,7 @@ export const features: Feature[] = [
   },
   {
     title: "Daily match digest",
-    body: "A short, relevant digest of new matches — not another noisy inbox to clear.",
+    body: "A short, relevant digest of new matches, not another noisy inbox to clear.",
   },
 ];
 
@@ -148,7 +148,7 @@ export const testimonials: Testimonial[] = [
   },
   {
     quote:
-      "Staking sounded scary until I did it once. Funds are locked, not spent — and released the moment we both confirm.",
+      "Staking sounded scary until I did it once. Funds are locked, not spent, and released the moment we both confirm.",
     name: "Priya Nair",
     role: "Engineering Manager",
     initials: "PN",
@@ -157,7 +157,7 @@ export const testimonials: Testimonial[] = [
 
 export type Metric = { value: string; label: string };
 
-/** Big-number band — outcome stats, not vanity volume. */
+/** Big-number band with outcome stats, not vanity volume. */
 export const metrics: Metric[] = [
   { value: "4×", label: "Faster from match to signed offer" },
   { value: "40%", label: "Less screening time per role" },
@@ -169,11 +169,11 @@ export type Faq = { q: string; a: string };
 export const faqs: Faq[] = [
   {
     q: "What exactly is the stake, and is my money safe?",
-    a: "When you apply or accept, a small stablecoin stake is locked in escrow — not spent, not paid to us. It signals real commitment from both sides and is released automatically when you both confirm completion. Funds never leave escrow until that point.",
+    a: "When you apply or accept, a small stablecoin stake is locked in escrow, not spent and not paid to us. It signals real commitment from both sides and is released automatically when you both confirm completion. Funds never leave escrow until that point.",
   },
   {
     q: "How does the AI matching work?",
-    a: "Shire turns your CV or job post into a structured profile, then ranks matches using skill overlap plus reasoning. Every match comes with the reasons behind it — and the AI never applies or stakes on your behalf.",
+    a: "Shire turns your CV or job post into a structured profile, then ranks matches using skill overlap plus reasoning. Every match comes with the reasons behind it, and the AI never applies or stakes on your behalf.",
   },
   {
     q: "Do I need crypto experience to use Shire?",
@@ -181,7 +181,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "Can I be both a candidate and a company?",
-    a: "Yes. One account is one identity that can find work, find talent, or both. Switch modes anytime — your permissions are contextual, not locked to a role.",
+    a: "Yes. One account is one identity that can find work, find talent, or both. Switch modes anytime. Your permissions are contextual, not locked to a role.",
   },
   {
     q: "What happens if there's a dispute?",

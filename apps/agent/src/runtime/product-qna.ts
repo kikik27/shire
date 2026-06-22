@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { productQnaAgent } from "../mastra/agents/product-qna.agent";
+import { logger } from "./logger";
 import {
   buildKnowledgeSystemMessage,
   searchProductKnowledge,
@@ -53,6 +54,7 @@ export class ProductQnaError extends Error {
 }
 
 const MAX_PRODUCT_QUESTION_LENGTH = 1_000;
+const productQnaLogger = logger.child({ component: "product-qna" });
 const PRODUCT_ONLY_CODE_REQUEST_RESPONSE =
   "I can help with how to use Shire as a product, but I cannot provide code, API snippets, CLI commands, or implementation details here. Ask me about onboarding, roles, staking, escrow, AI matching, disputes, or the hiring flow.";
 
@@ -158,7 +160,15 @@ export async function answerProductQuestion(
     searchProductKnowledge?: typeof searchProductKnowledge;
   } = {},
 ): Promise<ProductQnaResponse> {
+  const startedAt = Date.now();
   const question = normalizeQuestion(body);
+  productQnaLogger.info(
+    {
+      questionLength: question.length,
+      codeRequest: isCodeRequest(question),
+    },
+    "product Q&A normalized question",
+  );
   if (isCodeRequest(question)) {
     return {
       answer: PRODUCT_ONLY_CODE_REQUEST_RESPONSE,
@@ -167,7 +177,15 @@ export async function answerProductQuestion(
   }
 
   const search = dependencies.searchProductKnowledge ?? searchProductKnowledge;
+  const retrievalStartedAt = Date.now();
   const knowledge = await searchPublicProductKnowledge(question, search);
+  productQnaLogger.info(
+    {
+      durationMs: Date.now() - retrievalStartedAt,
+      resultCount: knowledge.length,
+    },
+    "product Q&A knowledge retrieval completed",
+  );
   const context = knowledge.length
     ? buildKnowledgeSystemMessage(knowledge)
     : "No Shire product knowledge matched this public product question.";
@@ -175,6 +193,7 @@ export async function answerProductQuestion(
   requestContext.set("model-capability", "product-qna");
 
   const agent = dependencies.agent ?? (productQnaAgent as unknown as ProductQnaAgent);
+  const modelStartedAt = Date.now();
   const response = await agent.generate(
     [
       {
@@ -193,6 +212,13 @@ export async function answerProductQuestion(
       runId: `product-qna:${randomUUID()}`,
       maxOutputTokens: getCapabilityPolicy("product-qna").maxOutputTokens,
     },
+  );
+  productQnaLogger.info(
+    {
+      durationMs: Date.now() - modelStartedAt,
+      totalDurationMs: Date.now() - startedAt,
+    },
+    "product Q&A model call completed",
   );
   const answer = stripHiddenReasoning(extractText(response));
 

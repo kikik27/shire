@@ -5,6 +5,7 @@ import {
   buildChatProxyBody,
   resolveChatScopeForPathname,
 } from "../lib/chat/context";
+import { buildThreadCopy } from "../lib/chat/thread-copy";
 import {
   hasHiddenReasoning,
   stripHiddenReasoning,
@@ -77,4 +78,38 @@ test("strips hidden model reasoning from rendered assistant text", () => {
   );
   assert.equal(stripHiddenReasoning("<think>Still thinking"), "");
   assert.equal(hasHiddenReasoning("<think>Still thinking"), true);
+});
+
+test("builds candidate job assistant copy from active page scope", () => {
+  const copy = buildThreadCopy({
+    role: "candidate",
+    resourceType: "job",
+    resourceLabel: "Senior Frontend Engineer",
+  });
+
+  assert.equal(copy.emptyTitle, "Ask Shire about Senior Frontend Engineer");
+  assert.equal(copy.placeholder, "Ask about this role...");
+  assert.equal(copy.contextLabel, "Candidate + role context");
+  assert.deepEqual(copy.suggestions, [
+    "How well do I fit this role?",
+    "What should I improve before applying?",
+    "Explain the stake and escrow flow",
+  ]);
+});
+
+test("builds recruiter hiring assistant copy from active page scope", () => {
+  const copy = buildThreadCopy({
+    role: "recruiter",
+    resourceType: "job",
+    resourceLabel: "Solidity Engineer",
+  });
+
+  assert.equal(copy.emptyTitle, "Ask Shire about Solidity Engineer");
+  assert.equal(copy.placeholder, "Ask about this hiring role...");
+  assert.equal(copy.contextLabel, "Recruiter + role context");
+  assert.deepEqual(copy.suggestions, [
+    "How can I improve this job post?",
+    "What candidate signals matter most?",
+    "What should I review next?",
+  ]);
 });

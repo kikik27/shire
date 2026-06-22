@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Fade + rise into view, once. Respects prefers-reduced-motion (renders children
- * as-is). Keep it subtle: small distance, short ease-out — never a full fly-in.
+ * as-is). Keep it subtle: small distance, short ease-out, never a full fly-in.
  */
 export function Reveal({
   children,

@@ -132,7 +132,7 @@ export const jobs: Job[] = [
     recruiterId: "rec_northwind",
     title: "Product Designer",
     description:
-      "Northwind is hiring a product designer to shape early-stage Web3 products end to end — from research to high-fidelity prototypes. You'll work directly with founders and engineers in a tight feedback loop.",
+      "Northwind is hiring a product designer to shape early-stage Web3 products end to end, from research to high-fidelity prototypes. You'll work directly with founders and engineers in a tight feedback loop.",
     companyName: "Northwind",
     location: "Lisbon / Remote",
     remote: true,
@@ -176,7 +176,7 @@ export const jobs: Job[] = [
   {
     id: "job_cm_quickcoin",
     recruiterId: "rec_quickcoin",
-    title: "Community Manager — Earn Fast",
+    title: "Community Manager, Earn Fast",
     description:
       "Urgent hire! Earn guaranteed income working from home. Small registration fee required to start. Contact us on Telegram to begin onboarding today.",
     companyName: "QuickCoin Rewards",
@@ -291,7 +291,7 @@ export const seedApplications: Application[] = [
     jobId: "job_fe_aperture",
     candidateId: "tal_sara",
     status: "INTERVIEW",
-    message: "Led a wallet-native rewrite at my last role — would love to do it here.",
+    message: "Led a wallet-native rewrite at my last role. Would love to do it here.",
     matchScore: 92,
     riskScore: 12,
     appliedAt: NOW - 3 * DAY,
@@ -314,7 +314,7 @@ export const seedApplications: Application[] = [
     jobId: "job_design_northwind",
     candidateId: "tal_priya",
     status: "REVIEWED",
-    message: "Portfolio attached — happy to do a paid trial task.",
+    message: "Portfolio attached. Happy to do a paid trial task.",
     matchScore: 88,
     riskScore: 44,
     appliedAt: NOW - 1 * DAY,

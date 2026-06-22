@@ -11,7 +11,9 @@ import { AlertCircle, ArrowUpIcon, BotIcon, SparklesIcon, UserIcon } from "lucid
 import type { ReactNode } from "react";
 
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
-import { stripHiddenReasoning } from "@/lib/chat/reasoning";
+import type { ChatScopeRequest } from "@/lib/chat/types";
+import { buildThreadCopy, type ThreadCopy } from "@/lib/chat/thread-copy";
+import { hasHiddenReasoning, stripHiddenReasoning } from "@/lib/chat/reasoning";
 import { cn } from "@/lib/utils";
 
 function UserMessage() {
@@ -28,7 +30,7 @@ function UserMessage() {
   );
 }
 
-function AssistantMessage() {
+function AssistantMessage({ thinkingTexts }: { thinkingTexts: string[] }) {
   const error = useAuiState((state) =>
     state.message.status?.type === "incomplete" &&
     state.message.status.reason === "error"
@@ -48,7 +50,18 @@ function AssistantMessage() {
               if (part.type === "text") {
                 const cleanText = stripHiddenReasoning(part.text);
                 if (part.status?.type === "running" && cleanText.length === 0) {
-                  return <ThinkingState />;
+                  return <ThinkingState texts={thinkingTexts} />;
+                }
+                if (
+                  part.status?.type !== "running" &&
+                  cleanText.length === 0 &&
+                  hasHiddenReasoning(part.text)
+                ) {
+                  return (
+                    <StatusPanel title="Assistant is still preparing" tone="neutral">
+                      The model returned internal reasoning without a final answer. Please send the question again.
+                    </StatusPanel>
+                  );
                 }
                 if (cleanText.length === 0) {
                   return null;
@@ -65,7 +78,20 @@ function AssistantMessage() {
               }
 
               if (part.type === "reasoning") {
-                return null;
+                if (part.status?.type !== "running") {
+                  return null;
+                }
+
+                const reasoningText =
+                  "text" in part && typeof part.text === "string"
+                    ? part.text.trim()
+                    : "";
+
+                return (
+                  <ThinkingState
+                    texts={reasoningText ? [reasoningText] : thinkingTexts}
+                  />
+                );
               }
 
               return null;
@@ -83,13 +109,7 @@ function AssistantMessage() {
   );
 }
 
-function EmptyThread() {
-  const suggestions = [
-    "Summarize this page",
-    "What should I do next?",
-    "Check this role fit",
-  ];
-
+function EmptyThread({ copy }: { copy: ThreadCopy }) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm">
       <div className="flex items-start gap-3">
@@ -98,14 +118,11 @@ function EmptyThread() {
         </div>
         <div className="space-y-3">
           <div>
-            <p className="font-medium text-foreground">Ask Shire about this page</p>
-            <p className="mt-1 text-muted-foreground">
-              The assistant uses your active role and page context, then answers in a
-              structured format.
-            </p>
+            <p className="font-medium text-foreground">{copy.emptyTitle}</p>
+            <p className="mt-1 text-muted-foreground">{copy.emptyDescription}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {suggestions.map((item) => (
+            {copy.suggestions.map((item) => (
               <span
                 key={item}
                 className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground"
@@ -120,18 +137,15 @@ function EmptyThread() {
   );
 }
 
-function ThinkingState() {
+function ThinkingState({ texts }: { texts: string[] }) {
+  const loadingTexts = texts[0] === "Thinking..." ? texts : ["Thinking...", ...texts];
+
   return (
     <AITextLoading
       containerClassName="justify-start p-0"
       className="text-xs font-normal tracking-normal text-muted-foreground"
       interval={1400}
-      texts={[
-        "Reading your Shire context...",
-        "Checking product knowledge...",
-        "Preparing a scoped answer...",
-        "Keeping private context protected...",
-      ]}
+      texts={loadingTexts}
     />
   );
 }
@@ -448,31 +462,37 @@ function safeMarkdownHref(href: string) {
   return undefined;
 }
 
-export function Thread() {
+export function Thread({ scope }: { scope?: ChatScopeRequest }) {
+  const copy = buildThreadCopy(scope);
+
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
       <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <AuiIf condition={(state) => state.thread.isEmpty}>
-          <EmptyThread />
+          <EmptyThread copy={copy} />
         </AuiIf>
 
         <ThreadPrimitive.Messages>
           {({ message }) =>
-            message.role === "user" ? <UserMessage /> : <AssistantMessage />
+            message.role === "user" ? (
+              <UserMessage />
+            ) : (
+              <AssistantMessage thinkingTexts={copy.thinkingTexts} />
+            )
           }
         </ThreadPrimitive.Messages>
 
         <ThreadPrimitive.ViewportFooter className="sticky bottom-0 pt-2">
           <ComposerPrimitive.Root className="rounded-2xl border border-border bg-background p-2 shadow-sm">
             <ComposerPrimitive.Input
-              placeholder="Ask about this page..."
+              placeholder={copy.placeholder}
               className="min-h-11 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground"
               rows={1}
             />
             <div className="flex items-center justify-between gap-2 px-1 pb-1">
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <UserIcon className="size-3.5" aria-hidden="true" />
-                Page-aware
+                {copy.contextLabel}
               </div>
               <ComposerPrimitive.Send className="inline-flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
                 <ArrowUpIcon className="size-4" />

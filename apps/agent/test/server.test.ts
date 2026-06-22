@@ -454,6 +454,38 @@ test("product Q&A rate limits repeated public questions", async () => {
   }
 });
 
+test("product Q&A returns a timeout instead of leaving the request pending", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    productQnaTimeoutMs: 10,
+    answerProductQuestion: async () =>
+      new Promise(() => {
+        // Intentionally never resolves.
+      }),
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const response = await fetch(`http://127.0.0.1:${address.port}/product-qna`, {
+      method: "POST",
+      headers: chatHeaders(),
+      body: JSON.stringify({ question: "How does Shire work?" }),
+    });
+
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), { status: "product-qna-timeout" });
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("chat route blocks prompt injection with a deterministic stream", async () => {
   const server = await createRuntimeHttpServer({
     serviceToken: CHAT_SERVICE_TOKEN,

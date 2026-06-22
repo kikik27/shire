@@ -9,7 +9,7 @@ import { animate, useReducedMotion } from "motion/react";
  * renders the final state with no counting.
  *
  * Pure CSS drives the bar fill (via group-hover), so the JS only animates the
- * number — cheap and smooth.
+ * number, cheap and smooth.
  */
 export function MatchBar({ score, skills }: { score: number; skills: string[] }) {
   const reduce = useReducedMotion();

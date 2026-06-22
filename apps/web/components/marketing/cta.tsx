@@ -18,7 +18,7 @@ export function Cta() {
           />
           <div className="relative mx-auto max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl lg:text-5xl">
-              Land your next role — or your next hire
+              Land your next role, or your next hire
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
               Smarter matches, real commitment, and escrow that protects both sides. Join Shire

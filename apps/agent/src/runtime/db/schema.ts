@@ -19,7 +19,7 @@ import {
 } from "@shire/shared";
 
 /**
- * Agent-side mirror of the web Drizzle schema — only the tables and columns
+ * Agent-side mirror of the web Drizzle schema. Only the tables and columns
  * the matching pipeline reads or writes. Kept in sync with
  * apps/web/lib/server/db/schema.ts by convention (both pull their enum values
  * from @shire/shared). The agent never owns these tables; it is a read-mostly

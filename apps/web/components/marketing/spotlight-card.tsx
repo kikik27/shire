@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /**
  * A surface that shows a soft, single-color radial glow following the pointer.
  * Intentionally restrained: hover-only, low opacity, large blur, one color.
- * No rainbow, no flicker — a warm reading light, not a laser show.
+ * No rainbow, no flicker. A warm reading light, not a laser show.
  *
  * Disabled under prefers-reduced-motion and on touch/coarse pointers.
  */
@@ -40,7 +40,7 @@ export function SpotlightCard({
       onPointerMove={onMove}
       className={cn("group/spot relative overflow-hidden", className)}
     >
-      {/* the glow layer — opacity 0 by default, fades in on hover */}
+      {/* the glow layer starts at opacity 0 and fades in on hover */}
       <div
         aria-hidden="true"
         className={cn(

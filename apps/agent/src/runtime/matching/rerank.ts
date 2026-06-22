@@ -41,7 +41,7 @@ export type RerankResult = {
  * Rerank a (candidate, job) pair using the capability model, then merge with
  * the deterministic rule score. Retrieval-first guarantee: if the model fails
  * or returns unusable output, we fall back to the rule score with a derived
- * recommendedAction — never fail the whole pipeline on a provider hiccup.
+ * recommendedAction. Never fail the whole pipeline on a provider hiccup.
  */
 export async function rerankMatch(
   candidate: CandidateMatchInput,

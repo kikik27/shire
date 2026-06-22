@@ -57,6 +57,7 @@ export type RuntimeHttpServerDependencies = {
   serviceToken?: string;
   extractCvDocument?: (file: CvDocumentFile | undefined) => Promise<string>;
   answerProductQuestion?: typeof answerProductQuestion;
+  productQnaTimeoutMs?: number;
   /** Override the /ready readiness probe (tests stub this to avoid real I/O). */
   checkReady?: () => Promise<ReadinessResult>;
 };
@@ -137,6 +138,7 @@ export async function createRuntimeHttpServer(
     rateLimiter,
     now: dependencies.now,
     answerProductQuestion: dependencies.answerProductQuestion,
+    timeoutMs: dependencies.productQnaTimeoutMs,
   });
 
   mountHealthRoutes(app, {
@@ -175,6 +177,28 @@ export async function createRuntimeHttpServer(
     },
     "runtime http routes ready",
   );
+  runtimeLogger.info(
+    {
+      textProvider: env.textModelProvider,
+      textBaseUrl: env.textModelBaseUrl,
+      defaultTextModel: env.chatModelChains.default[0],
+      textApiKeyConfigured: Boolean(env.textModelApiKey),
+      embeddingProvider: env.embeddingProvider,
+      embeddingEnabled: env.embeddingEnabled,
+      memoryUrlScheme: bootstrap.storage.memory.scheme,
+      knowledgeUrlScheme: bootstrap.storage.knowledge.scheme,
+    },
+    "runtime model configuration loaded",
+  );
+  if (!env.textModelApiKey) {
+    runtimeLogger.warn(
+      {
+        textProvider: env.textModelProvider,
+        textBaseUrl: env.textModelBaseUrl,
+      },
+      "text model API key is not configured; chat model calls will fail",
+    );
+  }
 
   app.use((request, response) => {
     response.status(404).json({
@@ -274,7 +298,7 @@ export async function startRuntimeService() {
 
   if (!env.redisUrl) {
     runtimeLogger.warn(
-      "REDIS_URL is not set — falling back to in-memory job queue. Jobs will not persist across restarts.",
+      "REDIS_URL is not set. Falling back to in-memory job queue. Jobs will not persist across restarts.",
     );
   }
   if (!env.agentServiceToken) {

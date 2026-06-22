@@ -14,7 +14,7 @@ const placeholders: Record<Mode, string> = {
 };
 
 /**
- * The copilot prompt — a believable "describe what you want" entry point.
+ * The copilot prompt, a believable "describe what you want" entry point.
  * Frontend-only: submitting routes into the app shell rather than calling an API.
  */
 export function HeroPrompt() {

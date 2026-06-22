@@ -8,6 +8,7 @@ await Promise.all([
   import("./cv-normalizer.test"),
   import("./guardrails.test"),
   import("./chat-agent.test"),
+  import("./chat-stream.test"),
   import("./chat-guard.test"),
   import("./chat-request-logging.test"),
   import("./jobs-data.test"),

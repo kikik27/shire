@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { talentRegions } from "@/lib/dashboard-data";
 
-/** Decorative dotted-globe panel — evokes global reach without shipping a heavy map path. */
+/** Decorative dotted-globe panel that evokes global reach without shipping a heavy map path. */
 function GlobeDecoration() {
   const dots: { cx: number; cy: number; r: number; o: number }[] = [];
   for (let y = 0; y < 7; y++) {

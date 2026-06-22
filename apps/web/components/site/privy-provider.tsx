@@ -9,7 +9,7 @@ const APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 /**
  * Mirrors Privy auth state into the demo store so every existing selector and flow
- * (`useWallet`, registry, stakes) keeps working unchanged — Privy just becomes the
+ * (`useWallet`, registry, stakes) keeps working unchanged. Privy just becomes the
  * real source of the connected address.
  */
 function PrivySync() {
@@ -42,7 +42,7 @@ function PrivySync() {
 /**
  * Env-guarded Privy provider. With `NEXT_PUBLIC_PRIVY_APP_ID` set, users sign in with
  * email / Google / passkey / wallet and Privy creates an embedded wallet for anyone who
- * doesn't have one — no seed phrases, no web3 knowledge required. Without the key, the app
+ * doesn't have one. No seed phrases, no web3 knowledge required. Without the key, the app
  * falls back to the client-side demo store so it still builds and runs.
  */
 export function PrivyAuthProvider({ children }: { children: ReactNode }) {

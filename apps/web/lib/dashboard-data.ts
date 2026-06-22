@@ -1,5 +1,5 @@
 /**
- * Typed demo data for the dashboard. No network — these fixtures stand in for the
+ * Typed demo data for the dashboard. No network. These fixtures stand in for the
  * API/DB layer so the UI is fully visible before backend wiring (see tasks.md).
  */
 

@@ -29,9 +29,9 @@ export interface JobsRouteDependencies {
 
 /**
  * Mounts the job submission and status routes:
- *   POST /jobs            — enqueue a typed job
- *   GET  /jobs/:jobId     — poll job status (candidateId-scoped when provided)
- *   POST /jobs/cv-document — upload a CV file and enqueue cv-parse
+ *   POST /jobs: enqueue a typed job
+ *   GET  /jobs/:jobId: poll job status (candidateId-scoped when provided)
+ *   POST /jobs/cv-document: upload a CV file and enqueue cv-parse
  */
 export function mountJobsRoutes(
   app: Express,

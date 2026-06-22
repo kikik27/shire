@@ -235,7 +235,7 @@ export function CandidateProfileForm({
                 <FormControl>
                   <Input placeholder="$90k" {...field} />
                 </FormControl>
-                <FormDescription>Kept private — only used for matching.</FormDescription>
+                <FormDescription>Kept private. Only used for matching.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}

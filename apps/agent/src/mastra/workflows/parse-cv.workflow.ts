@@ -1,4 +1,4 @@
-// Partial stub — the extraction/normalization steps here are real text
+// Partial stub. The extraction/normalization steps here are real text
 // primitives, but this Mastra workflow is NOT the CV path that runs in
 // production. The production CV pipeline is cv-parse.processor (BullMQ job),
 // which calls processCandidateCv → generateCandidateProfile (LLM) → embed.

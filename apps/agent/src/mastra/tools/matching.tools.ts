@@ -25,7 +25,7 @@ export const matchingContextOutputSchema = z.object({
  * Pairwise matching context. The base shape stays deterministic (score 75,
  * status ready) so orchestration and tests have a stable contract. When a
  * candidate (subjectId) and job (targetId) both resolve in Postgres, the tool
- * logs the real rule score for diagnostics — the authoritative scoring still
+ * logs the real rule score for diagnostics. The authoritative scoring still
  * happens in the pipeline via scoreMatch + rerank, not here.
  */
 export const matchingContextTool = createTool({

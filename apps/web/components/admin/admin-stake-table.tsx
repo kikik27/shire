@@ -114,7 +114,7 @@ export function AdminStakeTable() {
           <DialogHeader>
             <DialogTitle>Slash stake</DialogTitle>
             <DialogDescription>
-              Slashing forfeits the staked funds. Record a clear reason — this is part of the
+              Slashing forfeits the staked funds. Record a clear reason. This is part of the
               dispute record.
             </DialogDescription>
           </DialogHeader>
@@ -125,7 +125,7 @@ export function AdminStakeTable() {
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Confirmed scam — requested off-platform deposit."
+              placeholder="e.g. Confirmed scam, requested off-platform deposit."
             />
           </div>
           <DialogFooter>

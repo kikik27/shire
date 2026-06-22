@@ -1,4 +1,41 @@
 import { parseAutonomyMode } from "./runtime/autonomy";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const agentRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const localEnvPath = resolve(agentRoot, ".env");
+
+function loadLocalEnvFallback() {
+  if (!existsSync(localEnvPath)) {
+    return;
+  }
+
+  const content = readFileSync(localEnvPath, "utf8");
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = line.slice(0, separatorIndex).trim();
+    if (process.env[key] !== undefined) {
+      continue;
+    }
+
+    const rawValue = line.slice(separatorIndex + 1).trim();
+    process.env[key] = rawValue
+      .replace(/^['"]/, "")
+      .replace(/['"]$/, "");
+  }
+}
+
+loadLocalEnvFallback();
 
 function parseBoolean(value: string | undefined, defaultValue: boolean) {
   const normalized = value?.trim().toLowerCase();

@@ -99,7 +99,7 @@ export function DisputeReviewPanel() {
           <DialogHeader>
             <DialogTitle>Resolve dispute</DialogTitle>
             <DialogDescription>
-              The resolver decides — the AI only summarizes. Your decision settles any staked funds.
+              The resolver decides. The AI only summarizes. Your decision settles any staked funds.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
