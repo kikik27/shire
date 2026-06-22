@@ -17,6 +17,7 @@
     "job:dispute-summary": "node --env-file-if-exists=.env --import tsx src/jobs/run-dispute-summary.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.73",
     "@libsql/client": "^0.15.15",
     "@mastra/ai-sdk": "^1.4.4",
     "@mastra/core": "latest",
