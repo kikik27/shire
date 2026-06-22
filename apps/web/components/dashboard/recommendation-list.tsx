@@ -1,7 +1,6 @@
 "use client";
 
-import { Sparkles, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,8 +11,6 @@ import { cn } from "@/lib/utils";
 import {
   useCandidateRecommendations,
   useRecruiterRecommendations,
-  useRefreshCandidateRecommendations,
-  useRefreshRecruiterRecommendations,
   type Recommendation,
 } from "@/lib/hooks/use-recommendations";
 
@@ -67,7 +64,7 @@ function RecommendationRow({ recommendation }: { recommendation: Recommendation 
           </div>
           {recommendation.reasons.length > 0 && (
             <p className="line-clamp-2 text-xs text-muted-foreground">
-              {recommendation.reasons.join(" · ")}
+              {recommendation.reasons.join(" / ")}
             </p>
           )}
           {recommendation.missingRequirements.length > 0 && (
@@ -93,36 +90,26 @@ function EmptyState({ message }: { message: string }) {
 
 export function CandidateRecommendations() {
   const { data, isLoading, error } = useCandidateRecommendations();
-  const refresh = useRefreshCandidateRecommendations();
 
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Recommended jobs</CardTitle>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => refresh.mutate()}
-          disabled={refresh.isPending}
-        >
-          <RefreshCw
-            className={cn("size-4", refresh.isPending && "animate-spin")}
-            aria-hidden="true"
-          />
-          Refresh
-        </Button>
+        <span className="rounded-full border border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground">
+          Updates every 15 min
+        </span>
       </CardHeader>
       <CardContent className="px-0">
         {isLoading ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-            Loading recommendations…
+            Loading recommendations...
           </div>
         ) : error ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
             Could not load recommendations.
           </div>
         ) : !data || data.length === 0 ? (
-          <EmptyState message="No job recommendations yet. Refresh to generate matches." />
+          <EmptyState message="No job recommendations yet. Shire refreshes matches automatically every 15 minutes." />
         ) : (
           <ul>
             {data.map((recommendation) => (
@@ -140,36 +127,27 @@ export function CandidateRecommendations() {
 
 export function RecruiterRecommendations({ jobId }: { jobId?: string }) {
   const { data, isLoading, error } = useRecruiterRecommendations();
-  const refresh = useRefreshRecruiterRecommendations();
+  void jobId;
 
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Talent recommendations</CardTitle>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => jobId && refresh.mutate(jobId)}
-          disabled={refresh.isPending || !jobId}
-        >
-          <RefreshCw
-            className={cn("size-4", refresh.isPending && "animate-spin")}
-            aria-hidden="true"
-          />
-          Refresh
-        </Button>
+        <span className="rounded-full border border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground">
+          Updates every 15 min
+        </span>
       </CardHeader>
       <CardContent className="px-0">
         {isLoading ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-            Loading recommendations…
+            Loading recommendations...
           </div>
         ) : error ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
             Could not load recommendations.
           </div>
         ) : !data || data.length === 0 ? (
-          <EmptyState message="No talent recommendations yet. Open a job and refresh to find candidates." />
+          <EmptyState message="No talent recommendations yet. Shire refreshes matches automatically every 15 minutes." />
         ) : (
           <ul>
             {data.map((recommendation) => (
