@@ -10,6 +10,7 @@ import {
   type ProductKnowledgeRole,
 } from "./knowledge";
 import { getCapabilityPolicy } from "./model-policy";
+import { stripHiddenReasoning } from "./reasoning";
 
 type AgentMessage = {
   role: "system" | "user" | "assistant";
@@ -193,7 +194,7 @@ export async function answerProductQuestion(
       maxOutputTokens: getCapabilityPolicy("product-qna").maxOutputTokens,
     },
   );
-  const answer = extractText(response);
+  const answer = stripHiddenReasoning(extractText(response));
 
   if (!answer) {
     throw new ProductQnaError(

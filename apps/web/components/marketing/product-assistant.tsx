@@ -5,6 +5,7 @@ import { BotIcon, HandIcon, SendIcon, XIcon } from "lucide-react";
 import { MarkdownText } from "@/components/assistant-ui/thread";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import { Button } from "@/components/ui/button";
+import { stripHiddenReasoning } from "@/lib/chat/reasoning";
 import { cn } from "@/lib/utils";
 
 type ProductMessage = {
@@ -64,7 +65,8 @@ export function ProductAssistant() {
 
       const answer =
         typeof body.answer === "string" && body.answer.trim().length > 0
-          ? body.answer.trim()
+          ? stripHiddenReasoning(body.answer) ||
+            "The product assistant could not return an answer yet."
           : "The product assistant could not return an answer yet.";
       setMessages((current) => [
         ...current,
@@ -145,7 +147,12 @@ export function ProductAssistant() {
                 <AITextLoading
                   containerClassName="justify-start p-0"
                   className="text-xs font-normal tracking-normal text-muted-foreground"
-                  texts={["Asking the Shire product model..."]}
+                  interval={1400}
+                  texts={[
+                    "Reading Shire product context...",
+                    "Checking the public knowledge base...",
+                    "Preparing a concise answer...",
+                  ]}
                 />
               </div>
             ) : null}

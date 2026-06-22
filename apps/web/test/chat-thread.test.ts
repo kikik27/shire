@@ -5,6 +5,10 @@ import {
   buildChatProxyBody,
   resolveChatScopeForPathname,
 } from "../lib/chat/context";
+import {
+  hasHiddenReasoning,
+  stripHiddenReasoning,
+} from "../lib/chat/reasoning";
 import { buildChatScope, buildChatScopeLabel } from "../lib/chat/thread";
 
 test("labels a candidate job scope clearly", () => {
@@ -62,4 +66,15 @@ test("candidate profile path requests self-profile without browser-owned ids", (
     resourceId: undefined,
     resourceLabel: "M. Zaky Arisandhi",
   });
+});
+
+test("strips hidden model reasoning from rendered assistant text", () => {
+  assert.equal(
+    stripHiddenReasoning(
+      "<think>The model is planning.</think>Hello. I can help with Shire.",
+    ),
+    "Hello. I can help with Shire.",
+  );
+  assert.equal(stripHiddenReasoning("<think>Still thinking"), "");
+  assert.equal(hasHiddenReasoning("<think>Still thinking"), true);
 });

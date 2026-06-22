@@ -11,6 +11,7 @@ import { AlertCircle, ArrowUpIcon, BotIcon, SparklesIcon, UserIcon } from "lucid
 import type { ReactNode } from "react";
 
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
+import { stripHiddenReasoning } from "@/lib/chat/reasoning";
 import { cn } from "@/lib/utils";
 
 function UserMessage() {
@@ -45,10 +46,14 @@ function AssistantMessage() {
           <MessagePrimitive.Parts>
             {({ part }) => {
               if (part.type === "text") {
-                if (part.status?.type === "running" && part.text.length === 0) {
+                const cleanText = stripHiddenReasoning(part.text);
+                if (part.status?.type === "running" && cleanText.length === 0) {
                   return <ThinkingState />;
                 }
-                return <MarkdownText text={part.text} />;
+                if (cleanText.length === 0) {
+                  return null;
+                }
+                return <MarkdownText text={cleanText} />;
               }
 
               if (part.type === "tool-call") {
@@ -121,7 +126,12 @@ function ThinkingState() {
       containerClassName="justify-start p-0"
       className="text-xs font-normal tracking-normal text-muted-foreground"
       interval={1400}
-      texts={["Waiting for Shire assistant..."]}
+      texts={[
+        "Reading your Shire context...",
+        "Checking product knowledge...",
+        "Preparing a scoped answer...",
+        "Keeping private context protected...",
+      ]}
     />
   );
 }
@@ -154,7 +164,8 @@ function StatusPanel({
 }
 
 export function MarkdownText({ text }: { text: string }) {
-  const blocks = parseMarkdownBlocks(text);
+  const cleanText = stripHiddenReasoning(text);
+  const blocks = parseMarkdownBlocks(cleanText);
 
   return (
     <div className="space-y-3">

@@ -105,3 +105,24 @@ test("replaces accidental code output with the product-only boundary", async () 
   assert.match(generated.answer, /cannot provide code/);
   assert.doesNotMatch(generated.answer, /```/);
 });
+
+test("strips model reasoning tags from product answers", async () => {
+  const generated = await answerProductQuestion(
+    { question: "Hi" },
+    {
+      searchProductKnowledge: async () => [
+        {
+          path: ".agent/knowledge/product/shire-general.md",
+          text: "Shire can answer brief greetings and offer product help.",
+        },
+      ],
+      agent: {
+        generate: async () => ({
+          text: "<think>This is hidden reasoning.</think>Hello. I can help with Shire.",
+        }),
+      },
+    },
+  );
+
+  assert.equal(generated.answer, "Hello. I can help with Shire.");
+});
