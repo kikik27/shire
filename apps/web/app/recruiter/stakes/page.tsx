@@ -17,7 +17,7 @@ export default function RecruiterStakesPage() {
       <EmptyState
         icon={Zap}
         title="No stake history"
-        description="Stake records will appear here after escrow persistence is connected."
+        description="Escrow records from your job postings will appear here when stake activity is available."
         action={
           <Button asChild size="sm">
             <Link href="/recruiter/jobs">View jobs</Link>

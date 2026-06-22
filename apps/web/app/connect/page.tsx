@@ -42,7 +42,7 @@ export default function ConnectPage() {
       </div>
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        No crypto setup — use email, Google, or passkey.
+        No crypto setup. Use email, Google, or passkey.
       </p>
     </AuthShell>
   );

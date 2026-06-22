@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Briefcase, Users } from "lucide-react";
+import { Briefcase, RotateCw, Users } from "lucide-react";
 import { useRecruiterApiJobs } from "@/lib/hooks/use-jobs";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -11,7 +11,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { initials, timeAgo } from "@/lib/format";
 
 export default function RecruiterApplicantsPage() {
-  const { data: jobs = [], isLoading, isError } = useRecruiterApiJobs();
+  const {
+    data: jobs = [],
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useRecruiterApiJobs();
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -30,7 +36,18 @@ export default function RecruiterApplicantsPage() {
         <EmptyState
           icon={Users}
           title="Applicants unavailable"
-          description="We could not load your jobs. Try again after refreshing."
+          description="We could not load your jobs. Retry the request or check your connection."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RotateCw className="size-4" aria-hidden="true" />
+              Retry
+            </Button>
+          }
         />
       ) : jobs.length === 0 ? (
         <EmptyState

@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { FileText, RotateCw } from "lucide-react";
 import { useMyApplications } from "@/lib/hooks/use-applications";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -11,7 +11,13 @@ import { MatchScoreBadge } from "@/components/trust/scores";
 import { timeAgo } from "@/lib/format";
 
 export default function CandidateApplicationsPage() {
-  const { data: applications = [], isLoading, isError } = useMyApplications();
+  const {
+    data: applications = [],
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useMyApplications();
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -30,7 +36,18 @@ export default function CandidateApplicationsPage() {
         <EmptyState
           icon={FileText}
           title="Applications unavailable"
-          description="We could not load your applications. Try again after refreshing."
+          description="We could not load your applications. Retry the request or check your connection."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RotateCw className="size-4" aria-hidden="true" />
+              Retry
+            </Button>
+          }
         />
       ) : applications.length === 0 ? (
         <EmptyState

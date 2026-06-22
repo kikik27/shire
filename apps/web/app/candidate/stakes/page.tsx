@@ -17,7 +17,7 @@ export default function CandidateStakesPage() {
       <EmptyState
         icon={Zap}
         title="No stake history"
-        description="Stake records will appear here after escrow persistence is connected."
+        description="Escrow records from your applications will appear here when stake activity is available."
         action={
           <Button asChild size="sm">
             <Link href="/candidate/applications">View applications</Link>

@@ -5,7 +5,7 @@
 
 /*
   Shire brand tokens.
-  Warm cream / terracotta palette — editorial SaaS feel.
+  Warm cream / terracotta palette, editorial SaaS feel.
   Light = warm cream canvas, crisp white cards, terracotta primary.
   Dark  = warm charcoal (used for marketing hero/CTA bands and full dark mode).
 */
@@ -193,7 +193,7 @@
     mask-image: linear-gradient(to bottom, black 55%, transparent);
   }
 
-  /* Animated hero light beams (decorative — see hero-beams.tsx). */
+  /* Animated hero light beams (decorative, see hero-beams.tsx). */
   .animate-beam {
     animation: beam-fall var(--beam-dur, 7s) linear var(--beam-delay, 0s) infinite;
   }

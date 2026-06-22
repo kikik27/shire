@@ -61,7 +61,7 @@ export function CandidateProfileForm({
   const current = initialProfile ?? existing;
 
   const form = useForm<CandidateProfileValues>({
-    // zod defaults make input ≠ output; pin the resolver to the output type (RHF v7 + resolvers v5).
+    // zod defaults make input != output; pin the resolver to the output type (RHF v7 + resolvers v5).
     resolver: zodResolver(candidateProfileSchema) as Resolver<CandidateProfileValues>,
     defaultValues: {
       displayName: current?.displayName ?? "",
@@ -306,7 +306,7 @@ export function CandidateProfileForm({
               <FormItem>
                 <FormLabel>GitHub</FormLabel>
                 <FormControl>
-                  <Input placeholder="https://github.com/…" inputMode="url" {...field} />
+                  <Input placeholder="https://github.com/..." inputMode="url" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
