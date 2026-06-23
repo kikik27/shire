@@ -79,7 +79,10 @@ export async function rerankMatch(
       ],
       {
         requestContext,
-        structuredOutput: { schema: MatchingOutputSchema },
+        structuredOutput: {
+          schema: MatchingOutputSchema,
+          jsonPromptInjection: true,
+        },
         temperature: 0,
       },
     );
