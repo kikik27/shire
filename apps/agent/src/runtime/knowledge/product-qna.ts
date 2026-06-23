@@ -6,9 +6,8 @@ import { productQnaAgent } from "../../mastra/agents/product-qna.agent";
 import { logger } from "../logger";
 import {
   buildKnowledgeSystemMessage,
-  searchProductKnowledge,
+  searchPublicProductKnowledge,
   type KnowledgeResult,
-  type ProductKnowledgeRole,
 } from "./index";
 import { getCapabilityPolicy } from "../models/policy";
 import { stripHiddenReasoning } from "../security/reasoning";
@@ -141,23 +140,11 @@ function containsCodeOutput(answer: string) {
   return codeOutputPattern.test(answer);
 }
 
-async function searchPublicProductKnowledge(
-  question: string,
-  search: typeof searchProductKnowledge,
-) {
-  const roles: ProductKnowledgeRole[] = ["candidate", "recruiter"];
-  const results = await Promise.all(
-    roles.map((role) => search(question, role)),
-  );
-
-  return dedupeKnowledge(results.flat());
-}
-
 export async function answerProductQuestion(
   body: unknown,
   dependencies: {
     agent?: ProductQnaAgent;
-    searchProductKnowledge?: typeof searchProductKnowledge;
+    searchPublicProductKnowledge?: typeof searchPublicProductKnowledge;
   } = {},
 ): Promise<ProductQnaResponse> {
   const startedAt = Date.now();
@@ -176,9 +163,10 @@ export async function answerProductQuestion(
     };
   }
 
-  const search = dependencies.searchProductKnowledge ?? searchProductKnowledge;
+  const search =
+    dependencies.searchPublicProductKnowledge ?? searchPublicProductKnowledge;
   const retrievalStartedAt = Date.now();
-  const knowledge = await searchPublicProductKnowledge(question, search);
+  const knowledge = dedupeKnowledge(await search(question));
   productQnaLogger.info(
     {
       durationMs: Date.now() - retrievalStartedAt,

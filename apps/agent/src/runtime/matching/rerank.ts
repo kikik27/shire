@@ -20,7 +20,9 @@ type RerankAgent = {
     messages: unknown,
     options: unknown,
   ) => Promise<{
-    object: unknown;
+    object?: unknown;
+    text?: string;
+    content?: string;
     response?: { modelId?: string };
   }>;
 };
@@ -69,7 +71,9 @@ export async function rerankMatch(
           content: [
             "Evaluate the fit between this candidate and this job.",
             "Use the provided rule-score breakdown as a strong prior; adjust only when you have clear evidence.",
-            "Return only the JSON verdict.",
+            "Return only a valid JSON object. Do not wrap it in markdown.",
+            "Required JSON shape:",
+            '{"matchScore": number, "confidence": number, "reasons": string[], "missingRequirements": string[], "riskFlags": string[], "recommendedAction": "SUGGEST_APPLY" | "SUGGEST_INVITE" | "SAVE_ONLY" | "IGNORE"}',
             "",
             `Candidate: ${describeCandidate(candidate)}`,
             `Job: ${describeJob(job)}`,
@@ -79,15 +83,11 @@ export async function rerankMatch(
       ],
       {
         requestContext,
-        structuredOutput: {
-          schema: MatchingOutputSchema,
-          jsonPromptInjection: true,
-        },
         temperature: 0,
       },
     );
 
-    const parsed = MatchingOutputSchema.safeParse(response.object);
+    const parsed = parseRerankResponse(response);
     if (parsed.success) {
       return { output: parsed.data, llmInvoked: true };
     }
@@ -104,6 +104,50 @@ export async function rerankMatch(
   }
 
   return { output: fallbackOutput(ruleScore, capability), llmInvoked: false };
+}
+
+function parseRerankResponse(response: {
+  object?: unknown;
+  text?: string;
+  content?: string;
+}) {
+  const objectResult = MatchingOutputSchema.safeParse(response.object);
+  if (objectResult.success) {
+    return objectResult;
+  }
+
+  const text = extractResponseText(response);
+  if (!text) {
+    return objectResult;
+  }
+
+  try {
+    const json = extractJsonObject(text);
+    return MatchingOutputSchema.safeParse(JSON.parse(json));
+  } catch {
+    return objectResult;
+  }
+}
+
+function extractResponseText(response: { text?: string; content?: string }) {
+  if (typeof response.text === "string") return response.text.trim();
+  if (typeof response.content === "string") return response.content.trim();
+  return "";
+}
+
+function extractJsonObject(value: string) {
+  const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const start = value.indexOf("{");
+  const end = value.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return value.slice(start, end + 1);
+  }
+
+  return value;
 }
 
 /** Deterministic fallback when the model is unavailable or unparseable. */

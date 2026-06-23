@@ -177,6 +177,29 @@ function searchLocalProductKnowledge(
   );
 }
 
+function searchLocalPublicProductKnowledge(
+  query: string,
+  documents: ProductKnowledgeDocument[],
+) {
+  const terms = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 2);
+
+  return limitKnowledgeResults(
+    documents
+      .filter((document) => {
+        const normalized = document.text.toLowerCase();
+        return terms.some((term) => normalized.includes(term));
+      })
+      .map((document) => ({
+        path: document.path,
+        text: document.text,
+      })),
+    env.ragMaxCharacters,
+  );
+}
+
 function localPathFromFileUrl(url: string) {
   return url.startsWith("file:") ? url.slice("file:".length) : null;
 }
@@ -458,6 +481,25 @@ export function searchProductKnowledge(
       searchLocalProductKnowledge(
         query,
         role,
+        dependencies?.localDocuments ?? loadLocalProductDocuments(),
+      ),
+  );
+}
+
+export function searchPublicProductKnowledge(
+  query: string,
+  dependencies?: KnowledgeSearchDependencies,
+) {
+  return searchKnowledgeWithFilter(
+    query,
+    {
+      corpus: "product",
+      audience: { $in: ["general", "candidate", "recruiter"] },
+    },
+    dependencies,
+    () =>
+      searchLocalPublicProductKnowledge(
+        query,
         dependencies?.localDocuments ?? loadLocalProductDocuments(),
       ),
   );

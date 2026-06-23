@@ -230,13 +230,22 @@ test("fallback output derives the recommended action from the rule score", () =>
   assert.equal(low.recommendedAction, "IGNORE");
 });
 
-test("rerank enables JSON prompt injection for direct model providers", async () => {
+test("rerank parses JSON text for direct model providers", async () => {
   const ruleScore = scoreMatch(candidate(), job());
-  let structuredOutput: unknown;
+  let structuredOutputWasSent = false;
   const fakeAgent = {
     async generate(_messages: unknown, options: { structuredOutput?: unknown }) {
-      structuredOutput = options.structuredOutput;
-      return { object: fallbackOutput(ruleScore, "talent-rerank") };
+      structuredOutputWasSent = "structuredOutput" in options;
+      return {
+        text: JSON.stringify({
+          matchScore: 88,
+          confidence: 0.8,
+          reasons: ["Strong skill overlap"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_INVITE",
+        }),
+      };
     },
   };
 
@@ -249,8 +258,7 @@ test("rerank enables JSON prompt injection for direct model providers", async ()
   );
 
   assert.equal(result.llmInvoked, true);
-  assert.equal(
-    (structuredOutput as { jsonPromptInjection?: boolean }).jsonPromptInjection,
-    true,
-  );
+  assert.equal(structuredOutputWasSent, false);
+  assert.equal(result.output.matchScore, 88);
+  assert.equal(result.output.recommendedAction, "SUGGEST_INVITE");
 });
