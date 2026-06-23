@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { CONFIRMED_PROFILE_STATUS } from "@shire/shared";
 
 import {
   appUsers,
@@ -140,10 +141,18 @@ export function buildRoleProfileUpsertQuery(
   if (role === "candidate") {
     return executor
       .insert(candidateProfiles)
-      .values({ userId, profile })
+      .values({
+        userId,
+        profile,
+        profileStatus: CONFIRMED_PROFILE_STATUS,
+      })
       .onConflictDoUpdate({
         target: candidateProfiles.userId,
-        set: { profile, updatedAt: new Date() },
+        set: {
+          profile,
+          profileStatus: CONFIRMED_PROFILE_STATUS,
+          updatedAt: new Date(),
+        },
       })
       .returning({ profile: candidateProfiles.profile });
   }

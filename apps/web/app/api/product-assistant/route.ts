@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+const PRODUCT_ASSISTANT_TIMEOUT_MS = 25_000;
 
 function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status });
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
   }
 
   let upstream: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PRODUCT_ASSISTANT_TIMEOUT_MS);
   try {
     upstream = await fetch(agentUrl, {
       method: "POST",
@@ -53,9 +56,19 @@ export async function POST(request: Request) {
         "content-type": "application/json",
       },
       body: JSON.stringify({ question }),
+      signal: controller.signal,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("[shire-web:product-assistant] agent request timed out", {
+        agentUrl,
+        timeoutMs: PRODUCT_ASSISTANT_TIMEOUT_MS,
+      });
+      return jsonError("agent-timeout", 504);
+    }
     return jsonError("agent-unreachable", 502);
+  } finally {
+    clearTimeout(timeout);
   }
 
   const responseBody = await upstream.text();

@@ -1,3 +1,10 @@
+// Matching workflow registration shell. The REAL matching pipeline lives in
+// src/runtime/matching (rule-score → filter → rerank → persist) and is invoked
+// by the job-matching JobProcessor (POST /jobs { name: "job-matching" }) and
+// runJobMatchingForCandidate. This Mastra workflow is kept registered so the
+// CLI runner (runJobMatchingJob) and existing tests can reference its id; it
+// does not perform matching itself.
+
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 

@@ -23,7 +23,7 @@ function chainName(id: number): string {
 /**
  * The app's single wallet interface. Today it is backed by the demo store so every flow
  * is clickable without a deployed contract or funded wallet. To go live, replace the store
- * reads/writes here with wagmi's `useAccount` / `useConnect` / `useSwitchChain` — no call
+ * reads/writes here with wagmi's `useAccount` / `useConnect` / `useSwitchChain`. No call
  * site changes.
  */
 export function useWallet() {

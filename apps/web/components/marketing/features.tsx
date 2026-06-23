@@ -10,7 +10,7 @@ export function Features() {
         <SectionHeading
           eyebrow="Features"
           title="Everything to match, apply, and settle"
-          description="Built around one idea — real commitment from both sides, with the AI doing the finding and you keeping the final say."
+          description="Built around one idea: real commitment from both sides, with the AI doing the finding and you keeping the final say."
         />
 
         {/* Editorial grid: numbered eyebrow + title + line, hover-revealed accent bar. */}

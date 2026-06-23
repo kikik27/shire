@@ -77,7 +77,7 @@ export function ChatPanel({
           <ChatPanelHeader title={title} scope={scope} />
 
           <div className="flex-1 overflow-hidden">
-            <Thread />
+            <Thread scope={scope} />
           </div>
         </AssistantModalPrimitive.Content>
       </AssistantModalPrimitive.Root>

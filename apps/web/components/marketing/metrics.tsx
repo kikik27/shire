@@ -9,7 +9,7 @@ export function Metrics() {
         <SectionHeading
           eyebrow="Outcomes"
           title="What changes when commitment is on the line"
-          description="A refundable stake isn't a cost — it's a forcing function for the behavior you actually want."
+          description="A refundable stake isn't a cost. It's a forcing function for the behavior you actually want."
         />
         <dl className="mx-auto mt-14 grid max-w-4xl grid-cols-1 gap-10 text-center sm:grid-cols-3">
           {metrics.map((metric, i) => (

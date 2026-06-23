@@ -1,3 +1,11 @@
+// Partial stub. The extraction/normalization steps here are real text
+// primitives, but this Mastra workflow is NOT the CV path that runs in
+// production. The production CV pipeline is cv-parse.processor (BullMQ job),
+// which calls processCandidateCv → generateCandidateProfile (LLM) → embed.
+// This workflow is kept registered so the CLI runner and tests can reference
+// its id and the exported helpers (extractParsedCvText, normalizeParsedCvKeywords).
+// Do not treat the 3-step text pipeline below as the LLM-backed CV flow.
+
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 

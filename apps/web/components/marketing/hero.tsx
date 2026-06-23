@@ -10,7 +10,7 @@ import { heroSteps } from "@/lib/marketing";
 import { cn } from "@/lib/utils";
 
 export function Hero() {
-  // Steps light up in sequence — the "show the workflow" beat.
+  // Steps light up in sequence for the "show the workflow" beat.
   const [active, setActive] = React.useState(0);
 
   React.useEffect(() => {
@@ -79,12 +79,12 @@ export function Hero() {
           <Reveal mount delay={0.16}>
             <p className="mt-6 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
               Ghosted candidates. No-show hires. Weeks of wasted screening. Shire backs every match
-              with a refundable stake — so the commitment is real, on both sides.
+              with a refundable stake, so the commitment is real on both sides.
             </p>
           </Reveal>
 
           <Reveal mount delay={0.24} className="mt-9 w-full">
-            {/* the search box stays — it&apos;s step 1 of the story */}
+            {/* the search box stays because it&apos;s step 1 of the story */}
             <HeroPrompt />
           </Reveal>
 
@@ -92,7 +92,7 @@ export function Hero() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="shadow-sm">
                 <Link href="/connect">
-                  Get started — it&apos;s free
+                  Get started. It&apos;s free
                   <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
               </Button>

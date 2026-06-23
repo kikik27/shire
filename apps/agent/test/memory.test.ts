@@ -4,7 +4,7 @@ import test from "node:test";
 import { Memory } from "@mastra/memory";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 
-process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
+process.env.OPENAI_API_KEY ??= "test-openai-api-key";
 
 const [{ createEnv }, memoryModule] = await Promise.all([
   import("../src/env"),
@@ -77,8 +77,8 @@ test("agent memory config includes vector recall and working memory", () => {
   assert.equal(config.options.generateTitle, false);
   assert.equal(typeof config.embedder, "object");
   assert.equal(typeof config.embedder.doEmbed, "function");
-  assert.equal(config.embedder.provider, "openrouter");
-  assert.equal(config.embedder.modelId, "qwen/qwen3-embedding-8b");
+  assert.equal(config.embedder.provider, "openai");
+  assert.equal(config.embedder.modelId, "text-embedding-3-small");
 
   const aliasConfig = createAgentMemoryConfig({
     ...runtime,
@@ -88,8 +88,8 @@ test("agent memory config includes vector recall and working memory", () => {
   assert.ok(aliasConfig.storage instanceof LibSQLStore);
   assert.ok(aliasConfig.vector instanceof LibSQLVector);
   assert.equal(aliasConfig.options.generateTitle, config.options.generateTitle);
-  assert.equal(aliasConfig.embedder.provider, "openrouter");
-  assert.equal(aliasConfig.embedder.modelId, "qwen/qwen3-embedding-8b");
+  assert.equal(aliasConfig.embedder.provider, "openai");
+  assert.equal(aliasConfig.embedder.modelId, "text-embedding-3-small");
 });
 
 test("agent memory skips semantic recall when embeddings are disabled", () => {

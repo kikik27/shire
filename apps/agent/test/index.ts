@@ -1,4 +1,3 @@
-process.env.OPENROUTER_API_KEY ??= "test-openrouter-api-key";
 process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
 
 await Promise.all([
@@ -9,6 +8,7 @@ await Promise.all([
   import("./cv-normalizer.test"),
   import("./guardrails.test"),
   import("./chat-agent.test"),
+  import("./chat-stream.test"),
   import("./chat-guard.test"),
   import("./chat-request-logging.test"),
   import("./jobs-data.test"),
@@ -31,7 +31,11 @@ await Promise.all([
   import("./output-validation.test"),
   import("./chat-output-processor.test"),
   import("./security-guard.test"),
+  import("./security-guard-llm.test"),
   import("./security-policy.test"),
+  import("./storage-diagnostics.test"),
+  import("./matching-rule-score.test"),
+  import("./matching-pipeline.test"),
   import("./job-contracts.test"),
   import("./in-memory-job-queue.test"),
   import("./job-processors.test"),

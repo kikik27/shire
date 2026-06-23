@@ -2,14 +2,62 @@ import { env, type createEnv } from "../env";
 import type { ChatModelCapability } from "./model-policy";
 
 type RuntimeEnv = ReturnType<typeof createEnv>;
+type TextModelRuntime = Pick<
+  RuntimeEnv,
+  "textModelProvider" | "textModelBaseUrl" | "textModelApiKey"
+>;
+type ModelConfig = ReturnType<typeof toModelConfig>;
 
 export type ModelRequestContext = {
   capability?: ChatModelCapability;
-  runtime?: Pick<RuntimeEnv, "chatModelChains">;
+  runtime?: Pick<
+    RuntimeEnv,
+    | "chatModelChains"
+    | "textModelProvider"
+    | "textModelBaseUrl"
+    | "textModelApiKey"
+  >;
 };
 
-export function createModelFallbackChain(models: readonly string[]) {
-  return models.map((model) => ({ model, maxRetries: 1 }));
+function toModelConfig(
+  model: string,
+  runtime: TextModelRuntime,
+) {
+  const normalizedModel = model.trim();
+  const slashIndex = normalizedModel.indexOf("/");
+  const providerId =
+    slashIndex > 0
+      ? normalizedModel.slice(0, slashIndex)
+      : runtime.textModelProvider;
+  const modelId =
+    slashIndex > 0
+      ? normalizedModel.slice(slashIndex + 1)
+      : normalizedModel;
+
+  return {
+    providerId,
+    modelId,
+    url: runtime.textModelBaseUrl,
+    apiKey: runtime.textModelApiKey,
+  };
+}
+
+export function describeModelForTelemetry(model: string | ModelConfig) {
+  if (typeof model === "string") {
+    return model;
+  }
+
+  return `${model.providerId}/${model.modelId}`;
+}
+
+export function createModelFallbackChain(
+  models: readonly string[],
+  runtime: TextModelRuntime = env,
+) {
+  return models.map((model) => ({
+    model: toModelConfig(model, runtime),
+    maxRetries: 1,
+  }));
 }
 
 function toEnvCapabilityKey(capability: ChatModelCapability) {
@@ -48,11 +96,12 @@ function getCapabilityChain(
 export function resolveModelChain(input: ModelRequestContext) {
   const runtime = input.runtime ?? env;
   if (!input.capability) {
-    return createModelFallbackChain(runtime.chatModelChains.default);
+    return createModelFallbackChain(runtime.chatModelChains.default, runtime);
   }
 
   return createModelFallbackChain(
     getCapabilityChain(runtime, input.capability),
+    runtime,
   );
 }
 

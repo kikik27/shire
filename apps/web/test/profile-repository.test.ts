@@ -379,6 +379,8 @@ test("Drizzle profile persistence builds conflict-update upserts", () => {
   assert.match(userQuery.sql, /on conflict \("privy_user_id"\) do update/);
   assert.match(profileQuery.sql, /insert into "candidate_profiles"/);
   assert.match(profileQuery.sql, /on conflict \("user_id"\) do update/);
+  assert.match(profileQuery.sql, /"profile_status"/);
+  assert.ok(profileQuery.params.includes("CONFIRMED"));
   assert.match(onboardingQuery.sql, /update "app_users"/);
   assert.match(onboardingQuery.sql, /"onboarding_done" = \$1/);
 });

@@ -11,7 +11,7 @@ const STEP = 50;
 
 /**
  * A mini stake calculator: drag the amount and see the two outcomes side by
- * side — refunded on a successful hire, forfeited only if a resolver rules
+ * side, refunded on a successful hire, forfeited only if a resolver rules
  * against you. Makes the "stake, not cost" mechanic click instantly.
  */
 export function StakeCalculator() {

@@ -3,7 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useShireStore } from "@/lib/store";
 
-/** True when a Privy app id is configured. Read once at module load — stable per build. */
+/** True when a Privy app id is configured. Read once at module load, stable per build. */
 export const PRIVY_ENABLED = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
 
 export type AuthState = {

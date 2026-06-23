@@ -11,6 +11,7 @@ import {
   roleAwareChatAgent,
   roleAwareChatInstructions,
 } from "./agents/role-aware-chat.agent";
+import { securityGuardAgent } from "./agents/security-guard.agent";
 import { talentMatchingAgent } from "./agents/talent-matching.agent";
 import { parseCvWorkflow } from "./workflows/parse-cv.workflow";
 import { jobMatchingWorkflow } from "./workflows/job-matching.workflow";
@@ -69,6 +70,7 @@ export const mastra = new Mastra({
     talentMatchingAgent,
     disputeSummaryAgent,
     roleAwareChatAgent,
+    securityGuardAgent,
   },
   workflows: {
     parseCvWorkflow,

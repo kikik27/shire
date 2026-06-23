@@ -15,7 +15,7 @@ export function ThemeToggle() {
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >
-      {/* Icons cross-fade via CSS `dark:` classes — no JS mount guard needed. */}
+      {/* Icons cross-fade via CSS `dark:` classes. No JS mount guard needed. */}
       <Sun className="size-5 scale-100 rotate-0 transition-transform duration-200 dark:scale-0 dark:-rotate-90" />
       <Moon className="absolute size-5 scale-0 rotate-90 transition-transform duration-200 dark:scale-100 dark:rotate-0" />
       <span className="sr-only">Toggle theme</span>

@@ -202,7 +202,7 @@ export function JobDraftForm({ onSubmit }: { onSubmit: (values: JobDraftValues) 
               <div className="space-y-0.5">
                 <FormLabel>Require candidate stake</FormLabel>
                 <FormDescription>
-                  Candidates must lock cUSD to apply — reduces low-effort applications.
+                  Candidates must lock cUSD to apply. This reduces low-effort applications.
                 </FormDescription>
               </div>
               <FormControl>

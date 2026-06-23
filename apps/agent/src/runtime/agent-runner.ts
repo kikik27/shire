@@ -9,7 +9,10 @@ import {
 } from "./knowledge";
 import type { ChatModelCapability } from "./model-policy";
 import { getCapabilityPolicy } from "./model-policy";
-import { resolveModelChain } from "./model-router";
+import {
+  describeModelForTelemetry,
+  resolveModelChain,
+} from "./model-router";
 import { normalizeModelUsage } from "./usage";
 
 type AgentMessage = {
@@ -69,9 +72,11 @@ export async function runAgentWithContext(input: {
     },
     maxOutputTokens: getCapabilityPolicy(input.capability).maxOutputTokens,
   });
-  const configuredModel = resolveModelChain({
-    capability: input.capability,
-  })[0].model;
+  const configuredModel = describeModelForTelemetry(
+    resolveModelChain({
+      capability: input.capability,
+    })[0].model,
+  );
 
   return {
     response,

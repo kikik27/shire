@@ -1,6 +1,6 @@
 /**
  * Deterministic, rule-based stand-ins for the Shire AI agent service.
- * Same output shape as the documented agents — swap these for real `/ai/*` calls later.
+ * Same output shape as the documented agents. Swap these for real `/ai/*` calls later.
  * No randomness, so SSR and client renders agree.
  */
 import type {
@@ -82,7 +82,7 @@ export function computeMatch(job: Job, profile?: CandidateProfile | null): Match
   const reason =
     score >= 60
       ? `Your skills cover ${Math.round(ratio * 100)}% of the requirements${roleHit ? " and the role matches your target" : ""}.`
-      : `You cover ${Math.round(ratio * 100)}% of the requirements — closing a few gaps will lift your match.`;
+      : `You cover ${Math.round(ratio * 100)}% of the requirements. Closing a few gaps will lift your match.`;
 
   return {
     matchScore: score,
@@ -123,7 +123,7 @@ export function computeRisk(job: Job, recruiter?: RecruiterProfile | null): Risk
         ? "Proceed only after admin review. Never share a seed phrase, private key, or pay anything off-platform."
         : riskLevel === "MEDIUM"
           ? "Proceed carefully. Keep all communication and payment inside Shire."
-          : "Looks legitimate. Standard caution applies — keep everything on-platform.",
+          : "Looks legitimate. Standard caution applies. Keep everything on-platform.",
     confidence: 0.6 + Math.min(0.3, flags.length * 0.05),
   };
 }
@@ -147,14 +147,14 @@ export function recommendStake(
     return {
       recommendedRecruiterStake: "3–5 cUSD",
       candidateStakeRequired: false,
-      stakeReason: "Verified company with hiring history — a light stake signals good faith.",
+      stakeReason: "Verified company with hiring history. A light stake signals good faith.",
       refundPolicy: "Refundable when the job closes without a valid dispute.",
     };
   }
   return {
     recommendedRecruiterStake: "10–20 cUSD",
     candidateStakeRequired: false,
-    stakeReason: "New recruiter or unverified company — a higher stake builds candidate trust.",
+    stakeReason: "New recruiter or unverified company. A higher stake builds candidate trust.",
     refundPolicy: "Refundable when the job closes without a valid dispute.",
   };
 }
@@ -165,7 +165,7 @@ export function offerSafety(job: Job): OfferSafety {
     flags.push("Payment amount is not clearly defined");
   if (job.description.length < 200) flags.push("Scope of work is too general");
   if (/deposit|fee|upfront/i.test(job.description))
-    flags.push("Mentions an upfront cost — verify before accepting");
+    flags.push("Mentions an upfront cost. Verify before accepting");
 
   const level = flags.length >= 2 ? "MEDIUM" : flags.length === 1 ? "MEDIUM" : "LOW";
   return {
@@ -181,9 +181,9 @@ export function generateApplyKit(job: Job, profile?: CandidateProfile | null): A
   const name = profile?.displayName || "there";
   const top = (profile?.skills ?? ["my background"]).slice(0, 3).join(", ");
   return {
-    shortIntro: `Hi, I'm ${name} — a ${profile?.experienceLevel?.toLowerCase() ?? "motivated"} candidate focused on ${profile?.roleTargets?.[0] ?? job.title}.`,
+    shortIntro: `Hi, I'm ${name}, a ${profile?.experienceLevel?.toLowerCase() ?? "motivated"} candidate focused on ${profile?.roleTargets?.[0] ?? job.title}.`,
     coverLetter: `Dear ${job.companyName} team,\n\nI'm excited to apply for the ${job.title} role. My experience with ${top} maps directly to what you're looking for, and I'm drawn to building with a team that takes hiring integrity seriously.\n\nI'd welcome the chance to walk through a recent project and how I'd contribute in the first 30 days.\n\nBest,\n${name}`,
-    recruiterDM: `Hi — I just applied for the ${job.title} role at ${job.companyName}. I bring strong ${top} experience and I'm staked and serious about this one. Happy to share a quick portfolio walkthrough whenever works for you.`,
-    followUp: `Hi again — following up on my application for ${job.title}. Still very interested and available for a short call this week. Thank you for considering me!`,
+    recruiterDM: `Hi, I just applied for the ${job.title} role at ${job.companyName}. I bring strong ${top} experience and I'm staked and serious about this one. Happy to share a quick portfolio walkthrough whenever works for you.`,
+    followUp: `Hi again, following up on my application for ${job.title}. Still very interested and available for a short call this week. Thank you for considering me!`,
   };
 }

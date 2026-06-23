@@ -7,6 +7,7 @@ import { useMyApplications } from "@/lib/hooks/use-applications";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatTile } from "@/components/shared/stat-tile";
 import { JobCard } from "@/components/jobs/job-card";
+import { CandidateRecommendations } from "@/components/dashboard/recommendation-list";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,8 @@ export default function CandidatePage() {
       </div>
 
       <ProfilePrompt />
+
+      <CandidateRecommendations />
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

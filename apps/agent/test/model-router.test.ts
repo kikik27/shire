@@ -53,34 +53,75 @@ test("escalates a schema-valid CV profile with low confidence", () => {
 
 test("creates a Mastra fallback entry for each configured model", () => {
   assert.deepEqual(
-    createModelFallbackChain(["openrouter/free", "zai/glm", "openai/mini"]),
+    createModelFallbackChain(
+      ["MiniMax-M3", "openai/gpt-4.1-mini"],
+      {
+        textModelProvider: "tokenrouter",
+        textModelBaseUrl: "https://api.tokenrouter.com/v1",
+        textModelApiKey: "test-key",
+      },
+    ),
     [
-      { model: "openrouter/free", maxRetries: 1 },
-      { model: "zai/glm", maxRetries: 1 },
-      { model: "openai/mini", maxRetries: 1 },
+      {
+        model: {
+          providerId: "tokenrouter",
+          modelId: "MiniMax-M3",
+          url: "https://api.tokenrouter.com/v1",
+          apiKey: "test-key",
+        },
+        maxRetries: 1,
+      },
+      {
+        model: {
+          providerId: "openai",
+          modelId: "gpt-4.1-mini",
+          url: "https://api.tokenrouter.com/v1",
+          apiKey: "test-key",
+        },
+        maxRetries: 1,
+      },
     ],
   );
 });
 
 test("resolves model chain by capability", () => {
   const runtime = createEnv({
-    SHIRE_MODEL_DEFAULT: "openrouter/default",
+    SHIRE_TEXT_MODEL: "MiniMax-M3",
+    SHIRE_TEXT_API_KEY: "test-key",
     SHIRE_MODEL_PRODUCT_QNA: "openrouter/product",
   } as NodeJS.ProcessEnv);
 
   assert.deepEqual(resolveModelChain({ capability: "product-qna", runtime }), [
-    { model: "openrouter/product", maxRetries: 1 },
+    {
+      model: {
+        providerId: "openrouter",
+        modelId: "product",
+        url: "https://api.tokenrouter.com/v1",
+        apiKey: "test-key",
+      },
+      maxRetries: 1,
+    },
   ]);
   assert.deepEqual(
     resolveModelChain({ capability: "cv-normalization", runtime }),
-    [{ model: "openrouter/default", maxRetries: 1 }],
+    [
+      {
+        model: {
+          providerId: "tokenrouter",
+          modelId: "MiniMax-M3",
+          url: "https://api.tokenrouter.com/v1",
+          apiKey: "test-key",
+        },
+        maxRetries: 1,
+      },
+    ],
   );
 });
 
 test("uses the default configured model when capability is missing", () => {
   const result = resolveRuntimeAgentModelId();
 
-  assert.equal(result, "openrouter/nex-agi/nex-n2-pro:free");
+  assert.equal(result, "MiniMax-M3");
 });
 
 test("dynamic agent model reads model-capability request context", () => {
@@ -91,5 +132,10 @@ test("dynamic agent model reads model-capability request context", () => {
     requestContext: { get: (key: string) => requestContext.get(key) },
   });
 
-  assert.equal(result[0]?.model, env.chatModelChains.productQna[0]);
+  assert.deepEqual(result[0]?.model, {
+    providerId: "tokenrouter",
+    modelId: env.chatModelChains.productQna[0],
+    url: env.textModelBaseUrl,
+    apiKey: env.textModelApiKey,
+  });
 });

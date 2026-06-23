@@ -15,6 +15,13 @@
       "when": 1781860458315,
       "tag": "0001_web2_crud_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782039908967,
+      "tag": "0002_nostalgic_venom",
+      "breakpoints": true
     }
   ]
 }

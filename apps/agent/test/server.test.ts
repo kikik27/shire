@@ -290,6 +290,85 @@ test("health remains public when chat service auth is configured", async () => {
   }
 });
 
+test("/ready returns 200 with bootstrap when dependencies are ready", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    checkReady: async () => ({ ready: true }),
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/ready`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), getRuntimeBootstrapOutput());
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
+test("/ready returns 503 when a dependency probe fails", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    checkReady: async () => ({ ready: false, reason: "memory store unreachable" }),
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/ready`);
+
+    assert.equal(response.status, 503);
+    const body = await response.json();
+    assert.equal(body.status, "not-ready");
+    assert.equal(body.reason, "memory store unreachable");
+    // bootstrap fields are still present for diagnostics.
+    assert.equal(body.nodeEnv, env.nodeEnv);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
+test("/health stays 200 even when dependencies are not ready", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    checkReady: async () => ({ ready: false, reason: "down" }),
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), getRuntimeBootstrapOutput());
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("product Q&A rejects requests without the service token", async () => {
   const server = await createRuntimeHttpServer({
     serviceToken: CHAT_SERVICE_TOKEN,
@@ -369,6 +448,38 @@ test("product Q&A rate limits repeated public questions", async () => {
     });
 
     assert.equal(restored.status, 200);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
+test("product Q&A returns a timeout instead of leaving the request pending", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    productQnaTimeoutMs: 10,
+    answerProductQuestion: async () =>
+      new Promise(() => {
+        // Intentionally never resolves.
+      }),
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const response = await fetch(`http://127.0.0.1:${address.port}/product-qna`, {
+      method: "POST",
+      headers: chatHeaders(),
+      body: JSON.stringify({ question: "How does Shire work?" }),
+    });
+
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), { status: "product-qna-timeout" });
   } finally {
     server.close();
     await once(server, "close");

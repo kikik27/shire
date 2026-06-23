@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-process.env.OPENROUTER_API_KEY ??= "test-openrouter-api-key";
+process.env.OPENAI_API_KEY ??= "test-openai-api-key";
 
 const { createEnv } = await import("../src/env");
 const {
@@ -16,33 +16,40 @@ test("disables known AI SDK compatibility warning logs", () => {
   );
 });
 
-test("creates Qwen embeddings through OpenRouter", () => {
+test("creates OpenAI-compatible embeddings through the configured provider", () => {
   const model = createEmbeddingModel({
-    modelId: "qwen/qwen3-embedding-8b",
-    baseUrl: "https://openrouter.ai/api/v1",
-    apiKey: "test-openrouter-api-key",
+    modelId: "text-embedding-3-small",
+    providerId: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    apiKey: "test-openai-api-key",
   });
 
-  assert.equal(model.provider, "openrouter");
-  assert.equal(model.modelId, "qwen/qwen3-embedding-8b");
+  assert.equal(model.provider, "openai");
+  assert.equal(model.modelId, "text-embedding-3-small");
   assert.equal(typeof model.doEmbed, "function");
 });
 
 test("resolves embedding config for a specific capability", () => {
   const runtime = createEnv({
-    SHIRE_MODEL_DEFAULT: "openrouter/default",
-    SHIRE_EMBEDDING_MODEL_DEFAULT: "embedding/default",
+    SHIRE_TEXT_MODEL: "MiniMax-M3",
+    SHIRE_EMBEDDING_MODEL: "embedding/default",
     SHIRE_EMBEDDING_MODEL_MEMORY: "embedding/memory",
-    SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://default.test/v1",
+    SHIRE_EMBEDDING_PROVIDER: "custom-embedding",
+    SHIRE_EMBEDDING_BASE_URL: "https://default.test/v1",
     SHIRE_EMBEDDING_BASE_URL_MEMORY: "https://memory.test/v1",
+    SHIRE_EMBEDDING_API_KEY: "embedding-key",
   } as NodeJS.ProcessEnv);
 
   assert.deepEqual(resolveEmbeddingConfig("memory", runtime), {
     modelId: "embedding/memory",
+    providerId: "custom-embedding",
     baseUrl: "https://memory.test/v1",
+    apiKey: "embedding-key",
   });
   assert.deepEqual(resolveEmbeddingConfig("product-knowledge", runtime), {
     modelId: "embedding/default",
+    providerId: "custom-embedding",
     baseUrl: "https://default.test/v1",
+    apiKey: "embedding-key",
   });
 });
