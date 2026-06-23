@@ -1,4 +1,4 @@
-import type { ChatResourceType, ChatRole, ChatScopeInput } from "./chat-types";
+import type { ChatResourceType, ChatRole, ChatScopeInput } from "./types";
 import {
   getApplicationById,
   getApplicationsByCandidateId,
@@ -9,8 +9,8 @@ import {
   getOwnedJobs,
   getTiedApplications,
   getTiedCandidates,
-} from "./data/chat-access-data";
-import { evaluateChatPolicy, type ChatPolicyDecision } from "./chat-policy";
+} from "../data/chat-access-data";
+import { evaluateChatPolicy, type ChatPolicyDecision } from "./policy";
 
 export type SafeResolvedChatContext = {
   viewer: {

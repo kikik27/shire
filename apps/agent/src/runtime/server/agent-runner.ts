@@ -2,18 +2,18 @@ import { randomUUID } from "node:crypto";
 
 import { RequestContext } from "@mastra/core/request-context";
 
-import type { KnowledgeResult } from "./knowledge";
+import type { KnowledgeResult } from "../knowledge";
 import {
   buildKnowledgeSystemMessage,
   searchKnowledge,
-} from "./knowledge";
-import type { ChatModelCapability } from "./model-policy";
-import { getCapabilityPolicy } from "./model-policy";
+} from "../knowledge";
+import type { ChatModelCapability } from "../models/policy";
+import { getCapabilityPolicy } from "../models/policy";
 import {
   describeModelForTelemetry,
   resolveModelChain,
-} from "./model-router";
-import { normalizeModelUsage } from "./usage";
+} from "../models/router";
+import { normalizeModelUsage } from "../models/usage";
 
 type AgentMessage = {
   role: "user" | "assistant" | "system";

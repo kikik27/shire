@@ -4,8 +4,8 @@ import {
   CandidateProfileDraftSchema,
   buildCandidateEmbeddingText,
 } from "./candidate-profile";
-import type { CandidateProfileStore } from "./data/candidate-profile-store";
-import { normalizeModelUsage } from "./usage";
+import type { CandidateProfileStore } from "../data/candidate-profile-store";
+import { normalizeModelUsage } from "../models/usage";
 
 export type CvGenerationResult = {
   profile: unknown;

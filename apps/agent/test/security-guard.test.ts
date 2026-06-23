@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { guardSecurityPrompt } from "../src/runtime/security-guard";
+import { guardSecurityPrompt } from "../src/runtime/security/guard";
 
 test("classifies clear English override attempts as high risk", () => {
   const result = guardSecurityPrompt({

@@ -1,8 +1,8 @@
 import { talentMatchingAgent } from "../mastra/agents/talent-matching.agent";
 import { talentMatchingWorkflow } from "../mastra/workflows/talent-matching.workflow";
 import { jobRunnerData } from "../runtime/data/runtime-data";
-import { runJobCli } from "../runtime/job-cli";
-import { createJobRouting } from "../runtime/job-routing";
+import { runJobCli } from "../runtime/server/job-cli";
+import { createJobRouting } from "../runtime/server/job-routing";
 
 export async function runTalentMatchingJob() {
   return {

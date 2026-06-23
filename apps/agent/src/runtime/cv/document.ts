@@ -1,7 +1,7 @@
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 
-import { sanitizeCvText } from "./cv-normalizer";
+import { sanitizeCvText } from "./normalizer";
 
 export type CvDocumentErrorCode =
   | "CV_FILE_REQUIRED"

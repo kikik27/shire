@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { CandidateProfileDraft } from "../candidate-profile";
-import type { ModelUsageRecord } from "../usage";
+import type { CandidateProfileDraft } from "../cv/candidate-profile";
+import type { ModelUsageRecord } from "../models/usage";
 
 const cvParseRequestSchema = z.object({
   name: z.literal("cv-parse"),

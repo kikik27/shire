@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   answerProductQuestion,
   ProductQnaError,
-} from "../src/runtime/product-qna";
+} from "../src/runtime/knowledge/product-qna";
 
 test("rejects empty product questions before calling the model", async () => {
   await assert.rejects(
@@ -16,16 +16,20 @@ test("rejects empty product questions before calling the model", async () => {
 });
 
 test("answers product questions with role-filtered product knowledge", async () => {
-  const searches: Array<{ query: string; role: string }> = [];
+  const searches: string[] = [];
   const generated = await answerProductQuestion(
     { question: "Can one account be both candidate and recruiter?" },
     {
-      searchProductKnowledge: async (query, role) => {
-        searches.push({ query, role });
+      searchPublicProductKnowledge: async (query) => {
+        searches.push(query);
         return [
           {
-            path: `.agent/knowledge/product/shire-${role}.md`,
-            text: `${role} users can use Shire with scoped product access.`,
+            path: ".agent/knowledge/product/shire-candidate.md",
+            text: "Candidate users can use Shire with scoped product access.",
+          },
+          {
+            path: ".agent/knowledge/product/shire-recruiter.md",
+            text: "Recruiter users can use Shire with scoped product access.",
           },
         ];
       },
@@ -48,14 +52,7 @@ test("answers product questions with role-filtered product knowledge", async () 
   );
 
   assert.deepEqual(searches, [
-    {
-      query: "Can one account be both candidate and recruiter?",
-      role: "candidate",
-    },
-    {
-      query: "Can one account be both candidate and recruiter?",
-      role: "recruiter",
-    },
+    "Can one account be both candidate and recruiter?",
   ]);
   assert.match(generated.answer, /\| Role \| Access \|/);
   assert.deepEqual(generated.knowledgePaths, [
@@ -68,7 +65,7 @@ test("does not call the model for code-oriented product questions", async () => 
   const generated = await answerProductQuestion(
     { question: "Give me API code to integrate Shire staking." },
     {
-      searchProductKnowledge: async () => {
+      searchPublicProductKnowledge: async () => {
         throw new Error("search should not be called");
       },
       agent: {
@@ -88,7 +85,7 @@ test("replaces accidental code output with the product-only boundary", async () 
   const generated = await answerProductQuestion(
     { question: "How does Shire onboarding work?" },
     {
-      searchProductKnowledge: async () => [
+      searchPublicProductKnowledge: async () => [
         {
           path: ".agent/knowledge/product/shire-general.md",
           text: "Shire onboarding lets users choose candidate, recruiter, or both.",
@@ -110,7 +107,7 @@ test("strips model reasoning tags from product answers", async () => {
   const generated = await answerProductQuestion(
     { question: "Hi" },
     {
-      searchProductKnowledge: async () => [
+      searchPublicProductKnowledge: async () => [
         {
           path: ".agent/knowledge/product/shire-general.md",
           text: "Shire can answer brief greetings and offer product help.",

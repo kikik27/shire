@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CandidateProfileDraftSchema } from "../src/runtime/candidate-profile";
+import { CandidateProfileDraftSchema } from "../src/runtime/cv/candidate-profile";
 import { InMemoryCandidateProfileStore } from "../src/runtime/data/candidate-profile-store";
 import { createCvParseProcessor } from "../src/runtime/jobs/cv-parse.processor";
 

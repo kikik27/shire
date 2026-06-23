@@ -5,13 +5,13 @@ import { createEnv, env } from "../src/env";
 import {
   getCapabilityPolicy,
   shouldEscalate,
-} from "../src/runtime/model-policy";
+} from "../src/runtime/models/policy";
 import {
   createModelFallbackChain,
   dynamicAgentModel,
   resolveModelChain,
   resolveRuntimeAgentModelId,
-} from "../src/runtime/model-router";
+} from "../src/runtime/models/router";
 
 test("keeps CV confidence policy without model tiers", () => {
   assert.equal(

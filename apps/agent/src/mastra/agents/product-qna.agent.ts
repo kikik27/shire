@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 
-import { agentModel } from "../../runtime/model";
+import { agentModel } from "../../runtime/models";
 import { chatOutputProcessor } from "../processors/chat-output.processor";
 
 export const productQnaInstructions = `

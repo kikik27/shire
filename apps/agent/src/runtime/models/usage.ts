@@ -1,4 +1,4 @@
-import type { ChatModelCapability } from "./model-policy";
+import type { ChatModelCapability } from "./policy";
 
 export type ModelUsageRecord = {
   runId: string;

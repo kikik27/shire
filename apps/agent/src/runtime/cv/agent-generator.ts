@@ -1,15 +1,15 @@
 import { RequestContext } from "@mastra/core/request-context";
 
-import { cvProfileAgent } from "../mastra/agents/cv-profile.agent";
+import { cvProfileAgent } from "../../mastra/agents/cv-profile.agent";
 import {
   CandidateProfileDraftSchema,
   type CandidateProfileDraft,
 } from "./candidate-profile";
 import type {
   CvGenerationResult,
-} from "./cv-normalizer";
-import { getCapabilityPolicy } from "./model-policy";
-import { env } from "../env";
+} from "./normalizer";
+import { getCapabilityPolicy } from "../models/policy";
+import { env } from "../../env";
 
 type CvAgentResponse = {
   object: unknown;

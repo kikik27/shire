@@ -15,8 +15,8 @@ import {
   CvDocumentError,
   extractCvDocument,
   type CvDocumentFile,
-} from "../runtime/cv-document";
-import { hasValidServiceToken } from "../runtime/internal-auth";
+} from "../runtime/cv/document";
+import { hasValidServiceToken } from "../runtime/auth/internal";
 
 const jobsLogger = logger.child({ component: "jobs-route" });
 
@@ -110,6 +110,11 @@ export function mountJobsRoutes(
   });
 
   app.post("/jobs", async (request, response) => {
+    if (!isAuthorized(request)) {
+      response.status(401).json({ status: "unauthorized" });
+      return;
+    }
+
     try {
       const parsed = parseJobRequest(request.body);
       const job = dependencies.durableJobRuntime
@@ -129,14 +134,15 @@ export function mountJobsRoutes(
   });
 
   app.get("/jobs/:jobId", async (request, response) => {
+    if (!isAuthorized(request)) {
+      response.status(401).json({ status: "unauthorized" });
+      return;
+    }
+
     const candidateId =
       typeof request.query.candidateId === "string"
         ? request.query.candidateId
         : undefined;
-    if (candidateId && !isAuthorized(request)) {
-      response.status(401).json({ status: "unauthorized" });
-      return;
-    }
     let job;
     try {
       job = dependencies.durableJobRuntime

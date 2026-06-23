@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { agentMemory } from "../../runtime/memory";
-import { agentModel } from "../../runtime/model";
+import { agentModel } from "../../runtime/models";
 import { candidateContextTool } from "../tools/candidate.tools";
 import { evidenceContextTool } from "../tools/evidence.tools";
 import { knowledgeContextTool } from "../tools/knowledge.tools";

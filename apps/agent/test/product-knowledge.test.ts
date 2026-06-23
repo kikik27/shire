@@ -5,7 +5,7 @@ import {
   buildProductKnowledgeContext,
   enrichChatRequestWithProductKnowledge,
   resolveProductKnowledgeRole,
-} from "../src/runtime/product-knowledge";
+} from "../src/runtime/knowledge/product-context";
 
 test("resolves only supported structured chat roles", () => {
   assert.equal(

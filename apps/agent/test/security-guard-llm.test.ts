@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { confirmSecurityRiskWithLlm } from "../src/runtime/security-guard-llm";
+import { confirmSecurityRiskWithLlm } from "../src/runtime/security/guard-llm";
 
 type GuardAgent = Parameters<typeof confirmSecurityRiskWithLlm>[1] extends infer D
   ? D extends { agent?: infer A }

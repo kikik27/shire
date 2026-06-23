@@ -6,18 +6,18 @@ import { createClient } from "@libsql/client";
 import { LibSQLVector } from "@mastra/libsql";
 import { MDocument } from "@mastra/rag";
 
-import { env } from "../env";
+import { env } from "../../env";
 import {
   embedTextFor,
   embedTextsFor,
-} from "./embeddings";
+} from "../models/embeddings";
 import {
   type KnowledgeCorpus,
   knowledgeSources,
   productKnowledgeSources,
   type ProductKnowledgeAudience,
-} from "./knowledge-sources";
-import { buildLibSQLRuntimeConfig } from "./libsql-config";
+} from "./sources";
+import { buildLibSQLRuntimeConfig } from "../storage/libsql-config";
 
 export type KnowledgeResult = {
   path: string;
@@ -165,6 +165,29 @@ function searchLocalProductKnowledge(
   return limitKnowledgeResults(
     documents
       .filter((document) => allowedAudiences.has(document.audience))
+      .filter((document) => {
+        const normalized = document.text.toLowerCase();
+        return terms.some((term) => normalized.includes(term));
+      })
+      .map((document) => ({
+        path: document.path,
+        text: document.text,
+      })),
+    env.ragMaxCharacters,
+  );
+}
+
+function searchLocalPublicProductKnowledge(
+  query: string,
+  documents: ProductKnowledgeDocument[],
+) {
+  const terms = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 2);
+
+  return limitKnowledgeResults(
+    documents
       .filter((document) => {
         const normalized = document.text.toLowerCase();
         return terms.some((term) => normalized.includes(term));
@@ -458,6 +481,25 @@ export function searchProductKnowledge(
       searchLocalProductKnowledge(
         query,
         role,
+        dependencies?.localDocuments ?? loadLocalProductDocuments(),
+      ),
+  );
+}
+
+export function searchPublicProductKnowledge(
+  query: string,
+  dependencies?: KnowledgeSearchDependencies,
+) {
+  return searchKnowledgeWithFilter(
+    query,
+    {
+      corpus: "product",
+      audience: { $in: ["general", "candidate", "recruiter"] },
+    },
+    dependencies,
+    () =>
+      searchLocalPublicProductKnowledge(
+        query,
         dependencies?.localDocuments ?? loadLocalProductDocuments(),
       ),
   );

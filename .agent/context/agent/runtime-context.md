@@ -44,6 +44,46 @@ Embeddings are configured per retrieval surface. Memory semantic recall uses
 knowledge use separate libSQL URLs. Repository retrieval is bounded by
 `SHIRE_RAG_TOP_K` and `SHIRE_RAG_MAX_CHARACTERS`.
 
+## Runtime module boundaries
+
+Keep HTTP orchestration thin:
+
+- `apps/agent/src/server.ts` wires Express, Mastra, shared dependencies, route
+  mounting, and shutdown hooks.
+- `apps/agent/src/runtime/server/job-services.ts` owns job runtime selection,
+  worker startup, durable queue selection, and recommendation scheduler startup.
+- `apps/agent/src/routes/jobs.route.ts` owns job HTTP authorization and request
+  parsing. Internal job enqueue/status endpoints require
+  `SHIRE_AGENT_SERVICE_TOKEN`.
+- `apps/agent/src/routes/chat.middleware.ts` owns chat auth, request logging,
+  validation, rate limit, security guard, and product knowledge enrichment.
+- `apps/agent/src/routes/chat-stream-observer.ts` owns SSE stream observation
+  and stall logging.
+- `apps/agent/src/runtime/chat/stream-sanitizer.ts` owns provider-specific
+  hidden reasoning masking and synthetic `reasoning-*` stream events.
+- `apps/agent/src/runtime/chat/*` owns role-aware chat policy, validation,
+  guard fallback streams, request logging, caller rate-limit keys, and thread
+  scope helpers.
+- `apps/agent/src/runtime/cv/*` owns CV document extraction, normalization,
+  candidate profile schema, and CV agent generation.
+- `apps/agent/src/runtime/models/*` owns model routing, capability policy,
+  embeddings, model facade, and usage normalization.
+- `apps/agent/src/runtime/knowledge/*` owns repository RAG, product knowledge,
+  product Q&A, and knowledge source registration.
+- `apps/agent/src/runtime/security/*` owns prompt risk indicators, security
+  policy, LLM confirmation, output validation, reasoning stripping, and
+  autonomy guardrails.
+- `apps/agent/src/runtime/auth/*` owns service-token auth and in-memory rate
+  limiting.
+- `apps/agent/src/runtime/storage/*` owns storage diagnostics and libSQL config.
+- `apps/agent/src/constants/agent.ts` owns shared agent route names, agent IDs,
+  SSE headers, and timing constants.
+- `apps/agent/src/types/*` owns cross-module dependency and stream contracts.
+- `apps/agent/src/lib/sse.ts` owns reusable SSE parsing and chunk helpers.
+
+When adding a new runtime concern, prefer a focused module with an explicit
+dependency type over expanding `server.ts` or `chat.middleware.ts`.
+
 ## Agent-specific prompts
 
 ### CV Profile Agent

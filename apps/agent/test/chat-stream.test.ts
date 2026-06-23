@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
 
 const { createAiSdkHiddenReasoningStreamSanitizer } = await import(
-  "../src/routes/chat.middleware"
+  "../src/runtime/chat/stream-sanitizer"
 );
 
 function textDelta(delta: string) {

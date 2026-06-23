@@ -10,7 +10,7 @@ export type BlockedChatGuardDecision = Exclude<
   { decision: "allow" }
 >;
 
-import { classifySecurityIndicator } from "./security-indicators";
+import { classifySecurityIndicator } from "../security/indicators";
 
 export const PROMPT_INJECTION_RESPONSE =
   "I can't follow instructions that attempt to override my rules or access protected context. I can only assist with Shire-related recruitment and employment topics.";

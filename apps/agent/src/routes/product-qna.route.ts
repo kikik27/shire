@@ -2,13 +2,13 @@ import type { Express } from "express";
 
 import { env } from "../env";
 import { logger } from "../runtime/logger";
-import { enforceChatRateLimit } from "../runtime/chat-caller";
+import { enforceChatRateLimit } from "../runtime/chat/caller";
 import {
   answerProductQuestion,
   ProductQnaError,
-} from "../runtime/product-qna";
-import { hasValidServiceToken } from "../runtime/internal-auth";
-import type { RateLimiter } from "../runtime/rate-limit";
+} from "../runtime/knowledge/product-qna";
+import { hasValidServiceToken } from "../runtime/auth/internal";
+import type { RateLimiter } from "../runtime/auth/rate-limit";
 
 const qnaLogger = logger.child({ component: "product-qna-route" });
 const PRODUCT_QNA_TIMEOUT_MS = 20_000;

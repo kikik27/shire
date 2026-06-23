@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveChatCallerKey, enforceChatRateLimit, type ChatCallerDependencies } from "../src/runtime/chat-caller";
-import { createInMemoryRateLimiter } from "../src/runtime/rate-limit";
+import { resolveChatCallerKey, enforceChatRateLimit, type ChatCallerDependencies } from "../src/runtime/chat/caller";
+import { createInMemoryRateLimiter } from "../src/runtime/auth/rate-limit";
 
 test("resolves viewer ID from scope", () => {
   const body = {

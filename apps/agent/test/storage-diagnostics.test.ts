@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   getStorageDiagnostics,
   probeStorageReadiness,
-} from "../src/runtime/storage-diagnostics";
+} from "../src/runtime/storage/diagnostics";
 
 const localRuntime = {
   agentMemoryUrl: "file:./.data/shire-agent-memory.db",

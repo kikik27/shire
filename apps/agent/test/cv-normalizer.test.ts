@@ -5,11 +5,11 @@ import { runCvParseJob } from "../src/jobs/run-cv-parse";
 import {
   CandidateProfileDraftSchema,
   buildCandidateEmbeddingText,
-} from "../src/runtime/candidate-profile";
+} from "../src/runtime/cv/candidate-profile";
 import {
   normalizeCvWithFallback,
   processCandidateCv,
-} from "../src/runtime/cv-normalizer";
+} from "../src/runtime/cv/normalizer";
 import { InMemoryCandidateProfileStore } from "../src/runtime/data/candidate-profile-store";
 
 const profile = CandidateProfileDraftSchema.parse({

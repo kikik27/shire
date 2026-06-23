@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveChatContext } from "../src/runtime/chat-context";
+import { resolveChatContext } from "../src/runtime/chat/context";
 
 test("candidate chat context keeps only safe owned resources", () => {
   const context = resolveChatContext({

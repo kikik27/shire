@@ -9,7 +9,7 @@ import {
   runJobMatchingForCandidate,
   runTalentMatchingForJob,
 } from "../src/runtime/matching/pipeline";
-import { fallbackOutput } from "../src/runtime/matching/rerank";
+import { fallbackOutput, rerankMatch } from "../src/runtime/matching/rerank";
 import { scoreMatch } from "../src/runtime/matching/rule-score";
 import type { CandidateMatchInput, JobMatchInput } from "../src/runtime/matching/types";
 
@@ -52,7 +52,11 @@ function job(overrides: Partial<JobMatchInput> = {}): JobMatchInput {
 
 /** Mock rerank agents that always return the deterministic fallback (no LLM). */
 function fallbackAgents() {
-  const fakeAgent = async () => ({ object: undefined });
+  const fakeAgent = {
+    async generate() {
+      return { object: undefined };
+    },
+  };
   return { jobAgent: fakeAgent, talentAgent: fakeAgent };
 }
 
@@ -224,4 +228,37 @@ test("fallback output derives the recommended action from the rule score", () =>
     "job-rerank",
   );
   assert.equal(low.recommendedAction, "IGNORE");
+});
+
+test("rerank parses JSON text for direct model providers", async () => {
+  const ruleScore = scoreMatch(candidate(), job());
+  let structuredOutputWasSent = false;
+  const fakeAgent = {
+    async generate(_messages: unknown, options: { structuredOutput?: unknown }) {
+      structuredOutputWasSent = "structuredOutput" in options;
+      return {
+        text: JSON.stringify({
+          matchScore: 88,
+          confidence: 0.8,
+          reasons: ["Strong skill overlap"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_INVITE",
+        }),
+      };
+    },
+  };
+
+  const result = await rerankMatch(
+    candidate(),
+    job(),
+    ruleScore,
+    "talent-rerank",
+    { talentAgent: fakeAgent },
+  );
+
+  assert.equal(result.llmInvoked, true);
+  assert.equal(structuredOutputWasSent, false);
+  assert.equal(result.output.matchScore, 88);
+  assert.equal(result.output.recommendedAction, "SUGGEST_INVITE");
 });

@@ -1,10 +1,10 @@
-import { extractLatestUserText } from "./chat-guard";
+import { extractLatestUserText } from "../chat/guard";
 import {
   buildKnowledgeSystemMessage,
   searchProductKnowledge,
   type KnowledgeResult,
   type ProductKnowledgeRole,
-} from "./knowledge";
+} from "./index";
 
 type UnknownRecord = Record<string, unknown>;
 

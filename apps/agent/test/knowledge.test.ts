@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { env } from "../src/env";
 import {
   buildKnowledgeFilter,
   buildKnowledgeSystemMessage,
   limitKnowledgeResults,
   syncKnowledgeBase,
   searchProductKnowledge,
+  searchPublicProductKnowledge,
 } from "../src/runtime/knowledge";
 import {
   knowledgeSources,
   productKnowledgeSources,
   repositoryKnowledgeSources,
-} from "../src/runtime/knowledge-sources";
+} from "../src/runtime/knowledge/sources";
 
 test("knowledge corpus excludes task and archive documents", () => {
   assert.equal(
@@ -97,7 +99,7 @@ test("product retrieval passes the role filter before ranking", async () => {
     "candidate",
     {
       embeddingsEnabled: true,
-      indexes: ["shire_context"],
+      indexes: [env.agentKnowledgeIndex],
       embed: async () => ({ embedding: [0.1, 0.2] }),
       query: async (input) => {
         receivedFilter = input.filter;
@@ -122,6 +124,37 @@ test("product retrieval passes the role filter before ranking", async () => {
     results[0]?.path,
     ".agent/knowledge/product/shire-candidate.md",
   );
+});
+
+test("public product retrieval uses one filter for all public audiences", async () => {
+  let receivedFilter: unknown;
+
+  const results = await searchPublicProductKnowledge(
+    "Can one account use both modes?",
+    {
+      embeddingsEnabled: true,
+      indexes: [env.agentKnowledgeIndex],
+      embed: async () => ({ embedding: [0.1, 0.2] }),
+      query: async (input) => {
+        receivedFilter = input.filter;
+        return [
+          {
+            score: 0.9,
+            metadata: {
+              path: ".agent/knowledge/product/shire-general.md",
+              text: "Shire supports candidate and recruiter modes.",
+            },
+          },
+        ];
+      },
+    },
+  );
+
+  assert.deepEqual(receivedFilter, {
+    corpus: "product",
+    audience: { $in: ["general", "candidate", "recruiter"] },
+  });
+  assert.equal(results[0]?.path, ".agent/knowledge/product/shire-general.md");
 });
 
 test("product retrieval falls back to local role-filtered documents", async () => {
@@ -171,7 +204,7 @@ test("product retrieval skips vector embedding when embeddings are disabled", as
     "candidate",
     {
       embeddingsEnabled: false,
-      indexes: ["shire_context"],
+      indexes: [env.agentKnowledgeIndex],
       embed: async () => {
         throw new Error("embedding should not run");
       },
@@ -197,7 +230,7 @@ test("product retrieval falls back when an existing index has no role metadata",
     "recruiter",
     {
       embeddingsEnabled: true,
-      indexes: ["shire_context"],
+      indexes: [env.agentKnowledgeIndex],
       embed: async () => ({ embedding: [0.1, 0.2] }),
       query: async () => [],
       localDocuments: [
@@ -269,7 +302,7 @@ test("knowledge sync exposes corpus to embedding selection", async () => {
 test("knowledge sync deletes vectors for removed manifest paths", async () => {
   const deletedFilters: unknown[] = [];
   const vector = {
-    listIndexes: async () => ["shire_context"],
+    listIndexes: async () => [env.agentKnowledgeIndex],
     deleteVectors: async (input: unknown) => {
       deletedFilters.push(input);
     },
@@ -290,7 +323,7 @@ test("knowledge sync deletes vectors for removed manifest paths", async () => {
 
   assert.deepEqual(deletedFilters, [
     {
-      indexName: "shire_context",
+      indexName: env.agentKnowledgeIndex,
       filter: { path: ".agent/knowledge/removed.md" },
     },
   ]);

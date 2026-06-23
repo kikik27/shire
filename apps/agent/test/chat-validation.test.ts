@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateChatRequest } from "../src/runtime/chat-validation";
+import { validateChatRequest } from "../src/runtime/chat/validation";
 
 const OPTIONS = {
   maxBodyBytes: 65_536,

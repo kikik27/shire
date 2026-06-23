@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   classifySecurityIndicator,
   extractInstructionBearingText,
-} from "../src/runtime/security-indicators";
+} from "../src/runtime/security/indicators";
 
 test("extracts instruction-bearing text from system, messages, and context", () => {
   const texts = extractInstructionBearingText({

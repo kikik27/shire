@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeModelUsage } from "../src/runtime/usage";
+import { normalizeModelUsage } from "../src/runtime/models/usage";
 
 test("normalizes provider usage into an AgentRun-compatible record", () => {
   assert.deepEqual(

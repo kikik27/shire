@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createInMemoryRateLimiter } from "../src/runtime/rate-limit";
+import { createInMemoryRateLimiter } from "../src/runtime/auth/rate-limit";
 
 test("allows requests within limit", async () => {
   const limiter = createInMemoryRateLimiter();

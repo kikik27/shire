@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   buildChatResourceKey,
   buildChatThreadScope,
-} from "../src/runtime/chat-thread";
+} from "../src/runtime/chat/thread";
 
 test("builds a general role thread key", () => {
   assert.deepEqual(

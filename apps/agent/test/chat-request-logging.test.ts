@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { summarizeChatRequestBody } from "../src/runtime/chat-request-logging";
+import { summarizeChatRequestBody } from "../src/runtime/chat/request-logging";
 
 test("summarizes a chat request body clearly", () => {
   assert.deepEqual(

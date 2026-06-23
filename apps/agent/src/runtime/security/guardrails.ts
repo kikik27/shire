@@ -1,5 +1,5 @@
-import { env } from "../env";
-import type { AutonomyMode } from "./autonomy";
+import { env } from "../../env";
+import type { AutonomyMode } from "../server/autonomy";
 
 export type GuardrailDecision = {
   decision: "proceed" | "escalate";

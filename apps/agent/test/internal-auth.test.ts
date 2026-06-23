@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasValidServiceToken } from "../src/runtime/internal-auth";
+import { hasValidServiceToken } from "../src/runtime/auth/internal";
 
 test("accepts only an exact bearer service token", () => {
   assert.equal(hasValidServiceToken("Bearer secret", "secret"), true);

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CandidateProfileDraftSchema } from "../src/runtime/candidate-profile";
-import { generateCandidateProfile } from "../src/runtime/cv-agent-generator";
+import { CandidateProfileDraftSchema } from "../src/runtime/cv/candidate-profile";
+import { generateCandidateProfile } from "../src/runtime/cv/agent-generator";
 
 const profile = CandidateProfileDraftSchema.parse({
   fullName: "Maya Okafor",
