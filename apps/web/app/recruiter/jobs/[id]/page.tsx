@@ -3,7 +3,7 @@
 import { use } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, Zap } from "lucide-react";
+import { ArrowLeft, Briefcase, RotateCw, Users, Zap } from "lucide-react";
 import { useRecruiterApiJobs, usePublishJob } from "@/lib/hooks/use-jobs";
 import { useJobApplications } from "@/lib/hooks/use-applications";
 import { PageHeader } from "@/components/shared/page-header";
@@ -12,6 +12,7 @@ import { RiskScoreBadge } from "@/components/trust/scores";
 import { MatchScoreBadge } from "@/components/trust/scores";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { ApplicationTimeline } from "@/components/applications/application-timeline";
+import { RecruiterRecommendations } from "@/components/dashboard/recommendation-list";
 import { StakeDialog } from "@/components/stake/stake-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,7 +28,13 @@ export default function RecruiterJobDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { data: jobs = [], isLoading } = useRecruiterApiJobs();
+  const {
+    data: jobs = [],
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useRecruiterApiJobs();
   const job = jobs.find((j) => j.id === id);
   const { data: applications = [] } = useJobApplications(job?.id);
   const publishJob = usePublishJob();
@@ -37,6 +44,35 @@ export default function RecruiterJobDetailPage({
     return (
       <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
         <p className="text-sm text-muted-foreground">Loading job...</p>
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+        <Link
+          href="/recruiter/jobs"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          My jobs
+        </Link>
+        <EmptyState
+          icon={Briefcase}
+          title="Job unavailable"
+          description="We could not load this job from the API. Retry the request or check your connection."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RotateCw className="size-4" aria-hidden="true" />
+              Retry
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -87,6 +123,8 @@ export default function RecruiterJobDetailPage({
           </p>
         )}
       </div>
+
+      <RecruiterRecommendations jobId={job.id} />
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

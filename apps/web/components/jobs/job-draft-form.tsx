@@ -27,9 +27,15 @@ import { SkillInput } from "@/components/profile/skill-input";
 
 const SKILLS = ["React", "TypeScript", "Solidity", "Figma", "Node.js", "SQL", "Tailwind", "viem"];
 
-export function JobDraftForm({ onSubmit }: { onSubmit: (values: JobDraftValues) => void }) {
+export function JobDraftForm({
+  isSubmitting = false,
+  onSubmit,
+}: {
+  isSubmitting?: boolean;
+  onSubmit: (values: JobDraftValues) => void;
+}) {
   const form = useForm<JobDraftValues>({
-    // zod defaults/coerce make input ≠ output; pin the resolver to the output type (RHF v7 + resolvers v5).
+    // zod defaults/coerce make input != output; pin the resolver to the output type (RHF v7 + resolvers v5).
     resolver: zodResolver(jobDraftSchema) as Resolver<JobDraftValues>,
     defaultValues: {
       title: "",
@@ -170,7 +176,7 @@ export function JobDraftForm({ onSubmit }: { onSubmit: (values: JobDraftValues) 
               <FormItem>
                 <FormLabel>Salary range</FormLabel>
                 <FormControl>
-                  <Input placeholder="$80k–$120k" {...field} />
+                  <Input placeholder="$80k-$120k" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -213,8 +219,8 @@ export function JobDraftForm({ onSubmit }: { onSubmit: (values: JobDraftValues) 
         />
 
         <div className="flex justify-end">
-          <Button type="submit" size="lg">
-            Continue to stake
+          <Button type="submit" size="lg" disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Continue to stake"}
           </Button>
         </div>
       </form>

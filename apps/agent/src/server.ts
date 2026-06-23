@@ -15,10 +15,13 @@ import type {
 import { InMemoryJobQueue } from "./runtime/jobs/in-memory-job-queue";
 import type { JobQueue } from "./runtime/jobs/job-queue";
 import { createJobProcessors } from "./runtime/jobs/job-processors";
+import { RecommendationScheduler } from "./runtime/jobs/recommendation-scheduler";
 import {
   createBullMqJobRuntime,
   type DurableJobRuntime,
 } from "./runtime/jobs/bullmq-job-queue";
+import { getAgentDatabase } from "./runtime/db";
+import { createDrizzleMatchingRepository } from "./runtime/matching/repository";
 import type {
   searchProductKnowledge,
 } from "./runtime/knowledge";
@@ -112,6 +115,21 @@ export async function createRuntimeHttpServer(
   const worker = jobQueue
     ? new AgentWorker({ queue: jobQueue, process: processJob })
     : undefined;
+  const schedulerCanEnqueueProcessableJobs =
+    env.workerEnabled || durableJobRuntime !== undefined;
+  const matchingScheduler = new RecommendationScheduler({
+    enabled:
+      env.recommendationSchedulerEnabled && schedulerCanEnqueueProcessableJobs,
+    intervalMs: env.recommendationSchedulerIntervalMs,
+    getRepository: () => {
+      const database = getAgentDatabase();
+      return database ? createDrizzleMatchingRepository(database) : undefined;
+    },
+    enqueue: (request) =>
+      durableJobRuntime
+        ? durableJobRuntime.enqueue(request)
+        : jobQueue!.enqueue(request),
+  });
   if (env.workerEnabled) {
     if (durableJobRuntime) {
       await durableJobRuntime.start();
@@ -119,6 +137,7 @@ export async function createRuntimeHttpServer(
       worker?.start();
     }
   }
+  matchingScheduler.start();
 
   // --- Shared dependencies ---
   const serviceToken = dependencies.serviceToken ?? env.agentServiceToken;
@@ -209,6 +228,7 @@ export async function createRuntimeHttpServer(
 
   const httpServer = createServer(app);
   httpServer.on("close", () => {
+    matchingScheduler.close();
     if (env.workerEnabled) {
       if (durableJobRuntime) {
         void durableJobRuntime.close();

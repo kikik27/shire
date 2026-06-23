@@ -166,7 +166,7 @@ export function RecruiterProfileForm({
               <FormItem>
                 <FormLabel>Location</FormLabel>
                 <FormControl>
-                  <Input placeholder="Remote · GMT+1" {...field} />
+                  <Input placeholder="Remote / GMT+1" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

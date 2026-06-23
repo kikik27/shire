@@ -1,9 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
 import type { RecommendationType, RecommendationStatus } from "@shire/shared";
+
+export const RECOMMENDATIONS_REFETCH_INTERVAL_MS = 15 * 60 * 1000;
 
 export type Recommendation = {
   id: string;
@@ -47,6 +49,8 @@ export function useCandidateRecommendations() {
   const getAccessToken = useAccessToken();
   return useQuery({
     queryKey: ["recommendations", "candidate"],
+    refetchInterval: RECOMMENDATIONS_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const accessToken = await getAccessToken();
       const response = await fetch("/api/candidate/recommendations", {
@@ -61,66 +65,14 @@ export function useRecruiterRecommendations() {
   const getAccessToken = useAccessToken();
   return useQuery({
     queryKey: ["recommendations", "recruiter"],
+    refetchInterval: RECOMMENDATIONS_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const accessToken = await getAccessToken();
       const response = await fetch("/api/recruiter/recommendations", {
         headers: authorizationHeaders(accessToken),
       });
       return readRecommendationsResponse(response);
-    },
-  });
-}
-
-/** Enqueue a job-matching run for the authenticated candidate. */
-export function useRefreshCandidateRecommendations() {
-  const queryClient = useQueryClient();
-  const getAccessToken = useAccessToken();
-  return useMutation({
-    mutationFn: async () => {
-      const accessToken = await getAccessToken();
-      const response = await fetch(
-        "/api/candidate/recommendations/refresh",
-        {
-          method: "POST",
-          headers: authorizationHeaders(accessToken),
-        },
-      );
-      if (!response.ok) {
-        throw new Error("Failed to enqueue matching job.");
-      }
-      return (await response.json()) as { jobId: string; status: string };
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["recommendations"],
-      });
-    },
-  });
-}
-
-/** Enqueue a talent-matching run for a recruiter's job. */
-export function useRefreshRecruiterRecommendations() {
-  const queryClient = useQueryClient();
-  const getAccessToken = useAccessToken();
-  return useMutation({
-    mutationFn: async (jobId: string) => {
-      const accessToken = await getAccessToken();
-      const response = await fetch(
-        `/api/recruiter/jobs/${jobId}/recommendations/refresh`,
-        {
-          method: "POST",
-          headers: authorizationHeaders(accessToken),
-        },
-      );
-      if (!response.ok) {
-        throw new Error("Failed to enqueue matching job.");
-      }
-      return (await response.json()) as { jobId: string; status: string };
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["recommendations"],
-      });
     },
   });
 }

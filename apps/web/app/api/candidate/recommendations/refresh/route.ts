@@ -14,6 +14,7 @@ import {
 } from "@/lib/server/profile-repository";
 
 export const runtime = "nodejs";
+const AGENT_ENQUEUE_TIMEOUT_MS = 15_000;
 
 function agentConfig() {
   const url = process.env.SHIRE_AGENT_INTERNAL_URL?.trim().replace(/\/+$/, "");
@@ -52,20 +53,31 @@ export function createCandidateMatchingRefreshHandler(
       // Enqueue a job-matching job for this candidate. The agent resolves the
       // candidate profile + active jobs from Postgres and writes recommendations.
       stage = "forward-agent";
-      const upstream = await (dependencies.fetch ?? fetch)(
-        `${config.url}/jobs`,
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${config.token}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            name: "job-matching",
-            payload: { candidateId: user.id },
-          }),
-        },
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(),
+        AGENT_ENQUEUE_TIMEOUT_MS,
       );
+      let upstream: Response;
+      try {
+        upstream = await (dependencies.fetch ?? fetch)(
+          `${config.url}/jobs`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${config.token}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              name: "job-matching",
+              payload: { candidateId: user.id },
+            }),
+            signal: controller.signal,
+          },
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
 
       return new Response(await upstream.arrayBuffer(), {
         status: upstream.status,
@@ -97,7 +109,11 @@ export function createCandidateMatchingRefreshHandler(
         stage,
         error: error instanceof Error ? error.message : String(error),
       });
-      return NextResponse.json({ error: "agent-unreachable" }, { status: 502 });
+      const isTimeout = error instanceof Error && error.name === "AbortError";
+      return NextResponse.json(
+        { error: isTimeout ? "agent-timeout" : "agent-unreachable" },
+        { status: isTimeout ? 504 : 502 },
+      );
     }
   };
 }

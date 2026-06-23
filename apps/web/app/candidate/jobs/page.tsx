@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Briefcase } from "lucide-react";
+import { Briefcase, RotateCw } from "lucide-react";
 import { useCandidateApiJobs } from "@/lib/hooks/use-jobs";
 import { PageHeader } from "@/components/shared/page-header";
 import { JobFilters, type JobFilterState } from "@/components/jobs/job-filters";
 import { JobCard } from "@/components/jobs/job-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
 
 const defaultFilters: JobFilterState = {
   query: "",
@@ -16,7 +17,13 @@ const defaultFilters: JobFilterState = {
 };
 
 export default function CandidateJobsPage() {
-  const { data: jobs = [], isLoading, isError } = useCandidateApiJobs();
+  const {
+    data: jobs = [],
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useCandidateApiJobs();
   const [filters, setFilters] = useState<JobFilterState>(defaultFilters);
 
   const visible = useMemo(() => {
@@ -56,7 +63,18 @@ export default function CandidateJobsPage() {
         <EmptyState
           icon={Briefcase}
           title="Job feed unavailable"
-          description="We could not load active roles. Try again after refreshing."
+          description="We could not load active roles. Retry the request or check your connection."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RotateCw className="size-4" aria-hidden="true" />
+              Retry
+            </Button>
+          }
         />
       ) : visible.length === 0 ? (
         <EmptyState

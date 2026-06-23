@@ -48,14 +48,14 @@ export default function NewJobPage() {
     <div className="space-y-6 p-4 sm:p-6">
       <PageHeader
         title="Post a new job"
-        description="Stake cUSD to activate the listing — no stake, no spam."
+        description="Stake cUSD to activate the listing: no stake, no spam."
       />
 
       <div className="rounded-2xl border border-border bg-card p-6">
-        <JobDraftForm onSubmit={handleFormSubmit} />
-        {createJob.isPending && (
-          <p className="mt-3 text-sm text-muted-foreground">Saving job...</p>
-        )}
+        <JobDraftForm
+          isSubmitting={createJob.isPending}
+          onSubmit={handleFormSubmit}
+        />
       </div>
 
       {draft && (

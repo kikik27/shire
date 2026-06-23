@@ -19,7 +19,7 @@ export default function AdminPage() {
     <div className="space-y-8 p-4 sm:p-6">
       <PageHeader
         title="Admin overview"
-        description="Platform health — jobs, stakes, and disputes."
+        description="Platform health: jobs, stakes, and disputes."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

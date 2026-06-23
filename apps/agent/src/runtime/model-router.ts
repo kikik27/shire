@@ -6,7 +6,6 @@ type TextModelRuntime = Pick<
   RuntimeEnv,
   "textModelProvider" | "textModelBaseUrl" | "textModelApiKey"
 >;
-type ModelConfig = ReturnType<typeof toModelConfig>;
 
 export type ModelRequestContext = {
   capability?: ChatModelCapability;
@@ -19,10 +18,25 @@ export type ModelRequestContext = {
   >;
 };
 
+/**
+ * OpenAI-compatible model config. When `url` + `apiKey` are present, Mastra
+ * routes requests directly to that endpoint instead of through its built-in
+ * provider gateway. This lets us point chat models at TokenRouter (serving
+ * MiniMax-M3) while embeddings stay on OpenRouter.
+ *
+ * Matches Mastra's `OpenAICompatibleConfig` variant of `MastraModelConfig`.
+ */
+export type ModelConfig = {
+  providerId: string;
+  modelId: string;
+  url?: string;
+  apiKey?: string;
+};
+
 function toModelConfig(
   model: string,
   runtime: TextModelRuntime,
-) {
+): ModelConfig {
   const normalizedModel = model.trim();
   const slashIndex = normalizedModel.indexOf("/");
   const providerId =
@@ -37,6 +51,8 @@ function toModelConfig(
   return {
     providerId,
     modelId,
+    // Always carry url + apiKey so Mastra treats this as OpenAI-compatible
+    // (direct routing) rather than a registered-gateway provider lookup.
     url: runtime.textModelBaseUrl,
     apiKey: runtime.textModelApiKey,
   };

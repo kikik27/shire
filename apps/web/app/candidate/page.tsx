@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Briefcase, FileText, Sparkles } from "lucide-react";
+import { ArrowRight, Briefcase, FileText, RotateCw, Sparkles } from "lucide-react";
 import { useCandidateApiJobs } from "@/lib/hooks/use-jobs";
 import { useMyApplications } from "@/lib/hooks/use-applications";
 import { PageHeader } from "@/components/shared/page-header";
@@ -35,8 +35,20 @@ function ProfilePrompt() {
 }
 
 export default function CandidatePage() {
-  const { data: applications = [], isLoading: applicationsLoading } = useMyApplications();
-  const { data: allJobs = [], isLoading: jobsLoading } = useCandidateApiJobs();
+  const {
+    data: applications = [],
+    isLoading: applicationsLoading,
+    isError: applicationsError,
+    isFetching: applicationsFetching,
+    refetch: refetchApplications,
+  } = useMyApplications();
+  const {
+    data: allJobs = [],
+    isLoading: jobsLoading,
+    isError: jobsError,
+    isFetching: jobsFetching,
+    refetch: refetchJobs,
+  } = useCandidateApiJobs();
 
   const activeApps = applications.filter(
     (a) => !["HIRED", "REJECTED", "WITHDRAWN"].includes(a.status),
@@ -90,11 +102,28 @@ export default function CandidatePage() {
             title="Loading recommendations"
             description="Fetching live jobs from the database."
           />
+        ) : jobsError ? (
+          <EmptyState
+            icon={Briefcase}
+            title="Jobs unavailable"
+            description="We could not load live jobs. Retry the request or check your connection."
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void refetchJobs()}
+                disabled={jobsFetching}
+              >
+                <RotateCw className="size-4" aria-hidden="true" />
+                Retry
+              </Button>
+            }
+          />
         ) : recommended.length === 0 ? (
           <EmptyState
             icon={Sparkles}
             title="No new recommendations"
-            description="You've applied to all current matches — check back soon."
+            description="You've applied to all current matches. Check back soon."
           />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -119,6 +148,23 @@ export default function CandidatePage() {
             icon={FileText}
             title="Loading applications"
             description="Fetching your applications from the database."
+          />
+        ) : applicationsError ? (
+          <EmptyState
+            icon={FileText}
+            title="Applications unavailable"
+            description="We could not load your applications. Retry the request or check your connection."
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void refetchApplications()}
+                disabled={applicationsFetching}
+              >
+                <RotateCw className="size-4" aria-hidden="true" />
+                Retry
+              </Button>
+            }
           />
         ) : activeApps.length === 0 ? (
           <EmptyState

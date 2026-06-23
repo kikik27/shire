@@ -26,6 +26,7 @@ import {
 import type { ChatResourceType, ChatScopeRequest } from "../../../../lib/chat/types";
 
 export const runtime = "nodejs";
+const CHAT_AGENT_HEADER_TIMEOUT_MS = 60_000;
 
 type ResolveAuthenticatedUser = (
   request: Request,
@@ -176,6 +177,11 @@ export function createChatPostHandler(
       });
 
       let upstream: Response;
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(),
+        CHAT_AGENT_HEADER_TIMEOUT_MS,
+      );
       try {
         upstream = await fetcher(agentUrl, {
           method: "POST",
@@ -184,8 +190,20 @@ export function createChatPostHandler(
             "content-type": "application/json",
           },
           body: JSON.stringify(forwardedBody),
+          signal: controller.signal,
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          console.error("[shire-web:chat-proxy] agent response timed out", {
+            agentUrl,
+            durationMs: Date.now() - startedAt,
+            timeoutMs: CHAT_AGENT_HEADER_TIMEOUT_MS,
+          });
+          return NextResponse.json(
+            { error: "agent-timeout", target: agentUrl },
+            { status: 504 },
+          );
+        }
         console.error("[shire-web:chat-proxy] agent unreachable", {
           agentUrl,
           durationMs: Date.now() - startedAt,
@@ -197,6 +215,8 @@ export function createChatPostHandler(
           },
           { status: 502 },
         );
+      } finally {
+        clearTimeout(timeout);
       }
 
       if (!upstream.ok) {
