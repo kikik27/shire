@@ -1,4 +1,4 @@
-import type { SecurityCategory, SecurityGuardDecision } from "./security-guard";
+import type { SecurityCategory, SecurityGuardDecision } from "./guard";
 
 export type SecurityPolicyDecision = {
   decision: "allow" | "block" | "degraded";

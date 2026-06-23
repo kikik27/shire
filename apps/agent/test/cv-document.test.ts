@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   CvDocumentError,
   extractCvDocument,
-} from "../src/runtime/cv-document";
+} from "../src/runtime/cv/document";
 
 const pdf = Buffer.from("%PDF-1.7\nfake");
 const docx = Buffer.concat([

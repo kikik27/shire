@@ -5,33 +5,12 @@ import { pathToFileURL } from "node:url";
 import express from "express";
 import { MastraServer } from "@mastra/express";
 import { logger } from "./runtime/logger";
-import { jobRegistry, resolveJobName } from "./runtime/job-registry";
-import { getStorageDiagnostics, probeStorageReadiness } from "./runtime/storage-diagnostics";
-import { AgentWorker } from "./runtime/jobs/agent-worker";
-import type {
-  JobResult,
-  ProcessableJob,
-} from "./runtime/jobs/job-contracts";
-import { InMemoryJobQueue } from "./runtime/jobs/in-memory-job-queue";
-import type { JobQueue } from "./runtime/jobs/job-queue";
-import { createJobProcessors } from "./runtime/jobs/job-processors";
-import { RecommendationScheduler } from "./runtime/jobs/recommendation-scheduler";
-import {
-  createBullMqJobRuntime,
-  type DurableJobRuntime,
-} from "./runtime/jobs/bullmq-job-queue";
-import { getAgentDatabase } from "./runtime/db";
-import { createDrizzleMatchingRepository } from "./runtime/matching/repository";
-import type {
-  searchProductKnowledge,
-} from "./runtime/knowledge";
-import type { answerProductQuestion } from "./runtime/product-qna";
-import type { guardSecurityPrompt } from "./runtime/security-guard";
-import type { confirmSecurityRiskWithLlm } from "./runtime/security-guard-llm";
-import type { classifySecurityIndicator } from "./runtime/security-indicators";
-import type { RateLimiter } from "./runtime/rate-limit";
-import { createInMemoryRateLimiter } from "./runtime/rate-limit";
-import type { CvDocumentFile } from "./runtime/cv-document";
+import { jobRegistry, resolveJobName } from "./runtime/server/job-registry";
+import { getStorageDiagnostics, probeStorageReadiness } from "./runtime/storage/diagnostics";
+import { createRuntimeJobServices } from "./runtime/server/job-services";
+import { createInMemoryRateLimiter } from "./runtime/auth/rate-limit";
+import { RUNTIME_HTTP_ROUTES } from "./constants/agent";
+import type { RuntimeHttpServerDependencies } from "./types/runtime";
 
 import {
   mountChatAuth,
@@ -43,27 +22,6 @@ import { mountProductQnaRoute } from "./routes/product-qna.route";
 import { mountHealthRoutes, type ReadinessResult } from "./routes/health.route";
 
 const runtimeLogger = logger.child({ component: "runtime" });
-
-export type RuntimeHttpServerDependencies = {
-  searchProductKnowledge?: typeof searchProductKnowledge;
-  rateLimiter?: RateLimiter;
-  now?: () => number;
-  securityIndicatorClassifier?: typeof classifySecurityIndicator;
-  securityGuard?: typeof guardSecurityPrompt;
-  confirmSecurityRisk?: typeof confirmSecurityRiskWithLlm;
-  jobQueue?: JobQueue;
-  processJob?: (
-    job: ProcessableJob,
-    context: { attempt: number; signal: AbortSignal },
-  ) => Promise<JobResult>;
-  durableJobRuntime?: DurableJobRuntime;
-  serviceToken?: string;
-  extractCvDocument?: (file: CvDocumentFile | undefined) => Promise<string>;
-  answerProductQuestion?: typeof answerProductQuestion;
-  productQnaTimeoutMs?: number;
-  /** Override the /ready readiness probe (tests stub this to avoid real I/O). */
-  checkReady?: () => Promise<ReadinessResult>;
-};
 
 export function getRuntimeBootstrapOutput() {
   return {
@@ -95,49 +53,12 @@ export async function createRuntimeHttpServer(
   const app = express();
   app.use(express.json());
 
-  // --- Job execution wiring ---
-  const processors = createJobProcessors();
-  const processJob = dependencies.processJob ?? processors.process;
-  const durableJobRuntime =
-    dependencies.durableJobRuntime ??
-    (env.redisUrl
-      ? createBullMqJobRuntime({
-          redisUrl: env.redisUrl,
-          queueName: env.jobQueueName,
-          attempts: env.jobAttempts,
-          backoffMs: env.jobBackoffMs,
-          process: processJob,
-        })
-      : undefined);
-  const jobQueue =
-    dependencies.jobQueue ??
-    (durableJobRuntime ? undefined : new InMemoryJobQueue());
-  const worker = jobQueue
-    ? new AgentWorker({ queue: jobQueue, process: processJob })
-    : undefined;
-  const schedulerCanEnqueueProcessableJobs =
-    env.workerEnabled || durableJobRuntime !== undefined;
-  const matchingScheduler = new RecommendationScheduler({
-    enabled:
-      env.recommendationSchedulerEnabled && schedulerCanEnqueueProcessableJobs,
-    intervalMs: env.recommendationSchedulerIntervalMs,
-    getRepository: () => {
-      const database = getAgentDatabase();
-      return database ? createDrizzleMatchingRepository(database) : undefined;
-    },
-    enqueue: (request) =>
-      durableJobRuntime
-        ? durableJobRuntime.enqueue(request)
-        : jobQueue!.enqueue(request),
+  const jobServices = createRuntimeJobServices({
+    jobQueue: dependencies.jobQueue,
+    durableJobRuntime: dependencies.durableJobRuntime,
+    processJob: dependencies.processJob,
   });
-  if (env.workerEnabled) {
-    if (durableJobRuntime) {
-      await durableJobRuntime.start();
-    } else {
-      worker?.start();
-    }
-  }
-  matchingScheduler.start();
+  await jobServices.start();
 
   // --- Shared dependencies ---
   const serviceToken = dependencies.serviceToken ?? env.agentServiceToken;
@@ -147,8 +68,8 @@ export async function createRuntimeHttpServer(
   // --- Non-Mastra routes ---
   mountJobsRoutes(app, {
     serviceToken,
-    jobQueue,
-    durableJobRuntime,
+    jobQueue: jobServices.jobQueue,
+    durableJobRuntime: jobServices.durableJobRuntime,
     extractCvDocument: dependencies.extractCvDocument,
   });
 
@@ -165,7 +86,7 @@ export async function createRuntimeHttpServer(
     checkReady: dependencies.checkReady ?? checkRuntimeReadiness,
   });
 
-  // --- Chat middleware chain (order matters: auth → logging → guard) ---
+  // --- Chat middleware chain (order matters: auth -> logging -> guard) ---
   mountChatAuth(app, serviceToken);
   mountChatLogging(app);
   mountChatGuard(app, {
@@ -184,15 +105,7 @@ export async function createRuntimeHttpServer(
 
   runtimeLogger.info(
     {
-      routes: [
-        "/health",
-        "/ready",
-        "/jobs",
-        "/jobs/cv-document",
-        "/jobs/:jobId",
-        "/product-qna",
-        "/chat/:agentId",
-      ],
+      routes: RUNTIME_HTTP_ROUTES,
     },
     "runtime http routes ready",
   );
@@ -228,14 +141,7 @@ export async function createRuntimeHttpServer(
 
   const httpServer = createServer(app);
   httpServer.on("close", () => {
-    matchingScheduler.close();
-    if (env.workerEnabled) {
-      if (durableJobRuntime) {
-        void durableJobRuntime.close();
-      } else {
-        void worker?.close();
-      }
-    }
+    jobServices.close();
   });
   return httpServer;
 }

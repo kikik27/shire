@@ -7,7 +7,7 @@ import {
   extractLatestUserText,
   OUT_OF_SCOPE_RESPONSE,
   PROMPT_INJECTION_RESPONSE,
-} from "../src/runtime/chat-guard";
+} from "../src/runtime/chat/guard";
 
 test("extracts the latest AI SDK v6 user text", () => {
   assert.equal(

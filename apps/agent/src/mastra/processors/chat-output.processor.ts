@@ -1,7 +1,7 @@
 import type { Processor, ProcessOutputStepArgs } from "@mastra/core/processors";
 
 import { env } from "../../env";
-import { validateOutputText } from "../../runtime/output-validation";
+import { validateOutputText } from "../../runtime/security/output-validation";
 
 export class ChatOutputProcessor implements Processor<"chat-output-processor"> {
   readonly id = "chat-output-processor";

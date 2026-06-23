@@ -7,7 +7,7 @@ const { createEnv } = await import("../src/env");
 const {
   createEmbeddingModel,
   resolveEmbeddingConfig,
-} = await import("../src/runtime/embeddings");
+} = await import("../src/runtime/models/embeddings");
 
 test("disables known AI SDK compatibility warning logs", () => {
   assert.equal(

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runAgentWithContext } from "../src/runtime/agent-runner";
+import { runAgentWithContext } from "../src/runtime/server/agent-runner";
 
 test("forwards bounded knowledge, memory ids, and model capability context", async () => {
   const calls: unknown[] = [];

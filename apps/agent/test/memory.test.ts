@@ -10,7 +10,7 @@ const [{ createEnv }, memoryModule] = await Promise.all([
   import("../src/env"),
   import("../src/runtime/memory"),
 ]);
-const { buildLibSQLRuntimeConfig } = await import("../src/runtime/libsql-config");
+const { buildLibSQLRuntimeConfig } = await import("../src/runtime/storage/libsql-config");
 
 const {
   agentMemory,

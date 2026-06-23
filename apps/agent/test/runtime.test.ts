@@ -22,8 +22,8 @@ import {
   evidenceContextTool,
 } from "../src/mastra";
 import { getRuntimeBootstrapOutput } from "../src/server";
-import { jobRegistry } from "../src/runtime/job-registry";
-import { getStorageDiagnostics } from "../src/runtime/storage-diagnostics";
+import { jobRegistry } from "../src/runtime/server/job-registry";
+import { getStorageDiagnostics } from "../src/runtime/storage/diagnostics";
 
 test("mastra registry exports the expected agents, workflows, and tools", () => {
   assert.ok(mastra);

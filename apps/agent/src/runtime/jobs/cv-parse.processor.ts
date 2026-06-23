@@ -1,11 +1,11 @@
-import type { CvGenerationResult } from "../cv-normalizer";
-import { processCandidateCv } from "../cv-normalizer";
-import { generateCandidateProfile } from "../cv-agent-generator";
+import type { CvGenerationResult } from "../cv/normalizer";
+import { processCandidateCv } from "../cv/normalizer";
+import { generateCandidateProfile } from "../cv/agent-generator";
 import {
   candidateProfileStore,
   type CandidateProfileStore,
 } from "../data/candidate-profile-store";
-import { embedText } from "../embeddings";
+import { embedText } from "../models/embeddings";
 import type { JobProcessor } from "./job-processor";
 
 export type CvParseProcessorDependencies = {

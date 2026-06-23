@@ -1,9 +1,9 @@
-import { runCvParseJob } from "../jobs/run-cv-parse";
-import { runDisputeSummaryJob } from "../jobs/run-dispute-summary";
-import { runJobMatchingJob } from "../jobs/run-job-matching";
-import { runKnowledgeSyncJob } from "../jobs/run-knowledge-sync";
-import { runOnchainSyncJob } from "../jobs/run-onchain-sync";
-import { runTalentMatchingJob } from "../jobs/run-talent-matching";
+import { runCvParseJob } from "../../jobs/run-cv-parse";
+import { runDisputeSummaryJob } from "../../jobs/run-dispute-summary";
+import { runJobMatchingJob } from "../../jobs/run-job-matching";
+import { runKnowledgeSyncJob } from "../../jobs/run-knowledge-sync";
+import { runOnchainSyncJob } from "../../jobs/run-onchain-sync";
+import { runTalentMatchingJob } from "../../jobs/run-talent-matching";
 
 export const jobRegistry = {
   "cv-parse": runCvParseJob,

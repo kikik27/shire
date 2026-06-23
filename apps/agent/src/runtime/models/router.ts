@@ -1,5 +1,5 @@
-import { env, type createEnv } from "../env";
-import type { ChatModelCapability } from "./model-policy";
+import { env, type createEnv } from "../../env";
+import type { ChatModelCapability } from "./policy";
 
 type RuntimeEnv = ReturnType<typeof createEnv>;
 type TextModelRuntime = Pick<

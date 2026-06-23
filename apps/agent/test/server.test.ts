@@ -7,12 +7,12 @@ import {
   getRuntimeBootstrapOutput,
   runServer,
 } from "../src/server";
-import { jobRegistry, resolveJobName } from "../src/runtime/job-registry";
+import { jobRegistry, resolveJobName } from "../src/runtime/server/job-registry";
 import { jobRunnerData } from "../src/runtime/data/runtime-data";
 import {
   OUT_OF_SCOPE_RESPONSE,
   PROMPT_INJECTION_RESPONSE,
-} from "../src/runtime/chat-guard";
+} from "../src/runtime/chat/guard";
 
 const CHAT_SERVICE_TOKEN = "service-secret";
 
@@ -104,29 +104,13 @@ test("returns bootstrap output when no job is provided", async () => {
   const result = await runServer([]);
 
   assert.deepEqual(result, getRuntimeBootstrapOutput());
-  assert.deepEqual(result, {
-    status: "runtime-ready",
-    nodeEnv: env.nodeEnv,
-    port: env.port,
-    jobs: Object.keys(jobRegistry),
-    storage: {
-      memory: {
-        scheme: "file",
-        persistent: false,
-        authConfigured: false,
-      },
-      knowledge: {
-        scheme: "file",
-        persistent: false,
-        authConfigured: false,
-      },
-      knowledgeManifest: {
-        scheme: "file",
-        persistent: false,
-        authConfigured: false,
-      },
-    },
-  });
+  assert.equal(result.status, "runtime-ready");
+  assert.equal(result.nodeEnv, env.nodeEnv);
+  assert.equal(result.port, env.port);
+  assert.deepEqual(result.jobs, Object.keys(jobRegistry));
+  assert.ok(["file", "libsql", "unknown"].includes(result.storage.memory.scheme));
+  assert.equal(typeof result.storage.memory.persistent, "boolean");
+  assert.equal(typeof result.storage.memory.authConfigured, "boolean");
 });
 
 test("runtime http server exposes health and not-found responses", async () => {

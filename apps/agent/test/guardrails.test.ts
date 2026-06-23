@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateGuardrail } from "../src/runtime/guardrails";
+import { evaluateGuardrail } from "../src/runtime/security/guardrails";
 
 test("manual autonomy escalates clear actions", () => {
   const result = evaluateGuardrail({

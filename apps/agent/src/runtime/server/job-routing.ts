@@ -1,8 +1,8 @@
-import type { ChatModelCapability } from "./model-policy";
+import type { ChatModelCapability } from "../models/policy";
 import {
   describeModelForTelemetry,
   resolveModelChain,
-} from "./model-router";
+} from "../models/router";
 
 export const jobCapabilities = {
   "cv-parse": "cv-normalization",

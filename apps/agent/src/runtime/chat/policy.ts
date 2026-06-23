@@ -1,11 +1,11 @@
-import type { ChatResourceType, ChatScopeInput } from "./chat-types";
+import type { ChatResourceType, ChatScopeInput } from "./types";
 import {
   getApplicationById,
   getCandidateApplicationForJob,
   getOwnedCompanyIds,
   getOwnedJobs,
   getTiedCandidates,
-} from "./data/chat-access-data";
+} from "../data/chat-access-data";
 
 export type ChatPolicyScope = "owned" | "related" | "forbidden";
 

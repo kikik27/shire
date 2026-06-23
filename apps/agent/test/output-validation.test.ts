@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateOutputText } from "../src/runtime/output-validation";
+import { validateOutputText } from "../src/runtime/security/output-validation";
 
 test("allows normal Shire responses", () => {
   const result = validateOutputText(

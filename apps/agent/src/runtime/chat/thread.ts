@@ -1,4 +1,4 @@
-import type { ChatScopeInput } from "./chat-types";
+import type { ChatScopeInput } from "./types";
 
 export function buildChatResourceKey(input: ChatScopeInput) {
   if (!input.resourceType || !input.resourceId) {

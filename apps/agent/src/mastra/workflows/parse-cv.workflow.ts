@@ -9,7 +9,7 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
-import { processCandidateCv } from "../../runtime/cv-normalizer";
+import { processCandidateCv } from "../../runtime/cv/normalizer";
 
 export const parseCvWorkflowId = "parse-cv-workflow" as const;
 

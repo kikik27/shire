@@ -1,5 +1,5 @@
-import type { CandidateProfileDraft } from "../candidate-profile";
-import type { ModelUsageRecord } from "../usage";
+import type { CandidateProfileDraft } from "../cv/candidate-profile";
+import type { ModelUsageRecord } from "../models/usage";
 
 export type CandidateProfileRecord = {
   id: string;

@@ -12,7 +12,7 @@ import {
   knowledgeSources,
   productKnowledgeSources,
   repositoryKnowledgeSources,
-} from "../src/runtime/knowledge-sources";
+} from "../src/runtime/knowledge/sources";
 
 test("knowledge corpus excludes task and archive documents", () => {
   assert.equal(

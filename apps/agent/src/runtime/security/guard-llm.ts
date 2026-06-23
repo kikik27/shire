@@ -1,9 +1,9 @@
 import { RequestContext } from "@mastra/core/request-context";
 import { z } from "zod";
 
-import { securityGuardAgent, securityGuardMaxOutputTokens } from "../mastra/agents/security-guard.agent";
-import { env } from "../env";
-import type { SecurityCategory, SecurityGuardDecision, SecurityRisk } from "./security-guard";
+import { securityGuardAgent, securityGuardMaxOutputTokens } from "../../mastra/agents/security-guard.agent";
+import { env } from "../../env";
+import type { SecurityCategory, SecurityGuardDecision, SecurityRisk } from "./guard";
 
 /**
  * Structured verdict the security-guard capability model must return. Keeping

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateChatPolicy } from "../src/runtime/chat-policy";
+import { evaluateChatPolicy } from "../src/runtime/chat/policy";
 
 test("candidates can access their own profile, applications, and viewed jobs", () => {
   assert.deepEqual(

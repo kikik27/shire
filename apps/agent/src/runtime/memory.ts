@@ -5,8 +5,8 @@ import { Memory } from "@mastra/memory";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 
 import { env } from "../env";
-import { createEmbeddingModelFor } from "./embeddings";
-import { buildLibSQLRuntimeConfig } from "./libsql-config";
+import { createEmbeddingModelFor } from "./models/embeddings";
+import { buildLibSQLRuntimeConfig } from "./storage/libsql-config";
 
 export interface AgentMemoryRuntimeConfig {
   agentMemoryUrl: string;

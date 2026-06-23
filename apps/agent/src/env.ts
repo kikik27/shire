@@ -1,4 +1,4 @@
-import { parseAutonomyMode } from "./runtime/autonomy";
+import { parseAutonomyMode } from "./runtime/server/autonomy";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";

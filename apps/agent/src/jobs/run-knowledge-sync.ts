@@ -1,4 +1,4 @@
-import { runJobCli } from "../runtime/job-cli";
+import { runJobCli } from "../runtime/server/job-cli";
 import { syncKnowledgeBase } from "../runtime/knowledge";
 
 export async function runKnowledgeSyncJob() {

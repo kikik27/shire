@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   answerProductQuestion,
   ProductQnaError,
-} from "../src/runtime/product-qna";
+} from "../src/runtime/knowledge/product-qna";
 
 test("rejects empty product questions before calling the model", async () => {
   await assert.rejects(

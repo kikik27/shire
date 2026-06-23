@@ -1,4 +1,4 @@
-import type { RateLimiter } from "./rate-limit";
+import type { RateLimiter } from "../auth/rate-limit";
 
 type UnknownRecord = Record<string, unknown>;
 

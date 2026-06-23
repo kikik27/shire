@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateSecurityPolicy } from "../src/runtime/security-policy";
+import { evaluateSecurityPolicy } from "../src/runtime/security/policy";
 
 test("blocks high-risk prompt injection", () => {
   assert.deepEqual(

@@ -2,16 +2,16 @@ import { randomUUID } from "node:crypto";
 
 import { RequestContext } from "@mastra/core/request-context";
 
-import { productQnaAgent } from "../mastra/agents/product-qna.agent";
-import { logger } from "./logger";
+import { productQnaAgent } from "../../mastra/agents/product-qna.agent";
+import { logger } from "../logger";
 import {
   buildKnowledgeSystemMessage,
   searchProductKnowledge,
   type KnowledgeResult,
   type ProductKnowledgeRole,
-} from "./knowledge";
-import { getCapabilityPolicy } from "./model-policy";
-import { stripHiddenReasoning } from "./reasoning";
+} from "./index";
+import { getCapabilityPolicy } from "../models/policy";
+import { stripHiddenReasoning } from "../security/reasoning";
 
 type AgentMessage = {
   role: "system" | "user" | "assistant";

@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 
-import { agentModel } from "../../runtime/model";
-import { getCapabilityPolicy } from "../../runtime/model-policy";
+import { agentModel } from "../../runtime/models";
+import { getCapabilityPolicy } from "../../runtime/models/policy";
 
 export const securityGuardAgentId = "security-guard-agent" as const;
 

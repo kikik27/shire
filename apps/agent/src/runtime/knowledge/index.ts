@@ -6,18 +6,18 @@ import { createClient } from "@libsql/client";
 import { LibSQLVector } from "@mastra/libsql";
 import { MDocument } from "@mastra/rag";
 
-import { env } from "../env";
+import { env } from "../../env";
 import {
   embedTextFor,
   embedTextsFor,
-} from "./embeddings";
+} from "../models/embeddings";
 import {
   type KnowledgeCorpus,
   knowledgeSources,
   productKnowledgeSources,
   type ProductKnowledgeAudience,
-} from "./knowledge-sources";
-import { buildLibSQLRuntimeConfig } from "./libsql-config";
+} from "./sources";
+import { buildLibSQLRuntimeConfig } from "../storage/libsql-config";
 
 export type KnowledgeResult = {
   path: string;

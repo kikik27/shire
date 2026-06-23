@@ -1,7 +1,7 @@
 import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
 import { embed, embedMany } from "ai";
 
-import { env } from "../env";
+import { env } from "../../env";
 
 (globalThis as { AI_SDK_LOG_WARNINGS?: boolean }).AI_SDK_LOG_WARNINGS = false;
 
