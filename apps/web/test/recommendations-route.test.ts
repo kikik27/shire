@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  AuthenticatedUserError,
+} from "../lib/server/authenticated-user";
 import { createInMemoryProfileRepository } from "../lib/server/profile-repository";
 import {
   createCandidateRecommendationsRouteHandlers,
   createRecruiterRecommendationsRouteHandlers,
 } from "../lib/server/recommendations-route";
-import { createInMemoryRecommendationsRepository } from "../lib/server/recommendations-repository";
+import {
+  createInMemoryRecommendationsRepository,
+  RecommendationsRepositoryError,
+} from "../lib/server/recommendations-repository";
 
 function authenticated(privyUserId = "did:privy:candidate") {
   return async () => ({ mode: "privy", privyUserId }) as const;
@@ -26,6 +32,21 @@ function seedRecommendation(
     jobId: string;
     matchScore: number;
     recommendedAction: string;
+    candidate: {
+      displayName?: string;
+      headline?: string;
+      skills: string[];
+      roleTargets: string[];
+      location?: string;
+    };
+    job: {
+      title: string;
+      companyName: string;
+      location: string;
+      remote: boolean;
+      experienceLevel: string;
+      skillsRequired: string[];
+    };
   }>,
 ) {
   const now = Date.now();
@@ -44,6 +65,8 @@ function seedRecommendation(
     status: "NEW",
     createdAt: now,
     updatedAt: now,
+    candidate: overrides.candidate,
+    job: overrides.job,
   });
 }
 
@@ -124,6 +147,21 @@ test("recruiter recommendations GET returns only the recruiter's talent recommen
     recruiterUserId: recruiter.id,
     matchScore: 90,
     recommendedAction: "SUGGEST_INVITE",
+    candidate: {
+      displayName: "Sara Lindgren",
+      headline: "Frontend Engineer",
+      skills: ["React", "TypeScript"],
+      roleTargets: ["Frontend Engineer"],
+      location: "Remote",
+    },
+    job: {
+      title: "Frontend Engineer",
+      companyName: "Shire Labs",
+      location: "Remote",
+      remote: true,
+      experienceLevel: "SENIOR",
+      skillsRequired: ["React", "TypeScript"],
+    },
   });
   seedRecommendation(recommendations, {
     type: "TALENT_TO_COMPANY",
@@ -147,4 +185,120 @@ test("recruiter recommendations GET returns only the recruiter's talent recommen
   assert.equal(body.recommendations.length, 1);
   assert.equal(body.recommendations[0].recruiterUserId, recruiter.id);
   assert.equal(body.recommendations[0].recommendedAction, "SUGGEST_INVITE");
+  assert.equal(body.recommendations[0].candidate.displayName, "Sara Lindgren");
+  assert.equal(body.recommendations[0].job.title, "Frontend Engineer");
+});
+
+test("candidate recommendations GET returns 401 when authentication fails", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const recommendations = createInMemoryRecommendationsRepository();
+  const handlers = createCandidateRecommendationsRouteHandlers({
+    resolveAuthenticatedUser: async () => {
+      throw new AuthenticatedUserError("Authentication token is invalid.");
+    },
+    profileRepository: profiles,
+    recommendationsRepository: recommendations,
+  });
+
+  const response = await handlers.GET(
+    getRequest("http://localhost/api/candidate/recommendations"),
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.error, "unauthorized");
+});
+
+test("candidate recommendations GET returns an empty array when none exist", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const recommendations = createInMemoryRecommendationsRepository();
+  const handlers = createCandidateRecommendationsRouteHandlers({
+    resolveAuthenticatedUser: authenticated(),
+    profileRepository: profiles,
+    recommendationsRepository: recommendations,
+  });
+
+  const response = await handlers.GET(
+    getRequest("http://localhost/api/candidate/recommendations"),
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body, { recommendations: [] });
+});
+
+test("candidate recommendations GET returns 500 when the repository throws", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const failingRepo = {
+    async listRecommendationsForCandidate() {
+      throw new RecommendationsRepositoryError(
+        "Failed to list candidate recommendations.",
+      );
+    },
+    async listRecommendationsForRecruiter() {
+      return [];
+    },
+  };
+  const handlers = createCandidateRecommendationsRouteHandlers({
+    resolveAuthenticatedUser: authenticated(),
+    profileRepository: profiles,
+    recommendationsRepository: failingRepo,
+  });
+
+  const response = await handlers.GET(
+    getRequest("http://localhost/api/candidate/recommendations"),
+  );
+
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.error, "database-error");
+});
+
+test("recruiter recommendations repository returns empty list when the recruiter has no jobs", async () => {
+  // The recruiter-talent join logic short-circuits to [] when the recruiter
+  // has no jobs. The route inherits this, which the recruiter dashboard relies
+  // on to render the "no talent yet" empty state without an error.
+  const profiles = createInMemoryProfileRepository();
+  await profiles.resolveUser("did:privy:recruiter");
+  const recommendations = createInMemoryRecommendationsRepository();
+  seedRecommendation(recommendations, {
+    type: "TALENT_TO_COMPANY",
+    recruiterUserId: "ghost-recruiter-with-no-jobs",
+    matchScore: 88,
+    recommendedAction: "SUGGEST_INVITE",
+  });
+
+  const handlers = createRecruiterRecommendationsRouteHandlers({
+    resolveAuthenticatedUser: authenticated("did:privy:recruiter"),
+    profileRepository: profiles,
+    recommendationsRepository: recommendations,
+  });
+
+  const response = await handlers.GET(
+    getRequest("http://localhost/api/recruiter/recommendations"),
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body, { recommendations: [] });
+});
+
+test("recruiter recommendations GET returns 401 when authentication fails", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const recommendations = createInMemoryRecommendationsRepository();
+  const handlers = createRecruiterRecommendationsRouteHandlers({
+    resolveAuthenticatedUser: async () => {
+      throw new AuthenticatedUserError("Authentication token is invalid.");
+    },
+    profileRepository: profiles,
+    recommendationsRepository: recommendations,
+  });
+
+  const response = await handlers.GET(
+    getRequest("http://localhost/api/recruiter/recommendations"),
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.error, "unauthorized");
 });

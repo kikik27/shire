@@ -22,6 +22,21 @@ export type Recommendation = {
   status: RecommendationStatus;
   createdAt: number;
   updatedAt: number;
+  candidate?: {
+    displayName?: string;
+    headline?: string;
+    skills: string[];
+    roleTargets: string[];
+    location?: string;
+  };
+  job?: {
+    title: string;
+    companyName: string;
+    location: string;
+    remote: boolean;
+    experienceLevel: string;
+    skillsRequired: string[];
+  };
 };
 
 function authorizationHeaders(accessToken?: string) {

@@ -1,14 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowRight, UserCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth/use-auth";
+import { useLoginDestination } from "@/lib/auth/use-login-destination";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { WalletConnectButton } from "@/components/wallet/wallet-connect-button";
 import { Button } from "@/components/ui/button";
 
 export default function ConnectPage() {
   const { isConnected } = useAuth();
+  const { goToLoginDestination } = useLoginDestination();
 
   return (
     <AuthShell back={{ href: "/", label: "Back home" }}>
@@ -28,15 +29,21 @@ export default function ConnectPage() {
                 <span className="text-sm text-muted-foreground">Signed in</span>
                 <span className="text-sm font-medium">Account ready</span>
               </div>
-              <Button asChild size="lg" className="w-full">
-                <Link href="/onboarding">
-                  Continue
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={() => goToLoginDestination("push")}
+              >
+                Continue
+                <ArrowRight className="size-4" />
               </Button>
             </div>
           ) : (
-            <WalletConnectButton size="lg" redirectTo="/onboarding" className="w-full" />
+            <WalletConnectButton
+              size="lg"
+              autoNavigateOnConnect
+              className="w-full"
+            />
           )}
         </div>
       </div>

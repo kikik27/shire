@@ -42,11 +42,56 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
+function fallbackCandidateLabel(recommendation: Recommendation) {
+  return `Candidate ${recommendation.candidateUserId.slice(0, 8)}`;
+}
+
+function fallbackJobLabel(recommendation: Recommendation) {
+  return recommendation.jobId ? `Job ${recommendation.jobId.slice(0, 8)}` : "Selected job";
+}
+
 function RecommendationRow({ recommendation }: { recommendation: Recommendation }) {
+  const isTalentRecommendation = recommendation.type === "TALENT_TO_COMPANY";
+  const primaryLabel = isTalentRecommendation
+    ? recommendation.candidate?.displayName ?? fallbackCandidateLabel(recommendation)
+    : recommendation.job?.title ?? fallbackJobLabel(recommendation);
+  const secondaryLabel = isTalentRecommendation
+    ? recommendation.candidate?.headline ??
+      recommendation.candidate?.roleTargets[0] ??
+      "Candidate profile"
+    : recommendation.job
+      ? `${recommendation.job.companyName} - ${recommendation.job.location}${recommendation.job.remote ? " - Remote" : ""}`
+      : "Recommended job";
+  const contextLabel = isTalentRecommendation
+    ? recommendation.job
+      ? `For ${recommendation.job.title} at ${recommendation.job.companyName}`
+      : recommendation.jobId
+        ? `For ${fallbackJobLabel(recommendation)}`
+        : undefined
+    : recommendation.candidate?.displayName
+      ? `Matched to ${recommendation.candidate.displayName}`
+      : undefined;
+  const skills = isTalentRecommendation
+    ? recommendation.candidate?.skills
+    : recommendation.job?.skillsRequired;
+
   return (
     <li className="border-b border-border/60 px-4 py-3 last:border-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
+          <div>
+            <p className="truncate text-sm font-medium text-foreground">
+              {primaryLabel}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {secondaryLabel}
+            </p>
+            {contextLabel && (
+              <p className="truncate text-[11px] text-muted-foreground">
+                {contextLabel}
+              </p>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={cn(
@@ -62,6 +107,18 @@ function RecommendationRow({ recommendation }: { recommendation: Recommendation 
               </span>
             )}
           </div>
+          {skills && skills.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {skills.slice(0, 4).map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          )}
           {recommendation.reasons.length > 0 && (
             <p className="line-clamp-2 text-xs text-muted-foreground">
               {recommendation.reasons.join(" / ")}
@@ -127,7 +184,9 @@ export function CandidateRecommendations() {
 
 export function RecruiterRecommendations({ jobId }: { jobId?: string }) {
   const { data, isLoading, error } = useRecruiterRecommendations();
-  void jobId;
+  const filteredData = jobId
+    ? data?.filter((recommendation) => recommendation.jobId === jobId)
+    : data;
 
   return (
     <Card className="h-full">
@@ -146,11 +205,11 @@ export function RecruiterRecommendations({ jobId }: { jobId?: string }) {
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
             Could not load recommendations.
           </div>
-        ) : !data || data.length === 0 ? (
+        ) : !filteredData || filteredData.length === 0 ? (
           <EmptyState message="No talent recommendations yet. Shire refreshes matches automatically every 15 minutes." />
         ) : (
           <ul>
-            {data.map((recommendation) => (
+            {filteredData.map((recommendation) => (
               <RecommendationRow
                 key={recommendation.id}
                 recommendation={recommendation}

@@ -4,11 +4,28 @@ import {
   createDatabase,
   type Database,
 } from "./db";
-import { jobs, recommendations } from "./db/schema";
+import { candidateProfiles, jobs, recommendations } from "./db/schema";
 import type {
   RecommendationStatus,
   RecommendationType,
 } from "@shire/shared";
+
+export type RecommendationCandidateSummary = {
+  displayName?: string;
+  headline?: string;
+  skills: string[];
+  roleTargets: string[];
+  location?: string;
+};
+
+export type RecommendationJobSummary = {
+  title: string;
+  companyName: string;
+  location: string;
+  remote: boolean;
+  experienceLevel: string;
+  skillsRequired: string[];
+};
 
 export type PersistedRecommendation = {
   id: string;
@@ -25,6 +42,8 @@ export type PersistedRecommendation = {
   status: RecommendationStatus;
   createdAt: number;
   updatedAt: number;
+  candidate?: RecommendationCandidateSummary;
+  job?: RecommendationJobSummary;
 };
 
 export interface RecommendationsRepository {
@@ -50,8 +69,56 @@ function toTimestamp(value: Date | number) {
   return value instanceof Date ? value.getTime() : value;
 }
 
+function asString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function asStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function mapCandidateSummary(
+  row: typeof candidateProfiles.$inferSelect | null | undefined,
+): RecommendationCandidateSummary | undefined {
+  if (!row) return undefined;
+
+  const profile = (row.profile ?? {}) as Record<string, unknown>;
+  const roleTargets = asStringArray(profile.preferredRoles).length
+    ? asStringArray(profile.preferredRoles)
+    : asStringArray(profile.roleTargets);
+
+  return {
+    displayName: asString(profile.fullName) ?? asString(profile.displayName),
+    headline: asString(profile.headline) ?? asString(profile.bio),
+    skills: asStringArray(profile.skills),
+    roleTargets,
+    location: asString(profile.location),
+  };
+}
+
+function mapJobSummary(
+  row: typeof jobs.$inferSelect | null | undefined,
+): RecommendationJobSummary | undefined {
+  if (!row) return undefined;
+
+  return {
+    title: row.title,
+    companyName: row.companyName,
+    location: row.location,
+    remote: row.remote,
+    experienceLevel: row.experienceLevel,
+    skillsRequired: row.skillsRequired,
+  };
+}
+
 function mapRecommendation(
   row: typeof recommendations.$inferSelect,
+  details: {
+    candidate?: typeof candidateProfiles.$inferSelect | null;
+    job?: typeof jobs.$inferSelect | null;
+  } = {},
 ): PersistedRecommendation {
   return {
     id: row.id,
@@ -68,6 +135,8 @@ function mapRecommendation(
     status: row.status,
     createdAt: toTimestamp(row.createdAt),
     updatedAt: toTimestamp(row.updatedAt),
+    candidate: mapCandidateSummary(details.candidate),
+    job: mapJobSummary(details.job),
   };
 }
 
@@ -78,8 +147,12 @@ export function createDrizzleRecommendationsRepository(
     async listRecommendationsForCandidate(candidateUserId) {
       try {
         const rows = await database
-          .select()
+          .select({
+            recommendation: recommendations,
+            job: jobs,
+          })
           .from(recommendations)
+          .leftJoin(jobs, eq(recommendations.jobId, jobs.id))
           .where(
             and(
               eq(recommendations.candidateUserId, candidateUserId),
@@ -87,7 +160,9 @@ export function createDrizzleRecommendationsRepository(
             ),
           )
           .orderBy(desc(recommendations.matchScore), desc(recommendations.createdAt));
-        return rows.map(mapRecommendation);
+        return rows.map((row) =>
+          mapRecommendation(row.recommendation, { job: row.job }),
+        );
       } catch (error) {
         throw new RecommendationsRepositoryError(
           "Failed to list candidate recommendations.",
@@ -108,8 +183,17 @@ export function createDrizzleRecommendationsRepository(
         }
 
         const rows = await database
-          .select()
+          .select({
+            recommendation: recommendations,
+            candidate: candidateProfiles,
+            job: jobs,
+          })
           .from(recommendations)
+          .leftJoin(
+            candidateProfiles,
+            eq(recommendations.candidateUserId, candidateProfiles.userId),
+          )
+          .leftJoin(jobs, eq(recommendations.jobId, jobs.id))
           .where(
             and(
               inArray(
@@ -120,7 +204,12 @@ export function createDrizzleRecommendationsRepository(
             ),
           )
           .orderBy(desc(recommendations.matchScore), desc(recommendations.createdAt));
-        return rows.map(mapRecommendation);
+        return rows.map((row) =>
+          mapRecommendation(row.recommendation, {
+            candidate: row.candidate,
+            job: row.job,
+          }),
+        );
       } catch (error) {
         throw new RecommendationsRepositoryError(
           "Failed to list recruiter recommendations.",
