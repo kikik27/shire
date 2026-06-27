@@ -108,24 +108,55 @@ export function createAiSdkHiddenReasoningStreamSanitizer(): HiddenReasoningStre
       if (!text) return chunk;
 
       sseLineBuffer += text;
-      const lines = sseLineBuffer.split(/\n/);
-      sseLineBuffer = lines.pop() ?? "";
 
-      const sanitizedLines: string[] = [];
-      for (const line of lines) {
-        const sanitizedLine = sanitizeSseLine(line);
-        if (sanitizedLine !== undefined) {
-          sanitizedLines.push(...sanitizedLine);
+      // The upstream AI SDK emits proper SSE events: each event is one or more
+      // `data: …` lines terminated by a blank line (`\n\n`). Splitting on
+      // `\n\n` gives us the event boundary, which lets us cleanly expand a
+      // single input event (e.g. a `text-delta` containing `<think>…`) into
+      // multiple output events (reasoning-start/delta/end + text-delta) while
+      // re-emitting every event with its own `\n\n` terminator. Without this,
+      // adjacent `data: …` lines would be concatenated by downstream SSE
+      // parsers and the resulting `JSON.parse` would fail mid-stream.
+      let output = "";
+      let boundaryIndex = sseLineBuffer.indexOf("\n\n");
+      while (boundaryIndex !== -1) {
+        const eventText = sseLineBuffer.slice(0, boundaryIndex);
+        sseLineBuffer = sseLineBuffer.slice(boundaryIndex + 2);
+
+        // An event may contain multiple `data: …` lines (uncommon but valid
+        // SSE). Process each line independently; each gets its own `\n\n`
+        // terminator from `createSseLine` / the pass-through branch.
+        const lines = eventText.split("\n");
+        for (const line of lines) {
+          const sanitizedLine = sanitizeSseLine(line);
+          if (sanitizedLine === undefined) continue;
+          for (const outLine of sanitizedLine) {
+            output += `${outLine}\n\n`;
+          }
         }
+
+        boundaryIndex = sseLineBuffer.indexOf("\n\n");
       }
 
-      return sanitizedLines.length ? `${sanitizedLines.join("\n")}\n` : "";
+      return output;
     },
     flush() {
+      // Drain anything still in the buffer. If the upstream closed without a
+      // trailing `\n\n`, treat the residue as a final partial event so we
+      // don't drop the last reasoning or text-delta chunk.
       if (!sseLineBuffer) return "";
-      const sanitizedLine = sanitizeSseLine(sseLineBuffer);
+      const lines = sseLineBuffer.split("\n");
       sseLineBuffer = "";
-      return sanitizedLine === undefined ? "" : sanitizedLine.join("\n");
+
+      let output = "";
+      for (const line of lines) {
+        const sanitizedLine = sanitizeSseLine(line);
+        if (sanitizedLine === undefined) continue;
+        for (const outLine of sanitizedLine) {
+          output += `${outLine}\n\n`;
+        }
+      }
+      return output;
     },
   };
 }
