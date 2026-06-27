@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, LogOut, UserCircle } from "lucide-react";
 import { toast } from "sonner";
 import { PRIVY_ENABLED, useAuth } from "@/lib/auth/use-auth";
+import { useLoginDestination } from "@/lib/auth/use-login-destination";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,29 +20,35 @@ import { NetworkSwitcher } from "@/components/wallet/network-switcher";
 
 export function WalletConnectButton({
   size = "default",
-  redirectTo,
+  autoNavigateOnConnect = false,
   accountLabel = "Account",
   accountDescription = "Signed in",
   className,
 }: {
   size?: "sm" | "default" | "lg";
-  redirectTo?: string;
+  /** Navigate to the resolved login destination (dashboard or onboarding) once connected. */
+  autoNavigateOnConnect?: boolean;
   accountLabel?: string;
   accountDescription?: string;
   className?: string;
 }) {
   const router = useRouter();
   const { address, isConnected, connecting, connect, disconnect } = useAuth();
+  const { goToLoginDestination } = useLoginDestination();
 
+  // When Privy connects, land the user on their role dashboard (or onboarding
+  // if they have no profile yet) instead of always forcing onboarding.
   useEffect(() => {
-    if (PRIVY_ENABLED && redirectTo && isConnected) router.push(redirectTo);
-  }, [isConnected, redirectTo, router]);
+    if (!PRIVY_ENABLED || !autoNavigateOnConnect || !isConnected) return;
+    const cancel = goToLoginDestination("push");
+    return cancel;
+  }, [isConnected, autoNavigateOnConnect, goToLoginDestination]);
 
   async function onConnect() {
     await connect();
     if (!PRIVY_ENABLED) {
       toast.success("Signed in", { description: "Your account is ready." });
-      if (redirectTo) router.push(redirectTo);
+      if (autoNavigateOnConnect) goToLoginDestination("push");
     }
   }
 
