@@ -97,6 +97,21 @@ test("recruiter job pages send the real owned job id", () => {
   );
 });
 
+test("recruiter job creation page stays in general chat scope", () => {
+  assert.deepEqual(
+    resolveChatScopeForPathname({
+      pathname: "/recruiter/jobs/new",
+      role: "recruiter",
+    }),
+    {
+      role: "recruiter",
+      resourceType: undefined,
+      resourceId: undefined,
+      resourceLabel: undefined,
+    },
+  );
+});
+
 test("strips hidden model reasoning from rendered assistant text", () => {
   assert.equal(
     stripHiddenReasoning(

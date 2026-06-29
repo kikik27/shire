@@ -47,10 +47,15 @@ export function resolveChatScopeForPathname(input: {
       : /^\/recruiter\/jobs\/([^/]+)$/,
   );
   if (jobMatch?.[1]) {
+    const resourceId = decodeURIComponent(jobMatch[1]);
+    if (input.role === "recruiter" && resourceId === "new") {
+      return buildServerChatScopeRequest({ role: input.role });
+    }
+
     return {
       role: input.role,
       resourceType: "job" as const,
-      resourceId: decodeURIComponent(jobMatch[1]),
+      resourceId,
     };
   }
 
