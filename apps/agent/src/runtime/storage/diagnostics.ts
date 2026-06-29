@@ -10,6 +10,10 @@ export type StorageReadinessResult =
   | { ready: true }
   | { ready: false; reason: string };
 
+type StorageReadinessDependencies = {
+  pingLibSql?: (url: string, authToken?: string) => Promise<boolean>;
+};
+
 type StorageTargetDiagnostics = {
   scheme: string;
   persistent: boolean;
@@ -81,6 +85,7 @@ export async function probeStorageReadiness(
     | "agentKnowledgeManifestUrl"
     | "agentKnowledgeManifestAuthToken"
   > = env,
+  dependencies: StorageReadinessDependencies = {},
 ): Promise<StorageReadinessResult> {
   const targets: Array<{ label: string; url: string; authToken?: string }> = [
     { label: "memory", url: runtime.agentMemoryUrl, authToken: runtime.agentMemoryAuthToken },
@@ -99,7 +104,9 @@ export async function probeStorageReadiness(
       continue;
     }
 
-    const reachable = await pingLibSql(target.url, target.authToken);
+    const reachable = await (
+      dependencies.pingLibSql ?? pingLibSql
+    )(target.url, target.authToken);
     if (!reachable) {
       return {
         ready: false,

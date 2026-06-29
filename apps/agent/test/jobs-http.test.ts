@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
+import type { Express } from "express";
 
-import { createRuntimeHttpServer } from "../src/server";
+import {
+  createRuntimeHttpServer,
+} from "../src/server";
 import { InMemoryJobQueue } from "../src/runtime/jobs/in-memory-job-queue";
 import type { DurableJobRuntime } from "../src/runtime/jobs/bullmq-job-queue";
+import type { RuntimeHttpServerDependencies } from "../src/types/runtime";
 
 const SERVICE_TOKEN = "service-secret";
 const serviceHeaders = {
@@ -12,11 +16,66 @@ const serviceHeaders = {
   "content-type": "application/json",
 };
 
+function mountDeterministicChat(app: Express) {
+  app.post("/chat/:agentId", (_request, response) => {
+    response.status(200);
+    response.setHeader("content-type", "text/event-stream");
+    response.end("data: [DONE]\n\n");
+  });
+}
+
+function createJobsHttpServer(
+  dependencies: RuntimeHttpServerDependencies = {},
+) {
+  const queueDependencies =
+    dependencies.jobQueue || dependencies.durableJobRuntime
+      ? {}
+      : { jobQueue: new InMemoryJobQueue() };
+
+  return createRuntimeHttpServer({
+    ...queueDependencies,
+    serviceToken: SERVICE_TOKEN,
+    mountAgentChat: mountDeterministicChat,
+    ...dependencies,
+  });
+}
+
+test("jobs HTTP server uses the deterministic chat runtime", async () => {
+  const server = await createJobsHttpServer();
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/chat/role-aware-chat-agent`,
+      {
+        method: "POST",
+        headers: serviceHeaders,
+        body: JSON.stringify({
+          messages: [
+            {
+              id: "message-1",
+              role: "user",
+              parts: [{ type: "text", text: "How does Shire work?" }],
+            },
+          ],
+        }),
+      },
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "data: [DONE]\n\n");
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("enqueues and polls a deterministic worker job", async () => {
   const queue = new InMemoryJobQueue();
-  const server = await createRuntimeHttpServer({
+  const server = await createJobsHttpServer({
     jobQueue: queue,
-    serviceToken: SERVICE_TOKEN,
     processJob: async () => ({
       status: "ready",
       chain: "Celo",
@@ -66,9 +125,7 @@ test("enqueues and polls a deterministic worker job", async () => {
 });
 
 test("rejects job enqueue and status requests without service token", async () => {
-  const server = await createRuntimeHttpServer({
-    serviceToken: SERVICE_TOKEN,
-  });
+  const server = await createJobsHttpServer();
   await new Promise<void>((resolve) => server.listen(0, resolve));
 
   try {
@@ -97,9 +154,7 @@ test("rejects job enqueue and status requests without service token", async () =
 });
 
 test("rejects invalid job payloads", async () => {
-  const server = await createRuntimeHttpServer({
-    serviceToken: SERVICE_TOKEN,
-  });
+  const server = await createJobsHttpServer();
   await new Promise<void>((resolve) => server.listen(0, resolve));
 
   try {
@@ -156,9 +211,8 @@ test("accepts authenticated CV documents and enforces status ownership", async (
     async start() {},
     async close() {},
   };
-  const server = await createRuntimeHttpServer({
+  const server = await createJobsHttpServer({
     durableJobRuntime: runtime,
-    serviceToken: SERVICE_TOKEN,
     extractCvDocument: async () => "Senior Engineer",
   });
   await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -218,9 +272,8 @@ test("returns 503 when durable job status is unavailable", async () => {
     async start() {},
     async close() {},
   };
-  const server = await createRuntimeHttpServer({
+  const server = await createJobsHttpServer({
     durableJobRuntime: runtime,
-    serviceToken: SERVICE_TOKEN,
   });
   await new Promise<void>((resolve) => server.listen(0, resolve));
 

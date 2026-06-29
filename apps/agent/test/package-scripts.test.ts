@@ -29,6 +29,11 @@ test("runtime scripts load the agent .env file", async () => {
     );
   }
 
+  assert.equal(
+    typeof packageJson.dependencies["@ai-sdk/openai"],
+    "string",
+  );
+
   for (const dependency of [
     "@ai-sdk/openai-compatible",
     "@openrouter/ai-sdk-provider",
