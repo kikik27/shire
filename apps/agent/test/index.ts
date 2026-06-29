@@ -1,4 +1,4 @@
-process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
+import "./test-env";
 
 await Promise.all([
   import("./agent-runner.test"),

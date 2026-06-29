@@ -1,3 +1,4 @@
+import type { Express } from "express";
 import type { CvDocumentFile } from "../runtime/cv/document";
 import type { JobQueue } from "../runtime/jobs/job-queue";
 import type { DurableJobRuntime } from "../runtime/jobs/bullmq-job-queue";
@@ -11,6 +12,7 @@ import type { ReadinessResult } from "../routes/health.route";
 import type { ProcessJob } from "./jobs";
 
 export type RuntimeHttpServerDependencies = {
+  mountAgentChat?: (app: Express) => void | Promise<void>;
   searchProductKnowledge?: typeof searchProductKnowledge;
   rateLimiter?: RateLimiter;
   now?: () => number;

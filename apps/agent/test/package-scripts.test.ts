@@ -30,12 +30,30 @@ test("runtime scripts load the agent .env file", async () => {
   }
 
   for (const dependency of [
-    "@ai-sdk/openai",
     "@ai-sdk/openai-compatible",
     "@openrouter/ai-sdk-provider",
   ]) {
     assert.equal(packageJson.dependencies[dependency], undefined);
   }
+});
+
+test("default tests isolate environment while live queue tests load .env", async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ) as {
+    scripts: Record<string, string>;
+  };
+  const testIndex = await readFile(
+    new URL("./index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(packageJson.scripts.test, /--env-file/);
+  assert.match(
+    packageJson.scripts["test:live-queue"],
+    /--env-file-if-exists=\.env/,
+  );
+  assert.match(testIndex, /^import "\.\/test-env";/);
 });
 
 test("onchain job script prints its result when run directly", () => {
