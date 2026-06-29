@@ -1,5 +1,6 @@
 const isolatedEnvironmentKeys = [
   "REDIS_URL",
+  "DATABASE_URL",
   "SHIRE_AGENT_DATABASE_URL",
   "SHIRE_TEXT_PROVIDER",
   "SHIRE_TEXT_BASE_URL",
@@ -14,6 +15,8 @@ const isolatedEnvironmentKeys = [
   "SHIRE_AGENT_MEMORY_AUTH_TOKEN",
   "SHIRE_AGENT_KNOWLEDGE_URL",
   "SHIRE_AGENT_KNOWLEDGE_AUTH_TOKEN",
+  "SHIRE_AGENT_KNOWLEDGE_MANIFEST_URL",
+  "SHIRE_AGENT_KNOWLEDGE_MANIFEST_AUTH_TOKEN",
 ] as const;
 
 for (const key of isolatedEnvironmentKeys) {

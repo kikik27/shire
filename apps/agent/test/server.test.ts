@@ -121,6 +121,7 @@ test("server uses injected chat runtime without live providers", async () => {
   assert.equal(env.recommendationSchedulerEnabled, false);
   assert.equal(bootstrap.storage.memory.scheme, "file");
   assert.equal(bootstrap.storage.knowledge.scheme, "file");
+  assert.equal(bootstrap.storage.knowledgeManifest.scheme, "file");
 
   let mounted = false;
   const dependencies = createTestRuntimeDependencies();
