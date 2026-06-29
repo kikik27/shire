@@ -16,6 +16,11 @@ import {
   type ProfileRole,
 } from "../../../../lib/server/profile-repository";
 import {
+  createDrizzleJobsRepository,
+  JobsRepositoryError,
+  type JobsRepository,
+} from "../../../../lib/server/jobs-repository";
+import {
   persistedCandidateProfileSchema,
   storedRecruiterProfileSchema,
 } from "../../../../lib/schemas";
@@ -35,6 +40,7 @@ type ResolveAuthenticatedUser = (
 export type ChatPostHandlerDependencies = {
   agentUrl?: string;
   fetcher?: typeof fetch;
+  jobsRepository?: JobsRepository;
   repository?: ProfileRepository;
   resolveAuthenticatedUser?: ResolveAuthenticatedUser;
   serviceToken?: string;
@@ -107,8 +113,14 @@ function errorResponse(error: unknown) {
   if (error instanceof ProfileRepositoryError) {
     return jsonError("database-error", 500);
   }
+  if (error instanceof JobsRepositoryError) {
+    return jsonError("database-error", 500);
+  }
   if (error instanceof ChatScopeAuthorizationError) {
-    return jsonError(error.code, 403);
+    return jsonError(
+      error.code,
+      error.code === "resource-not-found" ? 404 : 403,
+    );
   }
   return jsonError("database-error", 500);
 }
@@ -120,6 +132,8 @@ export function createChatPostHandler(
     dependencies.resolveAuthenticatedUser ?? resolveAuthenticatedUser;
   const repository = () =>
     dependencies.repository ?? createDrizzleProfileRepository();
+  const jobsRepository = () =>
+    dependencies.jobsRepository ?? createDrizzleJobsRepository();
   const fetcher = dependencies.fetcher ?? fetch;
 
   return async function POST(request: Request) {
@@ -158,11 +172,15 @@ export function createChatPostHandler(
       if (!parsedProfile.success) {
         return jsonError("database-error", 500);
       }
-      const trusted = buildAuthenticatedChatContext({
+      const trusted = await buildAuthenticatedChatContext({
         userId: user.id,
         role: requestedScope.role,
         profile: parsedProfile.data,
         requestedScope,
+        resourceRepository:
+          requestedScope.resourceType === "job"
+            ? jobsRepository()
+            : undefined,
       });
       const forwardedBody = {
         ...trusted,

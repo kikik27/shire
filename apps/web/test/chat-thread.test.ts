@@ -69,6 +69,34 @@ test("candidate profile path requests self-profile without browser-owned ids", (
   });
 });
 
+test("candidate job pages send the real job id without a demo catalog", () => {
+  assert.deepEqual(
+    resolveChatScopeForPathname({
+      pathname: "/candidate/jobs/6a9f3157-88c4-4d2d-868e-584645a76a72",
+      role: "candidate",
+    }),
+    {
+      role: "candidate",
+      resourceType: "job",
+      resourceId: "6a9f3157-88c4-4d2d-868e-584645a76a72",
+    },
+  );
+});
+
+test("recruiter job pages send the real owned job id", () => {
+  assert.deepEqual(
+    resolveChatScopeForPathname({
+      pathname: "/recruiter/jobs/job-real-1",
+      role: "recruiter",
+    }),
+    {
+      role: "recruiter",
+      resourceType: "job",
+      resourceId: "job-real-1",
+    },
+  );
+});
+
 test("strips hidden model reasoning from rendered assistant text", () => {
   assert.equal(
     stripHiddenReasoning(

@@ -5,6 +5,7 @@ import {
   buildAuthenticatedChatContext,
   ChatScopeAuthorizationError,
 } from "../lib/chat/server-scope";
+import type { PersistedJob } from "../lib/server/jobs-repository";
 import type { CandidateProfile, RecruiterProfile } from "../lib/types";
 
 const candidateProfile: CandidateProfile = {
@@ -32,15 +33,122 @@ const recruiterProfile: RecruiterProfile = {
   disputeCount: 0,
 };
 
-test("candidate and recruiter resources differ for one user", () => {
+function persistedJob(
+  overrides: Partial<PersistedJob> = {},
+): PersistedJob {
+  return {
+    id: "job-real-1",
+    recruiterUserId: "recruiter-user",
+    title: "Protocol Engineer",
+    description: "Build trusted protocol integrations.",
+    companyName: "Protocol Labs",
+    location: "Remote",
+    remote: true,
+    salaryRange: "$140k-$180k",
+    jobType: "FULL_TIME",
+    experienceLevel: "SENIOR",
+    skillsRequired: ["TypeScript", "Solidity"],
+    status: "ACTIVE",
+    stakeAmount: 100,
+    stakeToken: "cUSD",
+    candidateStakeRequired: false,
+    riskLevel: "LOW",
+    riskScore: 12,
+    createdAt: 1,
+    updatedAt: 1,
+    expiresAt: 2,
+    ...overrides,
+  };
+}
+
+test("candidate can chat about a real active job with trusted job context", async () => {
+  const job = persistedJob();
+  const context = await buildAuthenticatedChatContext({
+    userId: "candidate-user",
+    role: "candidate",
+    profile: candidateProfile,
+    requestedScope: {
+      role: "candidate",
+      resourceType: "job",
+      resourceId: job.id,
+      resourceLabel: "Browser-controlled title",
+    },
+    resourceRepository: {
+      getJob: async () => job,
+    },
+  });
+
+  assert.equal(context.scope.resourceLabel, job.title);
+  assert.match(context.system, /Job title: Protocol Engineer/);
+  assert.match(context.system, /Company: Protocol Labs/);
+  assert.match(context.system, /Description: Build trusted protocol integrations\./);
+  assert.match(context.system, /Required skills: TypeScript, Solidity/);
+  assert.match(context.system, /Job status: ACTIVE/);
+  assert.doesNotMatch(context.system, /Browser-controlled title/);
+});
+
+test("candidate cannot use a non-active job context", async () => {
+  const job = persistedJob({
+    id: "job_fe_aperture",
+    status: "DRAFT",
+  });
+
+  await assert.rejects(
+    async () =>
+      await buildAuthenticatedChatContext({
+        userId: "candidate-user",
+        role: "candidate",
+        profile: candidateProfile,
+        requestedScope: {
+          role: "candidate",
+          resourceType: "job",
+          resourceId: job.id,
+        },
+        resourceRepository: {
+          getJob: async () => job,
+        },
+      }),
+    (error) =>
+      error instanceof ChatScopeAuthorizationError &&
+      error.code === "resource-forbidden",
+  );
+});
+
+test("candidate cannot use an active job excluded from candidate listings", async () => {
+  const job = persistedJob({
+    recruiterUserId: "candidate-user",
+  });
+
+  await assert.rejects(
+    async () =>
+      await buildAuthenticatedChatContext({
+        userId: "candidate-user",
+        role: "candidate",
+        profile: candidateProfile,
+        requestedScope: {
+          role: "candidate",
+          resourceType: "job",
+          resourceId: job.id,
+        },
+        resourceRepository: {
+          getJob: async () => job,
+        },
+      }),
+    (error) =>
+      error instanceof ChatScopeAuthorizationError &&
+      error.code === "resource-forbidden",
+  );
+});
+
+test("candidate and recruiter resources differ for one user", async () => {
   const userId = "user-001";
-  const candidate = buildAuthenticatedChatContext({
+  const candidate = await buildAuthenticatedChatContext({
     userId,
     role: "candidate",
     profile: candidateProfile,
     requestedScope: { role: "candidate" },
   });
-  const recruiter = buildAuthenticatedChatContext({
+  const recruiter = await buildAuthenticatedChatContext({
     userId,
     role: "recruiter",
     profile: recruiterProfile,
@@ -52,14 +160,14 @@ test("candidate and recruiter resources differ for one user", () => {
   assert.notEqual(candidate.scope.resourceKey, recruiter.scope.resourceKey);
 });
 
-test("two users never receive the same resource or thread keys", () => {
-  const first = buildAuthenticatedChatContext({
+test("two users never receive the same resource or thread keys", async () => {
+  const first = await buildAuthenticatedChatContext({
     userId: "user-001",
     role: "candidate",
     profile: candidateProfile,
     requestedScope: { role: "candidate", resourceType: "candidate" },
   });
-  const second = buildAuthenticatedChatContext({
+  const second = await buildAuthenticatedChatContext({
     userId: "user-002",
     role: "candidate",
     profile: candidateProfile,
@@ -70,8 +178,8 @@ test("two users never receive the same resource or thread keys", () => {
   assert.notEqual(first.memory.thread, second.memory.thread);
 });
 
-test("browser viewerId and memory keys are ignored", () => {
-  const context = buildAuthenticatedChatContext({
+test("browser viewerId and memory keys are ignored", async () => {
+  const context = await buildAuthenticatedChatContext({
     userId: "user-real",
     role: "candidate",
     profile: candidateProfile,
@@ -91,8 +199,8 @@ test("browser viewerId and memory keys are ignored", () => {
   assert.equal(context.memory.thread, "user:user-real:role:candidate:candidate:user-real");
 });
 
-test("candidate trusted context includes the saved display name", () => {
-  const context = buildAuthenticatedChatContext({
+test("candidate trusted context includes the saved display name", async () => {
+  const context = await buildAuthenticatedChatContext({
     userId: "user-001",
     role: "candidate",
     profile: candidateProfile,
@@ -103,10 +211,10 @@ test("candidate trusted context includes the saved display name", () => {
   assert.doesNotMatch(context.system, /\$120k/);
 });
 
-test("an inactive role is rejected", () => {
-  assert.throws(
-    () =>
-      buildAuthenticatedChatContext({
+test("an inactive role is rejected", async () => {
+  await assert.rejects(
+    async () =>
+      await buildAuthenticatedChatContext({
         userId: "user-001",
         role: "recruiter",
         profile: null,
@@ -118,8 +226,8 @@ test("an inactive role is rejected", () => {
   );
 });
 
-test("candidate self-profile scope uses the authenticated user UUID", () => {
-  const context = buildAuthenticatedChatContext({
+test("candidate self-profile scope uses the authenticated user UUID", async () => {
+  const context = await buildAuthenticatedChatContext({
     userId: "user-001",
     role: "candidate",
     profile: candidateProfile,

@@ -1,5 +1,11 @@
 import type { ProfileRole } from "../server/profile-repository";
-import type { CandidateProfile, RecruiterProfile } from "../types";
+import type {
+  CandidateProfile,
+  ExperienceLevel,
+  JobStatus,
+  JobType,
+  RecruiterProfile,
+} from "../types";
 
 import type {
   ChatResourceType,
@@ -8,11 +14,37 @@ import type {
 } from "./types";
 
 export class ChatScopeAuthorizationError extends Error {
-  constructor(public readonly code: "role-not-active" | "resource-forbidden") {
+  constructor(
+    public readonly code:
+      | "role-not-active"
+      | "resource-forbidden"
+      | "resource-not-found",
+  ) {
     super(code);
     this.name = "ChatScopeAuthorizationError";
   }
 }
+
+type ChatResourceJob = {
+  candidateStakeAmount?: number;
+  candidateStakeRequired: boolean;
+  companyName: string;
+  description: string;
+  experienceLevel: ExperienceLevel;
+  id: string;
+  jobType: JobType;
+  location: string;
+  recruiterUserId: string;
+  remote: boolean;
+  salaryRange: string;
+  skillsRequired: string[];
+  status: JobStatus;
+  title: string;
+};
+
+export type ChatResourceRepository = {
+  getJob(id: string): Promise<ChatResourceJob | null>;
+};
 
 export type AuthenticatedChatContext = {
   context: Array<{ role: "system"; content: string }>;
@@ -27,6 +59,7 @@ export type AuthenticatedChatContext = {
 type BuildAuthenticatedChatContextInput = {
   profile: CandidateProfile | RecruiterProfile | null;
   requestedScope: ChatScopeRequest & Record<string, unknown>;
+  resourceRepository?: ChatResourceRepository;
   role: ProfileRole;
   userId: string;
 };
@@ -71,29 +104,48 @@ function trustedProfileContext(
   ];
 }
 
-function visibleDemoJob(resourceId: string) {
-  return {
-    job_fe_aperture: "Senior Frontend Engineer",
-    job_sol_mesh: "Solidity Engineer",
-    job_design_northwind: "Product Designer",
-    job_data_brightside: "Data Analyst",
-  }[resourceId];
+function trustedJobContext(job: ChatResourceJob) {
+  const candidateStake = job.candidateStakeRequired
+    ? `${job.candidateStakeAmount ?? 0}`
+    : "Not required";
+
+  return [
+    `Job title: ${job.title}`,
+    `Company: ${job.companyName}`,
+    `Description: ${job.description}`,
+    `Required skills: ${job.skillsRequired.join(", ") || "Not provided"}`,
+    `Job status: ${job.status}`,
+    `Location: ${job.location}`,
+    `Work arrangement: ${job.remote ? "Remote" : "On-site"}`,
+    `Job type: ${job.jobType}`,
+    `Experience level: ${job.experienceLevel}`,
+    `Salary range: ${job.salaryRange}`,
+    `Candidate stake: ${candidateStake}`,
+  ];
 }
 
-function resolveAuthorizedResource(input: {
+async function resolveAuthorizedResource(input: {
   profile: CandidateProfile | RecruiterProfile;
+  resourceRepository?: ChatResourceRepository;
   requestedScope: ChatScopeRequest;
   role: ProfileRole;
   userId: string;
-}): {
+}): Promise<{
+  context: string[];
   resourceId?: string;
   resourceLabel?: string;
   resourceType?: ChatResourceType;
-} {
-  const { profile, requestedScope, role, userId } = input;
+}> {
+  const {
+    profile,
+    requestedScope,
+    resourceRepository,
+    role,
+    userId,
+  } = input;
 
   if (!requestedScope.resourceType) {
-    return {};
+    return { context: [] };
   }
 
   if (role === "candidate") {
@@ -102,18 +154,8 @@ function resolveAuthorizedResource(input: {
         resourceType: "candidate",
         resourceId: userId,
         resourceLabel: (profile as CandidateProfile).displayName,
+        context: [],
       };
-    }
-
-    if (requestedScope.resourceType === "job" && requestedScope.resourceId) {
-      const jobTitle = visibleDemoJob(requestedScope.resourceId);
-      if (jobTitle) {
-        return {
-          resourceType: "job",
-          resourceId: requestedScope.resourceId,
-          resourceLabel: jobTitle,
-        };
-      }
     }
   }
 
@@ -122,19 +164,49 @@ function resolveAuthorizedResource(input: {
       resourceType: "company",
       resourceId: userId,
       resourceLabel: (profile as RecruiterProfile).companyName,
+      context: [],
     };
   }
 
-  throw new ChatScopeAuthorizationError("resource-forbidden");
+  if (
+    requestedScope.resourceType !== "job" ||
+    !requestedScope.resourceId
+  ) {
+    throw new ChatScopeAuthorizationError("resource-forbidden");
+  }
+  if (!resourceRepository) {
+    throw new Error("Chat resource repository is required for job scope.");
+  }
+
+  const job = await resourceRepository.getJob(requestedScope.resourceId);
+  if (!job) {
+    throw new ChatScopeAuthorizationError("resource-not-found");
+  }
+
+  if (role === "candidate") {
+    if (job.status !== "ACTIVE" || job.recruiterUserId === userId) {
+      throw new ChatScopeAuthorizationError("resource-forbidden");
+    }
+  } else if (job.recruiterUserId !== userId) {
+    throw new ChatScopeAuthorizationError("resource-forbidden");
+  }
+
+  return {
+    resourceType: "job",
+    resourceId: job.id,
+    resourceLabel: job.title,
+    context: trustedJobContext(job),
+  };
 }
 
 function buildSystemMessage(input: {
   memoryResource: string;
   profile: CandidateProfile | RecruiterProfile;
+  resourceContext: string[];
   role: ProfileRole;
   scope: TrustedChatScope;
 }) {
-  const { memoryResource, profile, role, scope } = input;
+  const { memoryResource, profile, resourceContext, role, scope } = input;
   const parts = [
     `Viewer: ${scope.viewerId}`,
     `Role: ${scope.role}`,
@@ -148,27 +220,31 @@ function buildSystemMessage(input: {
   }
 
   parts.push(...trustedProfileContext(role, profile));
+  parts.push(...resourceContext);
   return parts.join("\n");
 }
 
-export function buildAuthenticatedChatContext({
+export async function buildAuthenticatedChatContext({
   profile,
   requestedScope,
+  resourceRepository,
   role,
   userId,
-}: BuildAuthenticatedChatContextInput): AuthenticatedChatContext {
+}: BuildAuthenticatedChatContextInput): Promise<AuthenticatedChatContext> {
   assertActiveProfile(profile);
 
   if (requestedScope.role !== role) {
     throw new ChatScopeAuthorizationError("resource-forbidden");
   }
 
-  const resource = resolveAuthorizedResource({
-    profile,
-    requestedScope,
-    role,
-    userId,
-  });
+  const { context: resourceContext, ...resource } =
+    await resolveAuthorizedResource({
+      profile,
+      requestedScope,
+      resourceRepository,
+      role,
+      userId,
+    });
   const memoryResource = `user:${userId}:role:${role}`;
   const hasResource = Boolean(resource.resourceType && resource.resourceId);
   const threadId = hasResource
@@ -185,6 +261,7 @@ export function buildAuthenticatedChatContext({
   const system = buildSystemMessage({
     memoryResource,
     profile,
+    resourceContext,
     role,
     scope,
   });

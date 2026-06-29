@@ -17,7 +17,6 @@ export function buildServerChatScopeRequest(input: {
 
 export function resolveChatScopeForPathname(input: {
   candidateProfileLabel?: string;
-  jobs?: { id: string; title: string }[];
   pathname: string;
   recruiterProfileLabel?: string;
   role: ChatRole;
@@ -30,27 +29,6 @@ export function resolveChatScopeForPathname(input: {
         resourceLabel: input.candidateProfileLabel ?? "You",
       });
     }
-
-    const jobMatch = input.pathname.match(/^\/candidate\/jobs\/([^/]+)$/);
-    if (jobMatch) {
-      const jobId = jobMatch[1];
-      const jobLabel =
-        input.jobs?.find((job) => job.id === jobId)?.title ??
-        (jobId === "job_fe_aperture"
-          ? "Senior Frontend Engineer"
-          : jobId === "job_sol_mesh"
-            ? "Solidity Engineer"
-            : undefined);
-
-      if (jobId === "job_fe_aperture" || jobId === "job_sol_mesh") {
-        return buildServerChatScopeRequest({
-          role: input.role,
-          resourceType: "job",
-          resourceId: jobId,
-          resourceLabel: jobLabel,
-        });
-      }
-    }
   }
 
   if (input.role === "recruiter") {
@@ -61,27 +39,19 @@ export function resolveChatScopeForPathname(input: {
         resourceLabel: input.recruiterProfileLabel ?? "Aperture Labs",
       });
     }
+  }
 
-    const jobMatch = input.pathname.match(/^\/recruiter\/jobs\/([^/]+)$/);
-    if (jobMatch) {
-      const jobId = jobMatch[1];
-      const jobLabel =
-        input.jobs?.find((job) => job.id === jobId)?.title ??
-        (jobId === "job_fe_aperture"
-          ? "Senior Frontend Engineer"
-          : jobId === "job_sol_mesh"
-            ? "Solidity Engineer"
-            : undefined);
-
-      if (jobId === "job_fe_aperture" || jobId === "job_sol_mesh") {
-        return buildServerChatScopeRequest({
-          role: input.role,
-          resourceType: "job",
-          resourceId: jobId,
-          resourceLabel: jobLabel,
-        });
-      }
-    }
+  const jobMatch = input.pathname.match(
+    input.role === "candidate"
+      ? /^\/candidate\/jobs\/([^/]+)$/
+      : /^\/recruiter\/jobs\/([^/]+)$/,
+  );
+  if (jobMatch?.[1]) {
+    return {
+      role: input.role,
+      resourceType: "job" as const,
+      resourceId: decodeURIComponent(jobMatch[1]),
+    };
   }
 
   return buildServerChatScopeRequest({ role: input.role });
