@@ -6,10 +6,7 @@ import {
 } from "@shire/shared";
 
 import { filterCandidateToJob } from "./filter";
-import {
-  createMatchingFingerprint,
-  createUnavailableMatchingFingerprint,
-} from "./fingerprint";
+import { createMatchingFingerprint } from "./fingerprint";
 import {
   computeRuleScore,
   fallbackOutput,
@@ -71,10 +68,13 @@ export async function evaluateMatchingPair(
         repository.getActiveJob(pair.jobId),
       ]);
   if (!candidate || !job) {
-    return persistUnavailablePair(repository, pair, {
-      candidateAvailable: Boolean(candidate),
-      jobAvailable: Boolean(job),
-    });
+    return {
+      status: "ineligible",
+      recommended: false,
+      llmInvoked: false,
+      claimed: false,
+      recommendationRowsWritten: 0,
+    };
   }
 
   const appliedJobIds =
@@ -294,93 +294,4 @@ function isRecommended(
     matchScore >= MATCHING_SAVE_THRESHOLD &&
     recommendedAction !== "IGNORE"
   );
-}
-
-async function persistUnavailablePair(
-  repository: MatchingRepository,
-  pair: MatchingPair,
-  availability: { candidateAvailable: boolean; jobAvailable: boolean },
-): Promise<MatchingPairEvaluationResult> {
-  const inputHash = createUnavailableMatchingFingerprint(pair, availability);
-  const claimResult = await repository.claimEvaluation({
-    ...pair,
-    inputHash,
-    scoringVersion: MATCHING_SCORING_VERSION,
-  });
-  if (claimResult.status === "busy") {
-    return {
-      status: "busy",
-      recommended: false,
-      llmInvoked: false,
-      claimed: false,
-      recommendationRowsWritten: 0,
-    };
-  }
-
-  if (claimResult.status === "unchanged") {
-    const publication = await repository.repairRecommendations({
-      candidateUserId: claimResult.evaluation.candidateUserId,
-      jobId: claimResult.evaluation.jobId,
-      inputHash: claimResult.evaluation.inputHash,
-      scoringVersion: claimResult.evaluation.scoringVersion,
-      attemptCount: claimResult.evaluation.attemptCount,
-      recommendations: null,
-    });
-    return publication.published
-      ? {
-          status: "unchanged",
-          recommended: false,
-          llmInvoked: false,
-          claimed: false,
-          recommendationRowsWritten: publication.recommendationRowsWritten,
-        }
-      : {
-          status: "busy",
-          recommended: false,
-          llmInvoked: false,
-          claimed: false,
-          recommendationRowsWritten: 0,
-        };
-  }
-
-  const reasons = [
-    ...(availability.candidateAvailable ? [] : ["candidate-not-confirmed"]),
-    ...(availability.jobAvailable ? [] : ["job-not-active"]),
-  ];
-  try {
-    const publication = await repository.publishEvaluation({
-      ...claimResult.claim,
-      ruleScore: null,
-      matchScore: null,
-      confidence: null,
-      recommendedAction: null,
-      reasons: [],
-      missingRequirements: reasons,
-      riskFlags: [],
-      recommendations: null,
-    });
-    return publication.published
-      ? {
-          status: "ineligible",
-          recommended: false,
-          llmInvoked: false,
-          claimed: true,
-          recommendationRowsWritten: publication.recommendationRowsWritten,
-        }
-      : {
-          status: "busy",
-          recommended: false,
-          llmInvoked: false,
-          claimed: true,
-          recommendationRowsWritten: 0,
-        };
-  } catch (error) {
-    await repository.failEvaluation({
-      ...claimResult.claim,
-      failureCode:
-        error instanceof Error ? error.message : "matching publication failed",
-      retryable: true,
-    });
-    throw error;
-  }
 }

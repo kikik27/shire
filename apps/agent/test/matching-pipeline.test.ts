@@ -629,7 +629,7 @@ test("newly ineligible input expires both recommendation directions", async () =
   );
 });
 
-test("missing active entity is persisted as a fenced ineligible evaluation", async () => {
+test("missing active entity leaves cleanup to pair reconciliation", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate());
   repository.seedJob(job());
@@ -662,13 +662,13 @@ test("missing active entity is persisted as a fenced ineligible evaluation", asy
   });
 
   assert.equal(missing.status, "ineligible");
-  assert.equal(missing.claimed, true);
-  assert.equal(unchanged.status, "unchanged");
+  assert.equal(missing.claimed, false);
+  assert.equal(unchanged.status, "ineligible");
   assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
-  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 2);
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 1);
   assert.deepEqual(
     repository.snapshotRecommendations().map(({ status }) => status),
-    ["EXPIRED", "EXPIRED"],
+    ["NEW", "NEW"],
   );
 });
 
@@ -779,7 +779,7 @@ test("pending evaluations are unprocessed and claim attempt one", async () => {
   assert.equal(repository.snapshotEvaluations()[0]?.status, "RUNNING");
 });
 
-test("reactivating an unavailable pair reevaluates before restoring recommendations", async () => {
+test("reactivating an unavailable pair keeps its unchanged evaluation", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate());
   repository.seedJob(job());
@@ -819,8 +819,8 @@ test("reactivating an unavailable pair reevaluates before restoring recommendati
     dependencies,
   );
 
-  assert.equal(restored.status, "completed");
-  assert.equal(rerankCalls, 2);
+  assert.equal(restored.status, "unchanged");
+  assert.equal(rerankCalls, 1);
   assert.deepEqual(
     repository.snapshotRecommendations().map(({ status }) => status),
     ["NEW", "NEW"],

@@ -5,7 +5,6 @@ import { MATCHING_SCORING_VERSION } from "@shire/shared";
 import type {
   CandidateMatchInput,
   JobMatchInput,
-  MatchingPair,
 } from "./types";
 
 function normalizeText(value: string | undefined): string | null {
@@ -23,17 +22,6 @@ function normalizeList(values: string[]): string[] {
 
 function hashCanonicalInput(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-export function createUnavailableMatchingFingerprint(
-  pair: MatchingPair,
-  availability: { candidateAvailable: boolean; jobAvailable: boolean },
-): string {
-  return hashCanonicalInput({
-    scoringVersion: MATCHING_SCORING_VERSION,
-    pair,
-    availability,
-  });
 }
 
 export function createMatchingFingerprint(
