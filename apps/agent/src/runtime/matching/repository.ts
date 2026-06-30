@@ -1,4 +1,14 @@
-import { and, eq, lt, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   MATCHING_SCORING_VERSION,
   type MatchingEvaluationStatus,
@@ -21,15 +31,20 @@ import {
   type MatchingEvaluationClaim,
   type MatchingEvaluationClaimInput,
   type MatchingPair,
+  type MatchingReconciliationCursor,
   type MatchingRepository,
   matchingPairKey,
   type MatchingRecommendationPublication,
   type RecommendationInput,
   type RecommendationSnapshot,
 } from "./types";
-import { createMatchingFingerprint } from "./fingerprint";
+import {
+  createMatchingFingerprint,
+  RUNNING_EVALUATION_LEASE_MS,
+  shouldReconcileMatchingPair,
+} from "./fingerprint";
 
-export const RUNNING_EVALUATION_LEASE_MS = 5 * 60 * 1000;
+export { RUNNING_EVALUATION_LEASE_MS } from "./fingerprint";
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -428,6 +443,131 @@ export function createDrizzleMatchingRepository(
       return new Set(rows.map((row) => row.jobId));
     },
 
+    async reconcileMatchingPairs(options) {
+      const cursorCondition = options.cursor
+        ? or(
+            gt(candidateProfiles.userId, options.cursor.candidateId),
+            and(
+              eq(candidateProfiles.userId, options.cursor.candidateId),
+              gt(jobs.id, options.cursor.jobId),
+            ),
+          )
+        : undefined;
+      const rows = await database
+        .select({
+          candidate: candidateProfiles,
+          job: jobs,
+          applicationId: applications.id,
+          evaluation: matchingEvaluations,
+        })
+        .from(candidateProfiles)
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.status, "ACTIVE"),
+            ne(jobs.recruiterUserId, candidateProfiles.userId),
+          ),
+        )
+        .leftJoin(
+          applications,
+          and(
+            eq(applications.candidateUserId, candidateProfiles.userId),
+            eq(applications.jobId, jobs.id),
+          ),
+        )
+        .leftJoin(
+          matchingEvaluations,
+          and(
+            eq(
+              matchingEvaluations.candidateUserId,
+              candidateProfiles.userId,
+            ),
+            eq(matchingEvaluations.jobId, jobs.id),
+          ),
+        )
+        .where(
+          and(
+            eq(candidateProfiles.profileStatus, "CONFIRMED"),
+            cursorCondition,
+          ),
+        )
+        .orderBy(candidateProfiles.userId, jobs.id)
+        .limit(options.limit);
+      const now = options.now ?? new Date();
+      const pairs = rows.flatMap((row) => {
+        const candidate = mapCandidateProfileForMatching(row.candidate);
+        const job = mapJob(row.job);
+        const inputHash = createMatchingFingerprint(candidate, job, {
+          hasApplied: row.applicationId !== null,
+        });
+        const evaluation = row.evaluation
+          ? mapEvaluation(row.evaluation)
+          : null;
+        return shouldReconcileMatchingPair(inputHash, evaluation, now)
+          ? [{ candidateId: candidate.userId, jobId: job.id, inputHash }]
+          : [];
+      });
+      const last = rows.at(-1);
+      return {
+        pairs,
+        scannedPairs: rows.length,
+        skippedPairs: rows.length - pairs.length,
+        nextCursor:
+          rows.length === options.limit && last
+            ? {
+                candidateId: last.candidate.userId,
+                jobId: last.job.id,
+              }
+            : undefined,
+      };
+    },
+
+    async expireUnavailableRecommendations(options) {
+      return database.transaction(async (transaction) => {
+        const stale = await transaction
+          .select({ id: recommendations.id })
+          .from(recommendations)
+          .leftJoin(
+            candidateProfiles,
+            eq(candidateProfiles.userId, recommendations.candidateUserId),
+          )
+          .leftJoin(jobs, eq(jobs.id, recommendations.jobId))
+          .where(
+            and(
+              ne(recommendations.status, "EXPIRED"),
+              lt(recommendations.updatedAt, options.updatedBefore),
+              or(
+                isNull(candidateProfiles.userId),
+                ne(candidateProfiles.profileStatus, "CONFIRMED"),
+                isNull(jobs.id),
+                ne(jobs.status, "ACTIVE"),
+                eq(jobs.recruiterUserId, recommendations.candidateUserId),
+              ),
+            ),
+          )
+          .orderBy(recommendations.updatedAt, recommendations.id)
+          .limit(options.limit);
+        if (stale.length === 0) {
+          return 0;
+        }
+        const expired = await transaction
+          .update(recommendations)
+          .set({ status: "EXPIRED", updatedAt: new Date() })
+          .where(
+            and(
+              inArray(
+                recommendations.id,
+                stale.map((row) => row.id),
+              ),
+              ne(recommendations.status, "EXPIRED"),
+              lt(recommendations.updatedAt, options.updatedBefore),
+            ),
+          )
+          .returning({ id: recommendations.id });
+        return expired.length;
+      });
+    },
+
     async prepareEvaluation(pair, options) {
       return retryPostgresSerialization(() =>
         database.transaction(
@@ -783,6 +923,89 @@ export function createInMemoryMatchingRepository(
     },
     async listAppliedJobIds(candidateUserId) {
       return new Set(applied.get(candidateUserId) ?? []);
+    },
+    async reconcileMatchingPairs({ limit, cursor, now = new Date() }) {
+      const allPairs = [...candidates.values()]
+        .filter((candidate) => candidate.profileStatus === "CONFIRMED")
+        .flatMap((candidate) =>
+          [...jobStore.values()]
+            .filter(
+              (job) =>
+                job.status === "ACTIVE" &&
+                job.recruiterUserId !== candidate.userId,
+            )
+            .map((job) => ({ candidate, job })),
+        )
+        .sort(
+          (left, right) =>
+            left.candidate.userId.localeCompare(right.candidate.userId) ||
+            left.job.id.localeCompare(right.job.id),
+        )
+        .filter(
+          ({ candidate, job }) =>
+            !cursor ||
+            candidate.userId > cursor.candidateId ||
+            (candidate.userId === cursor.candidateId &&
+              job.id > cursor.jobId),
+        )
+        .slice(0, limit);
+      const pairs = allPairs.flatMap(({ candidate, job }) => {
+        const inputHash = createMatchingFingerprint(candidate, job, {
+          hasApplied: applied.get(candidate.userId)?.has(job.id) ?? false,
+        });
+        return shouldReconcileMatchingPair(
+          inputHash,
+          evaluations.get(
+            matchingPairKey({
+              candidateUserId: candidate.userId,
+              jobId: job.id,
+            }),
+          ) ?? null,
+          now,
+        )
+          ? [{ candidateId: candidate.userId, jobId: job.id, inputHash }]
+          : [];
+      });
+      const last = allPairs.at(-1);
+      return {
+        pairs,
+        scannedPairs: allPairs.length,
+        skippedPairs: allPairs.length - pairs.length,
+        nextCursor:
+          allPairs.length === limit && last
+            ? {
+                candidateId: last.candidate.userId,
+                jobId: last.job.id,
+              }
+            : undefined,
+      };
+    },
+    async expireUnavailableRecommendations({ limit }) {
+      let expired = 0;
+      for (const [key, recommendation] of savedRecommendations) {
+        if (expired >= limit) {
+          break;
+        }
+        const candidate = candidates.get(recommendation.candidateUserId);
+        const job = recommendation.jobId
+          ? jobStore.get(recommendation.jobId)
+          : undefined;
+        if (
+          recommendation.status !== "EXPIRED" &&
+          (!candidate ||
+            candidate.profileStatus !== "CONFIRMED" ||
+            !job ||
+            job.status !== "ACTIVE" ||
+            job.recruiterUserId === recommendation.candidateUserId)
+        ) {
+          savedRecommendations.set(key, {
+            ...recommendation,
+            status: "EXPIRED",
+          });
+          expired += 1;
+        }
+      }
+      return expired;
     },
     async prepareEvaluation(pair, claimOptions) {
       const candidate = candidates.get(pair.candidateUserId);

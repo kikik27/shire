@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 
 import { MATCHING_SCORING_VERSION } from "@shire/shared";
+import type { MatchingEvaluationStatus } from "@shire/shared";
 
 import type {
   CandidateMatchInput,
   JobMatchInput,
 } from "./types";
+
+export const RUNNING_EVALUATION_LEASE_MS = 5 * 60 * 1000;
 
 function normalizeText(value: string | undefined): string | null {
   return value === undefined
@@ -72,4 +75,37 @@ export function createMatchingFingerprint(
   };
 
   return hashCanonicalInput(canonicalInput);
+}
+
+type ReconciliationEvaluation = {
+  inputHash: string;
+  scoringVersion: string;
+  status: MatchingEvaluationStatus;
+  failureCode: string | null;
+  updatedAt: Date;
+};
+
+export function shouldReconcileMatchingPair(
+  inputHash: string,
+  evaluation: ReconciliationEvaluation | null,
+  now = new Date(),
+): boolean {
+  if (
+    !evaluation ||
+    evaluation.inputHash !== inputHash ||
+    evaluation.scoringVersion !== MATCHING_SCORING_VERSION ||
+    evaluation.status === "PENDING"
+  ) {
+    return true;
+  }
+  if (evaluation.status === "FAILED") {
+    return evaluation.failureCode?.startsWith("RETRYABLE:") ?? false;
+  }
+  if (evaluation.status === "RUNNING") {
+    return (
+      evaluation.updatedAt.getTime() <
+      now.getTime() - RUNNING_EVALUATION_LEASE_MS
+    );
+  }
+  return false;
 }

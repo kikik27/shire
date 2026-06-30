@@ -4,6 +4,7 @@ import type {
 import type { JobProcessor } from "./job-processor";
 import { getAgentDatabase } from "../db";
 import { createDrizzleMatchingRepository } from "../matching/repository";
+import { evaluateMatchingPair } from "../matching/evaluation";
 import {
   runJobMatchingForCandidate,
   runTalentMatchingForJob,
@@ -11,6 +12,7 @@ import {
 
 type JobMatchingResult = JobResultMap["job-matching"];
 type TalentMatchingResult = JobResultMap["talent-matching"];
+type MatchingPairResult = JobResultMap["matching-pair"];
 
 function summarizeSaved(count: number, strong: number): {
   status: JobMatchingResult["status"];
@@ -129,5 +131,68 @@ export const talentMatchingProcessor: JobProcessor<"talent-matching"> = {
       llmInvoked: result.llmInvoked,
       durationMs: result.durationMs,
     };
+  },
+};
+
+export const matchingPairProcessor: JobProcessor<"matching-pair"> = {
+  name: "matching-pair",
+  llmPolicy: "required",
+  async process(payload): Promise<MatchingPairResult> {
+    const database = getAgentDatabase();
+    if (!database) {
+      return {
+        status: "no-database",
+        claimed: false,
+        recommended: false,
+        recommendationRowsWritten: 0,
+        llmInvoked: false,
+        durationMs: 0,
+      };
+    }
+
+    const startedAt = Date.now();
+    const repository = createDrizzleMatchingRepository(database);
+    try {
+      const result = await evaluateMatchingPair(repository, {
+        candidateUserId: payload.candidateId,
+        jobId: payload.jobId,
+      });
+      const summary: MatchingPairResult = {
+        status: result.status,
+        claimed: result.claimed,
+        recommended: result.recommended,
+        recommendationRowsWritten: result.recommendationRowsWritten,
+        llmInvoked: result.llmInvoked,
+        durationMs: Date.now() - startedAt,
+      };
+      await repository.recordAgentRun({
+        agentName: "matching-pair-agent",
+        workflowName: "matching-pair",
+        status: result.status === "busy" ? "PARTIAL" : "SUCCESS",
+        input: {
+          candidateId: payload.candidateId,
+          jobId: payload.jobId,
+          inputHash: payload.inputHash,
+        },
+        output: summary,
+        latencyMs: summary.durationMs,
+      });
+      return summary;
+    } catch (error) {
+      await repository.recordAgentRun({
+        agentName: "matching-pair-agent",
+        workflowName: "matching-pair",
+        status: "FAILED",
+        input: {
+          candidateId: payload.candidateId,
+          jobId: payload.jobId,
+          inputHash: payload.inputHash,
+        },
+        errorMessage:
+          error instanceof Error ? error.message : "matching pair failed",
+        latencyMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
   },
 };

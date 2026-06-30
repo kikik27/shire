@@ -1,19 +1,22 @@
 import type { JobRequest } from "./job-contracts";
-import type { MatchingRepository } from "../matching/types";
+import type {
+  MatchingReconciliationCursor,
+  MatchingRepository,
+} from "../matching/types";
 import { logger } from "../logger";
 
 const schedulerLogger = logger.child({ component: "recommendation-scheduler" });
 
 export type RecommendationSchedulerRepository = Pick<
   MatchingRepository,
-  "listConfirmedCandidates" | "listActiveJobs"
+  "reconcileMatchingPairs" | "expireUnavailableRecommendations"
 >;
 
 export type RecommendationSchedulerDependencies = {
   enabled: boolean;
   intervalMs: number;
   getRepository: () => RecommendationSchedulerRepository | undefined;
-  enqueue: (request: JobRequest) => Promise<unknown>;
+  enqueue: (request: JobRequest) => Promise<{ deduplicated?: boolean } | unknown>;
   setInterval?: typeof setInterval;
   clearInterval?: typeof clearInterval;
 };
@@ -21,6 +24,7 @@ export type RecommendationSchedulerDependencies = {
 export class RecommendationScheduler {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
+  private cursor: MatchingReconciliationCursor | undefined;
 
   constructor(private readonly dependencies: RecommendationSchedulerDependencies) {}
 
@@ -54,46 +58,68 @@ export class RecommendationScheduler {
 
   async runOnce() {
     if (!this.dependencies.enabled) {
-      return { status: "disabled" as const, candidateJobs: 0, talentJobs: 0 };
+      return emptyResult("disabled");
     }
 
     if (this.running) {
       schedulerLogger.warn("recommendation scheduler run skipped because a previous run is still active");
-      return { status: "busy" as const, candidateJobs: 0, talentJobs: 0 };
+      return emptyResult("busy");
     }
 
     const repository = this.dependencies.getRepository();
     if (!repository) {
       schedulerLogger.warn("recommendation scheduler skipped because database is unavailable");
-      return { status: "no-database" as const, candidateJobs: 0, talentJobs: 0 };
+      return emptyResult("no-database");
     }
 
     this.running = true;
     const startedAt = Date.now();
     try {
-      const [candidates, jobs] = await Promise.all([
-        repository.listConfirmedCandidates(),
-        repository.listActiveJobs(),
-      ]);
-
-      for (const candidate of candidates) {
-        await this.dependencies.enqueue({
-          name: "job-matching",
-          payload: { candidateId: candidate.userId },
+      const now = new Date();
+      const expiredRecommendations =
+        await repository.expireUnavailableRecommendations({
+          limit: 500,
+          updatedBefore: now,
         });
-      }
-
-      for (const job of jobs) {
-        await this.dependencies.enqueue({
-          name: "talent-matching",
-          payload: { jobId: job.id },
-        });
+      const reconciliation = await repository.reconcileMatchingPairs({
+        limit: 500,
+        cursor: this.cursor,
+        now,
+      });
+      this.cursor = reconciliation.nextCursor;
+      let pairJobs = 0;
+      let deduplicated = 0;
+      for (const pair of reconciliation.pairs) {
+        const request: JobRequest = {
+          name: "matching-pair",
+          payload: pair,
+          deduplicationKey: [
+            "matching-pair",
+            pair.candidateId,
+            pair.jobId,
+            pair.inputHash,
+          ].join(":"),
+        };
+        const enqueueResult = await this.dependencies.enqueue(request);
+        if (
+          enqueueResult &&
+          typeof enqueueResult === "object" &&
+          "deduplicated" in enqueueResult &&
+          enqueueResult.deduplicated === true
+        ) {
+          deduplicated += 1;
+        } else {
+          pairJobs += 1;
+        }
       }
 
       schedulerLogger.info(
         {
-          candidateJobs: candidates.length,
-          talentJobs: jobs.length,
+          pairJobs,
+          skipped: reconciliation.skippedPairs,
+          deduplicated,
+          expiredRecommendations,
+          scannedPairs: reconciliation.scannedPairs,
           durationMs: Date.now() - startedAt,
         },
         "recommendation scheduler enqueued matching jobs",
@@ -101,8 +127,10 @@ export class RecommendationScheduler {
 
       return {
         status: "queued" as const,
-        candidateJobs: candidates.length,
-        talentJobs: jobs.length,
+        pairJobs,
+        skipped: reconciliation.skippedPairs,
+        deduplicated,
+        expiredRecommendations,
       };
     } catch (error) {
       schedulerLogger.error(
@@ -112,10 +140,21 @@ export class RecommendationScheduler {
         },
         "recommendation scheduler failed",
       );
-      return { status: "failed" as const, candidateJobs: 0, talentJobs: 0 };
+      return emptyResult("failed");
     } finally {
       this.running = false;
     }
   }
 }
 
+function emptyResult(
+  status: "disabled" | "busy" | "no-database" | "failed",
+) {
+  return {
+    status,
+    pairJobs: 0,
+    skipped: 0,
+    deduplicated: 0,
+    expiredRecommendations: 0,
+  };
+}

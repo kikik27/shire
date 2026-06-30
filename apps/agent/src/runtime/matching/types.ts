@@ -73,6 +73,24 @@ export type MatchingPair = {
   jobId: string;
 };
 
+export type MatchingPairJobDescriptor = {
+  candidateId: string;
+  jobId: string;
+  inputHash: string;
+};
+
+export type MatchingReconciliationCursor = {
+  candidateId: string;
+  jobId: string;
+};
+
+export type MatchingReconciliationResult = {
+  pairs: MatchingPairJobDescriptor[];
+  scannedPairs: number;
+  skippedPairs: number;
+  nextCursor?: MatchingReconciliationCursor;
+};
+
 export function matchingPairKey(pair: MatchingPair): string {
   return `${pair.candidateUserId}:${pair.jobId}`;
 }
@@ -159,6 +177,15 @@ export type MatchingRepository = {
   getActiveJob(jobId: string): Promise<JobMatchInput | null>;
   /** Job ids a candidate has already applied to. */
   listAppliedJobIds(candidateUserId: string): Promise<Set<string>>;
+  reconcileMatchingPairs(options: {
+    limit: number;
+    cursor?: MatchingReconciliationCursor;
+    now?: Date;
+  }): Promise<MatchingReconciliationResult>;
+  expireUnavailableRecommendations(options: {
+    limit: number;
+    updatedBefore: Date;
+  }): Promise<number>;
   /** Reads current source data and claims its fingerprint as one atomic snapshot. */
   prepareEvaluation(
     pair: MatchingPair,

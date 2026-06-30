@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   Queue,
   UnrecoverableError,
@@ -32,13 +34,24 @@ type BullJobLike = {
 export function createBullJobOptions(input: {
   attempts: number;
   backoffMs: number;
+  jobId?: string;
 }): JobsOptions {
   return {
     attempts: input.attempts,
     backoff: { type: "exponential", delay: input.backoffMs },
     removeOnComplete: false,
     removeOnFail: false,
+    ...(input.jobId ? { jobId: input.jobId } : {}),
   };
+}
+
+export function createBullDeduplicationJobId(
+  deduplicationKey: string,
+): string {
+  const digest = createHash("sha256")
+    .update(deduplicationKey)
+    .digest("hex");
+  return `dedup-${digest}`;
 }
 
 function mapStatus(state: string): JobEnvelope["status"] {
@@ -169,10 +182,13 @@ export function createBullMqJobRuntime(input: {
 
   return {
     async enqueue(request) {
+      const jobId = request.deduplicationKey
+        ? createBullDeduplicationJobId(request.deduplicationKey)
+        : undefined;
       const job = await queue.add(
         request.name,
         request,
-        createBullJobOptions(input),
+        createBullJobOptions({ ...input, jobId }),
       );
       return (await mapBullJobEnvelope(job as unknown as BullJobLike))!;
     },

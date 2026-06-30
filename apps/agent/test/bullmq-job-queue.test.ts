@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createBullDeduplicationJobId,
   createBullJobOptions,
   mapBullJobEnvelope,
 } from "../src/runtime/jobs/bullmq-job-queue";
@@ -13,6 +14,33 @@ test("uses three attempts with exponential delayed retry", () => {
     removeOnComplete: false,
     removeOnFail: false,
   });
+});
+
+test("uses a deterministic Bull-safe custom id for semantic deduplication keys", () => {
+  const semanticKey =
+    "matching-pair:candidate-001:job-001:fingerprint-001";
+  const jobId = createBullDeduplicationJobId(semanticKey);
+
+  assert.equal(
+    jobId,
+    "dedup-c252d88c76d91bb299c64925e39718ca923201c181f45b2f81913ac30b590aa0",
+  );
+  assert.doesNotMatch(jobId, /:/);
+  assert.doesNotMatch(jobId, /^\d+$/);
+  assert.deepEqual(
+    createBullJobOptions({
+      attempts: 3,
+      backoffMs: 5_000,
+      jobId,
+    }),
+    {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5_000 },
+      removeOnComplete: false,
+      removeOnFail: false,
+      jobId,
+    },
+  );
 });
 
 test("maps delayed BullMQ jobs with ownership and retry metadata", async () => {
