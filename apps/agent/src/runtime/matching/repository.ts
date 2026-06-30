@@ -40,6 +40,7 @@ import {
 } from "./types";
 import {
   createMatchingFingerprint,
+  matchingQueueGeneration,
   RUNNING_EVALUATION_LEASE_MS,
   shouldReconcileMatchingPair,
 } from "./fingerprint";
@@ -504,7 +505,12 @@ export function createDrizzleMatchingRepository(
           ? mapEvaluation(row.evaluation)
           : null;
         return shouldReconcileMatchingPair(inputHash, evaluation, now)
-          ? [{ candidateId: candidate.userId, jobId: job.id, inputHash }]
+          ? [{
+              candidateId: candidate.userId,
+              jobId: job.id,
+              inputHash,
+              queueGeneration: matchingQueueGeneration(inputHash, evaluation),
+            }]
           : [];
       });
       const last = rows.at(-1);
@@ -953,17 +959,24 @@ export function createInMemoryMatchingRepository(
         const inputHash = createMatchingFingerprint(candidate, job, {
           hasApplied: applied.get(candidate.userId)?.has(job.id) ?? false,
         });
-        return shouldReconcileMatchingPair(
-          inputHash,
+        const evaluation =
           evaluations.get(
             matchingPairKey({
               candidateUserId: candidate.userId,
               jobId: job.id,
             }),
-          ) ?? null,
+          ) ?? null;
+        return shouldReconcileMatchingPair(
+          inputHash,
+          evaluation,
           now,
         )
-          ? [{ candidateId: candidate.userId, jobId: job.id, inputHash }]
+          ? [{
+              candidateId: candidate.userId,
+              jobId: job.id,
+              inputHash,
+              queueGeneration: matchingQueueGeneration(inputHash, evaluation),
+            }]
           : [];
       });
       const last = allPairs.at(-1);

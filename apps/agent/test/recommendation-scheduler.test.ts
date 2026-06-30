@@ -3,10 +3,15 @@ import test from "node:test";
 
 import { MATCHING_SCORING_VERSION } from "@shire/shared";
 
+import { InMemoryJobQueue } from "../src/runtime/jobs/in-memory-job-queue";
 import { RecommendationScheduler } from "../src/runtime/jobs/recommendation-scheduler";
 import type { JobRequest } from "../src/runtime/jobs/job-contracts";
 import type { RecommendationSchedulerRepository } from "../src/runtime/jobs/recommendation-scheduler";
-import { shouldReconcileMatchingPair } from "../src/runtime/matching/fingerprint";
+import {
+  MAX_MATCHING_EVALUATION_ATTEMPTS,
+  matchingQueueGeneration,
+  shouldReconcileMatchingPair,
+} from "../src/runtime/matching/fingerprint";
 import { createInMemoryMatchingRepository } from "../src/runtime/matching/repository";
 
 function createRepository(): RecommendationSchedulerRepository {
@@ -16,11 +21,13 @@ function createRepository(): RecommendationSchedulerRepository {
       candidateId: "candidate-001",
       jobId: "job-001",
       inputHash: "fingerprint-001",
+      queueGeneration: 1,
     },
     {
       candidateId: "candidate-002",
       jobId: "job-001",
       inputHash: "fingerprint-002",
+      queueGeneration: 1,
     },
   ];
   return {
@@ -54,6 +61,7 @@ test("reconciles only stale or retryable matching evaluation states", () => {
     scoringVersion: MATCHING_SCORING_VERSION,
     status: "COMPLETED" as const,
     failureCode: null,
+    attemptCount: 1,
     updatedAt: now,
   };
 
@@ -133,6 +141,105 @@ test("reconciles only stale or retryable matching evaluation states", () => {
       now,
     ),
     false,
+  );
+  assert.equal(
+    shouldReconcileMatchingPair(
+      "current-hash",
+      {
+        ...evaluation,
+        status: "FAILED",
+        failureCode: "RETRYABLE:timeout",
+        attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+      },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldReconcileMatchingPair(
+      "current-hash",
+      {
+        ...evaluation,
+        status: "PENDING",
+        attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+      },
+      now,
+    ),
+    false,
+  );
+});
+
+test("matching queue generation follows the canonical evaluation lifecycle", () => {
+  const evaluation = {
+    inputHash: "current-hash",
+    scoringVersion: MATCHING_SCORING_VERSION,
+    status: "FAILED" as const,
+    failureCode: "RETRYABLE:timeout",
+    attemptCount: 1,
+    updatedAt: new Date(),
+  };
+
+  assert.equal(matchingQueueGeneration("current-hash", null), 1);
+  assert.equal(matchingQueueGeneration("changed-hash", evaluation), 1);
+  assert.equal(matchingQueueGeneration("current-hash", evaluation), 2);
+});
+
+test("retryable reconciliation emits a stable next-generation descriptor", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate({
+    userId: "candidate-001",
+    skills: ["TypeScript"],
+    preferredRoles: ["Engineer"],
+    profileStatus: "CONFIRMED",
+  });
+  repository.seedJob({
+    id: "job-001",
+    recruiterUserId: "recruiter-001",
+    title: "Engineer",
+    description: "Build",
+    companyName: "Shire",
+    location: "Remote",
+    remote: true,
+    salaryRange: "$100k",
+    jobType: "FULL_TIME",
+    experienceLevel: "MID",
+    skillsRequired: ["TypeScript"],
+    status: "ACTIVE",
+    riskLevel: "LOW",
+    riskScore: 0,
+  });
+  const [initial] = (
+    await repository.reconcileMatchingPairs({ limit: 1 })
+  ).pairs;
+  assert.equal(initial?.queueGeneration, 1);
+  repository.seedEvaluation({
+    candidateUserId: "candidate-001",
+    jobId: "job-001",
+    inputHash: initial!.inputHash,
+    scoringVersion: MATCHING_SCORING_VERSION,
+    status: "FAILED",
+    failureCode: "RETRYABLE:timeout",
+    attemptCount: 1,
+  });
+
+  const firstRetry = await repository.reconcileMatchingPairs({ limit: 1 });
+  const repeatedRetry = await repository.reconcileMatchingPairs({ limit: 1 });
+
+  assert.equal(firstRetry.pairs[0]?.queueGeneration, 2);
+  assert.deepEqual(repeatedRetry.pairs, firstRetry.pairs);
+
+  repository.seedEvaluation({
+    candidateUserId: "candidate-001",
+    jobId: "job-001",
+    inputHash: initial!.inputHash,
+    scoringVersion: MATCHING_SCORING_VERSION,
+    status: "FAILED",
+    failureCode: "RETRYABLE:timeout",
+    attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+  });
+  assert.deepEqual(
+    (await repository.reconcileMatchingPairs({ limit: 1 })).pairs,
+    [],
   );
 });
 
@@ -264,7 +371,7 @@ test("recommendation scheduler enqueues each canonical pair once", async () => {
         inputHash: "fingerprint-001",
       },
       deduplicationKey:
-        "matching-pair:candidate-001:job-001:fingerprint-001",
+        "matching-pair:candidate-001:job-001:fingerprint-001:1",
     },
     {
       name: "matching-pair",
@@ -274,7 +381,7 @@ test("recommendation scheduler enqueues each canonical pair once", async () => {
         inputHash: "fingerprint-002",
       },
       deduplicationKey:
-        "matching-pair:candidate-002:job-001:fingerprint-002",
+        "matching-pair:candidate-002:job-001:fingerprint-002:1",
     },
   ]);
   assert.equal(
@@ -285,6 +392,60 @@ test("recommendation scheduler enqueues each canonical pair once", async () => {
     ),
     false,
   );
+});
+
+test("retained failed generation 1 does not block generation 2, which still deduplicates", async () => {
+  const queue = new InMemoryJobQueue();
+  const baseRequest = {
+    name: "matching-pair" as const,
+    payload: {
+      candidateId: "candidate-001",
+      jobId: "job-001",
+      inputHash: "fingerprint-001",
+    },
+  };
+  const generation1 = await queue.enqueue({
+    ...baseRequest,
+    deduplicationKey:
+      "matching-pair:candidate-001:job-001:fingerprint-001:1",
+  });
+  await queue.markActive(generation1.id);
+  await queue.markFailed(generation1.id, {
+    code: "MATCHING_FAILED",
+    message: "provider unavailable",
+  });
+  const repository: RecommendationSchedulerRepository = {
+    async reconcileMatchingPairs() {
+      return {
+        pairs: [
+          {
+            ...baseRequest.payload,
+            queueGeneration: 2,
+          },
+        ],
+        scannedPairs: 1,
+        skippedPairs: 0,
+      };
+    },
+    async expireUnavailableRecommendations() {
+      return 0;
+    },
+  };
+  const scheduler = new RecommendationScheduler({
+    enabled: true,
+    intervalMs: 15 * 60 * 1000,
+    getRepository: () => repository,
+    enqueue: (request) => queue.enqueue(request),
+  });
+
+  const firstRetry = await scheduler.runOnce();
+  const repeatedRetry = await scheduler.runOnce();
+
+  assert.equal(firstRetry.pairJobs, 1);
+  assert.equal(firstRetry.deduplicated, 0);
+  assert.equal(repeatedRetry.pairJobs, 0);
+  assert.equal(repeatedRetry.deduplicated, 1);
+  assert.equal((await queue.get(generation1.id))?.status, "failed");
 });
 
 test("recommendation scheduler skips when database is unavailable", async () => {

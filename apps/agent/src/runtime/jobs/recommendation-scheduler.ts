@@ -92,12 +92,17 @@ export class RecommendationScheduler {
       for (const pair of reconciliation.pairs) {
         const request: JobRequest = {
           name: "matching-pair",
-          payload: pair,
+          payload: {
+            candidateId: pair.candidateId,
+            jobId: pair.jobId,
+            inputHash: pair.inputHash,
+          },
           deduplicationKey: [
             "matching-pair",
             pair.candidateId,
             pair.jobId,
             pair.inputHash,
+            pair.queueGeneration,
           ].join(":"),
         };
         const enqueueResult = await this.dependencies.enqueue(request);

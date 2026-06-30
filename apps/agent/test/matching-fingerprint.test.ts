@@ -88,7 +88,7 @@ test("matching fingerprint is stable for equivalent case, whitespace, and array 
   assert.equal(equivalent, baseline);
 });
 
-test("matching fingerprint changes for scoring and filter inputs but not timestamps", () => {
+test("matching fingerprint changes for all scoring and filter inputs but not timestamps", () => {
   const baseline = fingerprint();
   const variants: Array<[CandidateMatchInput, JobMatchInput]> = [
     [candidate({ skills: ["TypeScript"] }), job()],
@@ -125,13 +125,19 @@ test("matching fingerprint changes for scoring and filter inputs but not timesta
     ),
     baseline,
   );
-  assert.equal(
+});
+
+test("matching fingerprint changes with the job description", () => {
+  assert.notEqual(
     fingerprint(candidate(), job({ description: "Different description." })),
-    baseline,
+    fingerprint(),
   );
-  assert.equal(
+});
+
+test("matching fingerprint changes with the job type", () => {
+  assert.notEqual(
     fingerprint(candidate(), job({ jobType: "CONTRACT" })),
-    baseline,
+    fingerprint(),
   );
 });
 

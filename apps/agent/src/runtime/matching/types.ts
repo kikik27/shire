@@ -77,6 +77,7 @@ export type MatchingPairJobDescriptor = {
   candidateId: string;
   jobId: string;
   inputHash: string;
+  queueGeneration: number;
 };
 
 export type MatchingReconciliationCursor = {
