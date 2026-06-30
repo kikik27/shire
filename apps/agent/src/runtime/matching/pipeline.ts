@@ -65,7 +65,6 @@ export async function runJobMatchingForCandidate(
   const jobs = await repository.listActiveJobs({
     excludeRecruiterUserId: candidateUserId,
   });
-  const appliedJobIds = await repository.listAppliedJobIds(candidateUserId);
   const results: PairResult[] = [];
   for (const job of jobs) {
     results.push({
@@ -74,10 +73,7 @@ export async function runJobMatchingForCandidate(
       result: await evaluateMatchingPair(
         repository,
         { candidateUserId, jobId: job.id },
-        {
-          rerankDependencies,
-          preloaded: { candidate, job, appliedJobIds },
-        },
+        { rerankDependencies },
       ),
     });
   }
@@ -104,17 +100,13 @@ export async function runTalentMatchingForJob(
   const candidates = await repository.listConfirmedCandidates();
   const results: PairResult[] = [];
   for (const candidate of candidates) {
-    const appliedJobIds = await repository.listAppliedJobIds(candidate.userId);
     results.push({
       candidateUserId: candidate.userId,
       jobId,
       result: await evaluateMatchingPair(
         repository,
         { candidateUserId: candidate.userId, jobId },
-        {
-          rerankDependencies,
-          preloaded: { candidate, job, appliedJobIds },
-        },
+        { rerankDependencies },
       ),
     });
   }

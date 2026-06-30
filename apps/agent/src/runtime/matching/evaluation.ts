@@ -1,12 +1,10 @@
 import {
   MATCHING_SAVE_THRESHOLD,
-  MATCHING_SCORING_VERSION,
   recommendActionFromScore,
   type MatchingOutput,
 } from "@shire/shared";
 
 import { filterCandidateToJob } from "./filter";
-import { createMatchingFingerprint } from "./fingerprint";
 import {
   computeRuleScore,
   fallbackOutput,
@@ -15,8 +13,6 @@ import {
   type RerankResult,
 } from "./rerank";
 import type {
-  CandidateMatchInput,
-  JobMatchInput,
   MatchingEvaluation,
   MatchingPair,
   MatchingRecommendationPublication,
@@ -49,11 +45,6 @@ export type MatchingPairEvaluationResult = MatchingPairEvaluationAccounting &
 export type MatchingEvaluationDependencies = {
   rerank?: typeof rerankMatch;
   rerankDependencies?: RerankDependencies;
-  preloaded?: {
-    candidate: CandidateMatchInput;
-    job: JobMatchInput;
-    appliedJobIds: ReadonlySet<string>;
-  };
 };
 
 export async function evaluateMatchingPair(
@@ -61,13 +52,8 @@ export async function evaluateMatchingPair(
   pair: MatchingPair,
   dependencies: MatchingEvaluationDependencies = {},
 ): Promise<MatchingPairEvaluationResult> {
-  const [candidate, job] = dependencies.preloaded
-    ? [dependencies.preloaded.candidate, dependencies.preloaded.job]
-    : await Promise.all([
-        repository.getCandidateProfile(pair.candidateUserId),
-        repository.getActiveJob(pair.jobId),
-      ]);
-  if (!candidate || !job) {
+  const prepared = await repository.prepareEvaluation(pair);
+  if (prepared.status === "unavailable") {
     return {
       status: "ineligible",
       recommended: false,
@@ -77,17 +63,7 @@ export async function evaluateMatchingPair(
     };
   }
 
-  const appliedJobIds =
-    dependencies.preloaded?.appliedJobIds ??
-    (await repository.listAppliedJobIds(candidate.userId));
-  const inputHash = createMatchingFingerprint(candidate, job, {
-    hasApplied: appliedJobIds.has(job.id),
-  });
-  const claimResult = await repository.claimEvaluation({
-    ...pair,
-    inputHash,
-    scoringVersion: MATCHING_SCORING_VERSION,
-  });
+  const { candidate, job, appliedJobIds, claimResult } = prepared;
   if (claimResult.status === "busy") {
     return {
       status: "busy",

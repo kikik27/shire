@@ -20,12 +20,14 @@ import {
   type MatchingEvaluation,
   type MatchingEvaluationClaim,
   type MatchingEvaluationClaimInput,
+  type MatchingPair,
   type MatchingRepository,
   matchingPairKey,
   type MatchingRecommendationPublication,
   type RecommendationInput,
   type RecommendationSnapshot,
 } from "./types";
+import { createMatchingFingerprint } from "./fingerprint";
 
 export const RUNNING_EVALUATION_LEASE_MS = 5 * 60 * 1000;
 
@@ -199,6 +201,120 @@ function evaluationFence(
 type AgentTransaction = Parameters<
   Parameters<AgentDatabase["transaction"]>[0]
 >[0];
+type AgentQueryExecutor = Pick<AgentTransaction, "insert" | "select">;
+
+function findSqlState(error: unknown): string | undefined {
+  let current = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth += 1) {
+    const record = current as { code?: unknown; cause?: unknown };
+    if (typeof record.code === "string") {
+      return record.code;
+    }
+    current = record.cause;
+  }
+  return undefined;
+}
+
+export async function retryPostgresSerialization<T>(
+  operation: () => Promise<T>,
+  maxAttempts = 3,
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= maxAttempts || findSqlState(error) !== "40001") {
+        throw error;
+      }
+    }
+  }
+}
+
+async function getDrizzleEvaluation(
+  executor: AgentQueryExecutor,
+  pair: MatchingPair,
+): Promise<MatchingEvaluation | null> {
+  const [row] = await executor
+    .select()
+    .from(matchingEvaluations)
+    .where(
+      and(
+        eq(matchingEvaluations.candidateUserId, pair.candidateUserId),
+        eq(matchingEvaluations.jobId, pair.jobId),
+      ),
+    )
+    .limit(1);
+  return row ? mapEvaluation(row) : null;
+}
+
+async function claimDrizzleEvaluation(
+  executor: AgentQueryExecutor,
+  input: MatchingEvaluationClaimInput,
+  now: Date,
+) {
+  const leaseCutoff = new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS);
+  const [row] = await executor
+    .insert(matchingEvaluations)
+    .values({
+      ...input,
+      status: "RUNNING",
+      attemptCount: 1,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        matchingEvaluations.candidateUserId,
+        matchingEvaluations.jobId,
+      ],
+      set: {
+        inputHash: input.inputHash,
+        scoringVersion: input.scoringVersion,
+        status: "RUNNING",
+        ruleScore: null,
+        matchScore: null,
+        confidence: null,
+        recommendedAction: null,
+        reasons: [],
+        missingRequirements: [],
+        riskFlags: [],
+        failureCode: null,
+        attemptCount: sql`${matchingEvaluations.attemptCount} + 1`,
+        updatedAt: now,
+      },
+      setWhere: or(
+        ne(matchingEvaluations.inputHash, input.inputHash),
+        ne(matchingEvaluations.scoringVersion, input.scoringVersion),
+        eq(matchingEvaluations.status, "PENDING"),
+        and(
+          eq(matchingEvaluations.status, "FAILED"),
+          sql`${matchingEvaluations.failureCode} like 'RETRYABLE:%'`,
+        ),
+        and(
+          eq(matchingEvaluations.status, "RUNNING"),
+          lt(matchingEvaluations.updatedAt, leaseCutoff),
+        ),
+      ),
+    })
+    .returning();
+  if (row) {
+    return {
+      status: "claimed" as const,
+      claim: {
+        ...input,
+        attemptCount: row.attemptCount,
+      },
+    };
+  }
+
+  const evaluation = await getDrizzleEvaluation(executor, input);
+  if (!evaluation) {
+    throw new Error("matching evaluation claim lost without a persisted row");
+  }
+  return {
+    status: classifyEvaluationClaimConflict(input, evaluation),
+    evaluation,
+  };
+}
 
 async function writeDrizzleRecommendations(
   transaction: AgentTransaction,
@@ -312,82 +428,76 @@ export function createDrizzleMatchingRepository(
       return new Set(rows.map((row) => row.jobId));
     },
 
+    async prepareEvaluation(pair, options) {
+      return retryPostgresSerialization(() =>
+        database.transaction(
+          async (transaction) => {
+            const [candidateRow, jobRow, applicationRows] = await Promise.all([
+              transaction
+                .select()
+                .from(candidateProfiles)
+                .where(eq(candidateProfiles.userId, pair.candidateUserId))
+                .limit(1),
+              transaction
+                .select()
+                .from(jobs)
+                .where(eq(jobs.id, pair.jobId))
+                .limit(1),
+              transaction
+                .select({ jobId: applications.jobId })
+                .from(applications)
+                .where(eq(applications.candidateUserId, pair.candidateUserId)),
+            ]);
+            const candidateSource = candidateRow[0];
+            const jobSource = jobRow[0];
+            if (
+              !candidateSource ||
+              candidateSource.profileStatus !== "CONFIRMED" ||
+              !jobSource ||
+              jobSource.status !== "ACTIVE"
+            ) {
+              return { status: "unavailable" as const };
+            }
+
+            const candidate = mapCandidateProfileForMatching(candidateSource);
+            const job = mapJob(jobSource);
+            const appliedJobIds = new Set(
+              applicationRows.map((application) => application.jobId),
+            );
+            const claimResult = await claimDrizzleEvaluation(
+              transaction,
+              {
+                ...pair,
+                inputHash: createMatchingFingerprint(candidate, job, {
+                  hasApplied: appliedJobIds.has(job.id),
+                }),
+                scoringVersion: MATCHING_SCORING_VERSION,
+              },
+              options?.now ?? new Date(),
+            );
+            return {
+              status: "ready" as const,
+              candidate,
+              job,
+              appliedJobIds,
+              claimResult,
+            };
+          },
+          {
+            isolationLevel: "serializable",
+            accessMode: "read write",
+          },
+        ),
+      );
+    },
+
     async getEvaluation(pair) {
-      const [row] = await database
-        .select()
-        .from(matchingEvaluations)
-        .where(
-          and(
-            eq(matchingEvaluations.candidateUserId, pair.candidateUserId),
-            eq(matchingEvaluations.jobId, pair.jobId),
-          ),
-        )
-        .limit(1);
-      return row ? mapEvaluation(row) : null;
+      return getDrizzleEvaluation(database, pair);
     },
 
     async claimEvaluation(input, options) {
       const now = options?.now ?? new Date();
-      const leaseCutoff = new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS);
-      const [row] = await database
-        .insert(matchingEvaluations)
-        .values({
-          ...input,
-          status: "RUNNING",
-          attemptCount: 1,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [
-            matchingEvaluations.candidateUserId,
-            matchingEvaluations.jobId,
-          ],
-          set: {
-            inputHash: input.inputHash,
-            scoringVersion: input.scoringVersion,
-            status: "RUNNING",
-            ruleScore: null,
-            matchScore: null,
-            confidence: null,
-            recommendedAction: null,
-            reasons: [],
-            missingRequirements: [],
-            riskFlags: [],
-            failureCode: null,
-            attemptCount: sql`${matchingEvaluations.attemptCount} + 1`,
-            updatedAt: now,
-          },
-          setWhere: or(
-            ne(matchingEvaluations.inputHash, input.inputHash),
-            ne(matchingEvaluations.scoringVersion, input.scoringVersion),
-            eq(matchingEvaluations.status, "PENDING"),
-            and(
-              eq(matchingEvaluations.status, "FAILED"),
-              sql`${matchingEvaluations.failureCode} like 'RETRYABLE:%'`,
-            ),
-            and(
-              eq(matchingEvaluations.status, "RUNNING"),
-              lt(matchingEvaluations.updatedAt, leaseCutoff),
-            ),
-          ),
-        })
-        .returning();
-      if (row) {
-        return {
-          status: "claimed",
-          claim: {
-            ...input,
-            attemptCount: row.attemptCount,
-          },
-        };
-      }
-
-      const evaluation = await this.getEvaluation(input);
-      if (!evaluation) {
-        throw new Error("matching evaluation claim lost without a persisted row");
-      }
-      const status = classifyEvaluationClaimConflict(input, evaluation);
-      return { status, evaluation };
+      return claimDrizzleEvaluation(database, input, now);
     },
 
     async publishEvaluation(input) {
@@ -548,6 +658,74 @@ export function createInMemoryMatchingRepository(
     }
   }
 
+  function claimInMemoryEvaluation(
+    input: MatchingEvaluationClaimInput,
+    now: Date,
+  ) {
+    const key = matchingPairKey(input);
+    const existing = evaluations.get(key);
+    if (!existing) {
+      const evaluation: MatchingEvaluation = {
+        id: crypto.randomUUID(),
+        ...input,
+        status: "RUNNING",
+        ruleScore: null,
+        matchScore: null,
+        confidence: null,
+        recommendedAction: null,
+        reasons: [],
+        missingRequirements: [],
+        riskFlags: [],
+        failureCode: null,
+        attemptCount: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      evaluations.set(key, evaluation);
+      return {
+        status: "claimed" as const,
+        claim: { ...input, attemptCount: 1 },
+      };
+    }
+
+    const changed =
+      existing.inputHash !== input.inputHash ||
+      existing.scoringVersion !== input.scoringVersion;
+    const retryable =
+      existing.status === "FAILED" &&
+      existing.failureCode?.startsWith("RETRYABLE:");
+    const leaseExpired =
+      existing.status === "RUNNING" &&
+      existing.updatedAt.getTime() <
+        now.getTime() - RUNNING_EVALUATION_LEASE_MS;
+    if (changed || existing.status === "PENDING" || retryable || leaseExpired) {
+      const attemptCount = existing.attemptCount + 1;
+      evaluations.set(key, {
+        ...existing,
+        ...input,
+        status: "RUNNING",
+        ruleScore: null,
+        matchScore: null,
+        confidence: null,
+        recommendedAction: null,
+        reasons: [],
+        missingRequirements: [],
+        riskFlags: [],
+        failureCode: null,
+        attemptCount,
+        updatedAt: now,
+      });
+      return {
+        status: "claimed" as const,
+        claim: { ...input, attemptCount },
+      };
+    }
+    return {
+      status: classifyEvaluationClaimConflict(input, existing),
+      evaluation: existing,
+    };
+  }
+
   return {
     seedCandidate(candidate) {
       candidates.set(candidate.userId, candidate);
@@ -606,71 +784,44 @@ export function createInMemoryMatchingRepository(
     async listAppliedJobIds(candidateUserId) {
       return new Set(applied.get(candidateUserId) ?? []);
     },
+    async prepareEvaluation(pair, claimOptions) {
+      const candidate = candidates.get(pair.candidateUserId);
+      const job = jobStore.get(pair.jobId);
+      if (
+        !candidate ||
+        candidate.profileStatus !== "CONFIRMED" ||
+        !job ||
+        job.status !== "ACTIVE"
+      ) {
+        return { status: "unavailable" };
+      }
+      const appliedJobIds = new Set(applied.get(candidate.userId) ?? []);
+      const claimResult = claimInMemoryEvaluation(
+        {
+          ...pair,
+          inputHash: createMatchingFingerprint(candidate, job, {
+            hasApplied: appliedJobIds.has(job.id),
+          }),
+          scoringVersion: MATCHING_SCORING_VERSION,
+        },
+        claimOptions?.now ?? new Date(),
+      );
+      return {
+        status: "ready",
+        candidate,
+        job,
+        appliedJobIds,
+        claimResult,
+      };
+    },
     async getEvaluation(pair) {
       return evaluations.get(matchingPairKey(pair)) ?? null;
     },
     async claimEvaluation(input, claimOptions) {
-      const key = matchingPairKey(input);
-      const existing = evaluations.get(key);
-      const now = claimOptions?.now ?? new Date();
-      if (!existing) {
-        const evaluation: MatchingEvaluation = {
-          id: crypto.randomUUID(),
-          ...input,
-          status: "RUNNING",
-          ruleScore: null,
-          matchScore: null,
-          confidence: null,
-          recommendedAction: null,
-          reasons: [],
-          missingRequirements: [],
-          riskFlags: [],
-          failureCode: null,
-          attemptCount: 1,
-          createdAt: now,
-          updatedAt: now,
-        };
-        evaluations.set(key, evaluation);
-        return {
-          status: "claimed",
-          claim: { ...input, attemptCount: 1 },
-        };
-      }
-
-      const changed =
-        existing.inputHash !== input.inputHash ||
-        existing.scoringVersion !== input.scoringVersion;
-      const retryable =
-        existing.status === "FAILED" &&
-        existing.failureCode?.startsWith("RETRYABLE:");
-      const leaseExpired =
-        existing.status === "RUNNING" &&
-        existing.updatedAt.getTime() <
-          now.getTime() - RUNNING_EVALUATION_LEASE_MS;
-      if (changed || existing.status === "PENDING" || retryable || leaseExpired) {
-        const attemptCount = existing.attemptCount + 1;
-        evaluations.set(key, {
-          ...existing,
-          ...input,
-          status: "RUNNING",
-          ruleScore: null,
-          matchScore: null,
-          confidence: null,
-          recommendedAction: null,
-          reasons: [],
-          missingRequirements: [],
-          riskFlags: [],
-          failureCode: null,
-          attemptCount,
-          updatedAt: now,
-        });
-        return {
-          status: "claimed",
-          claim: { ...input, attemptCount },
-        };
-      }
-      const status = classifyEvaluationClaimConflict(input, existing);
-      return { status, evaluation: existing };
+      return claimInMemoryEvaluation(
+        input,
+        claimOptions?.now ?? new Date(),
+      );
     },
     async publishEvaluation(input) {
       const key = matchingPairKey(input);

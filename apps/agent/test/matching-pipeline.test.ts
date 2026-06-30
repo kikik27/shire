@@ -13,6 +13,7 @@ import {
   createInMemoryMatchingRepository,
   mapCandidateProfileForMatching,
   parsePersistedRecommendedAction,
+  retryPostgresSerialization,
   RUNNING_EVALUATION_LEASE_MS,
 } from "../src/runtime/matching/repository";
 import { evaluateMatchingPair } from "../src/runtime/matching/evaluation";
@@ -723,7 +724,7 @@ test("applying after recommendation completes a new ineligible evaluation withou
   );
 });
 
-test("pair evaluation reuses one application lookup for versioning and filtering", async () => {
+test("pair evaluation reads application state inside atomic preparation", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate());
   repository.seedJob(job());
@@ -752,7 +753,7 @@ test("pair evaluation reuses one application lookup for versioning and filtering
     },
   );
 
-  assert.equal(applicationReads, 1);
+  assert.equal(applicationReads, 0);
 });
 
 test("pending evaluations are unprocessed and claim attempt one", async () => {
@@ -941,6 +942,47 @@ test("stale workers cannot overwrite recommendations from a newer claim", async 
   });
   await staleWorker;
 
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ matchScore }) => matchScore),
+    [90, 90],
+  );
+});
+
+test("pair preparation cannot claim a detached stale source snapshot", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const staleCandidate = candidate({ headline: "Senior Frontend Engineer" });
+  repository.seedCandidate(staleCandidate);
+  repository.seedJob(job());
+  repository.seedCandidate(candidate({ headline: "Staff Frontend Engineer" }));
+  repository.getCandidateProfile = async () => staleCandidate;
+
+  const result = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    {
+      rerank: async (candidateInput) => ({
+        output: {
+          matchScore:
+            candidateInput.headline === "Staff Frontend Engineer" ? 90 : 75,
+          confidence: 0.9,
+          reasons: [candidateInput.headline ?? "unknown"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction:
+            candidateInput.headline === "Staff Frontend Engineer"
+              ? "SUGGEST_APPLY"
+              : "SAVE_ONLY",
+        },
+        llmInvoked: true,
+      }),
+    },
+  );
+
+  assert.equal(result.status, "completed");
+  if (result.status !== "completed") {
+    assert.fail("expected the current source snapshot to be evaluated");
+  }
+  assert.equal(result.output.matchScore, 90);
   assert.deepEqual(
     repository.snapshotRecommendations().map(({ matchScore }) => matchScore),
     [90, 90],
@@ -1166,6 +1208,30 @@ test("claim conflict classification never reports mismatched input as unchanged"
   );
 });
 
+test("serializable preparation retries only PostgreSQL serialization failures", async () => {
+  let attempts = 0;
+  const result = await retryPostgresSerialization(async () => {
+    attempts += 1;
+    if (attempts < 3) {
+      throw Object.assign(new Error("serialization failure"), { code: "40001" });
+    }
+    return "ready";
+  });
+
+  assert.equal(result, "ready");
+  assert.equal(attempts, 3);
+
+  let permanentAttempts = 0;
+  await assert.rejects(
+    retryPostgresSerialization(async () => {
+      permanentAttempts += 1;
+      throw Object.assign(new Error("constraint failure"), { code: "23514" });
+    }),
+    /constraint failure/,
+  );
+  assert.equal(permanentAttempts, 1);
+});
+
 test("invalid persisted recommendation actions throw while null remains valid", () => {
   assert.equal(parsePersistedRecommendedAction(null), null);
   assert.equal(
@@ -1178,7 +1244,7 @@ test("invalid persisted recommendation actions throw while null remains valid", 
   );
 });
 
-test("candidate pipeline preloads candidate, jobs, and applications once", async () => {
+test("candidate pipeline keeps detached reads out of pair preparation", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate());
   repository.seedJob(job({ id: "job-1" }));
@@ -1206,11 +1272,11 @@ test("candidate pipeline preloads candidate, jobs, and applications once", async
 
   assert.deepEqual(
     { candidateReads, jobReads, applicationReads },
-    { candidateReads: 1, jobReads: 0, applicationReads: 1 },
+    { candidateReads: 1, jobReads: 0, applicationReads: 0 },
   );
 });
 
-test("talent pipeline preloads its job and reads applications once per candidate", async () => {
+test("talent pipeline keeps detached reads out of pair preparation", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate({ userId: "candidate-1" }));
   repository.seedCandidate(candidate({ userId: "candidate-2" }));
@@ -1238,7 +1304,7 @@ test("talent pipeline preloads its job and reads applications once per candidate
 
   assert.deepEqual(
     { candidateReads, jobReads, applicationReads },
-    { candidateReads: 0, jobReads: 1, applicationReads: 2 },
+    { candidateReads: 0, jobReads: 1, applicationReads: 0 },
   );
 });
 

@@ -95,6 +95,16 @@ export type MatchingEvaluationClaimResult =
   | { status: "unchanged"; evaluation: MatchingEvaluation }
   | { status: "busy"; evaluation: MatchingEvaluation };
 
+export type PreparedMatchingEvaluation =
+  | { status: "unavailable" }
+  | {
+      status: "ready";
+      candidate: CandidateMatchInput;
+      job: JobMatchInput;
+      appliedJobIds: ReadonlySet<string>;
+      claimResult: MatchingEvaluationClaimResult;
+    };
+
 export type MatchingEvaluationCompletion = MatchingEvaluationClaim & {
   ruleScore: number | null;
   matchScore: number | null;
@@ -149,6 +159,11 @@ export type MatchingRepository = {
   getActiveJob(jobId: string): Promise<JobMatchInput | null>;
   /** Job ids a candidate has already applied to. */
   listAppliedJobIds(candidateUserId: string): Promise<Set<string>>;
+  /** Reads current source data and claims its fingerprint as one atomic snapshot. */
+  prepareEvaluation(
+    pair: MatchingPair,
+    options?: MatchingEvaluationClaimOptions,
+  ): Promise<PreparedMatchingEvaluation>;
   getEvaluation(pair: MatchingPair): Promise<MatchingEvaluation | null>;
   claimEvaluation(
     input: MatchingEvaluationClaimInput,
