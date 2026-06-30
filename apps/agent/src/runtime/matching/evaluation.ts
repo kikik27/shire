@@ -15,30 +15,45 @@ import {
   type RerankResult,
 } from "./rerank";
 import type {
+  CandidateMatchInput,
+  JobMatchInput,
   MatchingEvaluation,
-  MatchingEvaluationClaim,
   MatchingPair,
+  MatchingRecommendationPublication,
   MatchingRepository,
+  RecommendationInput,
 } from "./types";
 
-export type MatchingPairEvaluationResult =
-  | {
-      status: "completed";
-      recommended: boolean;
-      output: MatchingOutput;
-      llmInvoked: boolean;
-    }
-  | {
-      status: "unchanged";
-      recommended: boolean;
-      llmInvoked: false;
-    }
-  | { status: "busy"; recommended: false; llmInvoked: false }
-  | { status: "ineligible"; recommended: false; llmInvoked: false };
+type MatchingPairEvaluationAccounting = {
+  claimed: boolean;
+  recommendationRowsWritten: number;
+};
+
+export type MatchingPairEvaluationResult = MatchingPairEvaluationAccounting &
+  (
+    | {
+        status: "completed";
+        recommended: boolean;
+        output: MatchingOutput;
+        llmInvoked: boolean;
+      }
+    | {
+        status: "unchanged";
+        recommended: boolean;
+        llmInvoked: false;
+      }
+    | { status: "busy"; recommended: false; llmInvoked: false }
+    | { status: "ineligible"; recommended: false; llmInvoked: false }
+  );
 
 export type MatchingEvaluationDependencies = {
   rerank?: typeof rerankMatch;
   rerankDependencies?: RerankDependencies;
+  preloaded?: {
+    candidate: CandidateMatchInput;
+    job: JobMatchInput;
+    appliedJobIds: ReadonlySet<string>;
+  };
 };
 
 export async function evaluateMatchingPair(
@@ -46,20 +61,27 @@ export async function evaluateMatchingPair(
   pair: MatchingPair,
   dependencies: MatchingEvaluationDependencies = {},
 ): Promise<MatchingPairEvaluationResult> {
-  const [candidate, job] = await Promise.all([
-    repository.getCandidateProfile(pair.candidateUserId),
-    repository.getActiveJob(pair.jobId),
-  ]);
+  const [candidate, job] = dependencies.preloaded
+    ? [dependencies.preloaded.candidate, dependencies.preloaded.job]
+    : await Promise.all([
+        repository.getCandidateProfile(pair.candidateUserId),
+        repository.getActiveJob(pair.jobId),
+      ]);
   if (!candidate || !job) {
-    await repository.deactivateRecommendations(pair);
+    const recommendationRowsWritten =
+      await repository.deactivateRecommendations(pair);
     return {
       status: "ineligible",
       recommended: false,
       llmInvoked: false,
+      claimed: false,
+      recommendationRowsWritten,
     };
   }
 
-  const appliedJobIds = await repository.listAppliedJobIds(candidate.userId);
+  const appliedJobIds =
+    dependencies.preloaded?.appliedJobIds ??
+    (await repository.listAppliedJobIds(candidate.userId));
   const inputHash = createMatchingFingerprint(candidate, job, {
     hasApplied: appliedJobIds.has(job.id),
   });
@@ -69,50 +91,90 @@ export async function evaluateMatchingPair(
     scoringVersion: MATCHING_SCORING_VERSION,
   });
   if (claimResult.status === "busy") {
-    return { status: "busy", recommended: false, llmInvoked: false };
+    return {
+      status: "busy",
+      recommended: false,
+      llmInvoked: false,
+      claimed: false,
+      recommendationRowsWritten: 0,
+    };
   }
   if (claimResult.status === "unchanged") {
     const persistedOutput = outputFromEvaluation(claimResult.evaluation);
-    if (persistedOutput && isRecommended(
-      persistedOutput.matchScore,
-      persistedOutput.recommendedAction,
-    )) {
-      await saveRecommendations(repository, pair, job.recruiterUserId, persistedOutput);
-    } else {
-      await repository.deactivateRecommendations(pair);
+    const recommended = Boolean(
+      persistedOutput &&
+        isRecommended(
+          persistedOutput.matchScore,
+          persistedOutput.recommendedAction,
+        ),
+    );
+    const publication = await repository.repairRecommendations({
+      candidateUserId: claimResult.evaluation.candidateUserId,
+      jobId: claimResult.evaluation.jobId,
+      inputHash: claimResult.evaluation.inputHash,
+      scoringVersion: claimResult.evaluation.scoringVersion,
+      attemptCount: claimResult.evaluation.attemptCount,
+      recommendations:
+        persistedOutput && recommended
+          ? recommendationsFor(
+              pair,
+              job.recruiterUserId,
+              persistedOutput,
+            )
+          : null,
+    });
+    if (!publication.published) {
+      return {
+        status: "busy",
+        recommended: false,
+        llmInvoked: false,
+        claimed: false,
+        recommendationRowsWritten: 0,
+      };
     }
     return {
       status: "unchanged",
-      recommended: isRecommended(
-        claimResult.evaluation.matchScore,
-        claimResult.evaluation.recommendedAction,
-      ),
+      recommended,
       llmInvoked: false,
+      claimed: false,
+      recommendationRowsWritten: publication.recommendationRowsWritten,
     };
   }
 
   const { claim } = claimResult;
   try {
-    const filter = await filterCandidateToJob(
-      repository,
+    const filter = filterCandidateToJob(
       candidate.userId,
       job,
       appliedJobIds,
     );
     if (!filter.allowed) {
-      const completed = await persistIneligible(
-        repository,
-        claim,
-        pair,
-        filter.reason,
-      );
-      if (!completed) {
-        return { status: "busy", recommended: false, llmInvoked: false };
+      const publication = await repository.publishEvaluation({
+        ...claim,
+        ruleScore: null,
+        matchScore: null,
+        confidence: null,
+        recommendedAction: null,
+        reasons: [],
+        missingRequirements: [filter.reason],
+        riskFlags: [],
+        recommendations: null,
+      });
+      if (!publication.published) {
+        return {
+          status: "busy",
+          recommended: false,
+          llmInvoked: false,
+          claimed: true,
+          recommendationRowsWritten: 0,
+        };
       }
       return {
         status: "ineligible",
         recommended: false,
         llmInvoked: false,
+        claimed: true,
+        recommendationRowsWritten: publication.recommendationRowsWritten,
       };
     }
 
@@ -135,7 +197,7 @@ export async function evaluateMatchingPair(
       rerank.output.recommendedAction,
     );
 
-    const completed = await repository.completeEvaluation({
+    const publication = await repository.publishEvaluation({
       ...claim,
       ruleScore: ruleScore.score,
       matchScore: rerank.output.matchScore,
@@ -144,20 +206,22 @@ export async function evaluateMatchingPair(
       reasons: rerank.output.reasons,
       missingRequirements: rerank.output.missingRequirements,
       riskFlags: rerank.output.riskFlags,
+      recommendations: recommended
+        ? recommendationsFor(
+            pair,
+            job.recruiterUserId,
+            rerank.output,
+          )
+        : null,
     });
-    if (!completed) {
-      return { status: "busy", recommended: false, llmInvoked: false };
-    }
-
-    if (recommended) {
-      await saveRecommendations(
-        repository,
-        pair,
-        job.recruiterUserId,
-        rerank.output,
-      );
-    } else {
-      await repository.deactivateRecommendations(pair);
+    if (!publication.published) {
+      return {
+        status: "busy",
+        recommended: false,
+        llmInvoked: false,
+        claimed: true,
+        recommendationRowsWritten: 0,
+      };
     }
 
     return {
@@ -165,6 +229,8 @@ export async function evaluateMatchingPair(
       recommended,
       output: rerank.output,
       llmInvoked: rerank.llmInvoked,
+      claimed: true,
+      recommendationRowsWritten: publication.recommendationRowsWritten,
     };
   } catch (error) {
     await repository.failEvaluation({
@@ -196,36 +262,29 @@ function outputFromEvaluation(
   };
 }
 
-async function saveRecommendations(
-  repository: MatchingRepository,
+function recommendationsFor(
   pair: MatchingPair,
   recruiterUserId: string,
   output: MatchingOutput,
-) {
-  await Promise.all(
-    (["JOB_TO_CANDIDATE", "TALENT_TO_COMPANY"] as const).map((type) =>
-      repository.saveRecommendation({
-        ...pair,
-        type,
-        recruiterUserId,
-        matchScore: output.matchScore,
-        confidence: output.confidence,
-        reasons: output.reasons,
-        missingRequirements: output.missingRequirements,
-        riskFlags: output.riskFlags,
-        recommendedAction:
-          type === "JOB_TO_CANDIDATE"
-            ? recommendActionFromScore(
-                output.matchScore,
-                "candidate-to-job",
-              )
-            : recommendActionFromScore(
-                output.matchScore,
-                "job-to-candidate",
-              ),
-      }),
-    ),
-  );
+): MatchingRecommendationPublication {
+  const recommendation = (
+    type: RecommendationInput["type"],
+    direction: "candidate-to-job" | "job-to-candidate",
+  ): RecommendationInput => ({
+    ...pair,
+    type,
+    recruiterUserId,
+    matchScore: output.matchScore,
+    confidence: output.confidence,
+    reasons: output.reasons,
+    missingRequirements: output.missingRequirements,
+    riskFlags: output.riskFlags,
+    recommendedAction: recommendActionFromScore(output.matchScore, direction),
+  });
+  return [
+    recommendation("JOB_TO_CANDIDATE", "candidate-to-job"),
+    recommendation("TALENT_TO_COMPANY", "job-to-candidate"),
+  ];
 }
 
 function isRecommended(
@@ -237,26 +296,4 @@ function isRecommended(
     matchScore >= MATCHING_SAVE_THRESHOLD &&
     recommendedAction !== "IGNORE"
   );
-}
-
-async function persistIneligible(
-  repository: MatchingRepository,
-  claim: MatchingEvaluationClaim,
-  pair: MatchingPair,
-  reason: string,
-) {
-  const completed = await repository.completeEvaluation({
-    ...claim,
-    ruleScore: null,
-    matchScore: null,
-    confidence: null,
-    recommendedAction: null,
-    reasons: [],
-    missingRequirements: [reason],
-    riskFlags: [],
-  });
-  if (completed) {
-    await repository.deactivateRecommendations(pair);
-  }
-  return completed;
 }

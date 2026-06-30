@@ -82,6 +82,10 @@ export type MatchingEvaluationClaimInput = MatchingPair & {
   scoringVersion: string;
 };
 
+export type MatchingEvaluationClaimOptions = {
+  now?: Date;
+};
+
 export type MatchingEvaluationClaim = MatchingEvaluationClaimInput & {
   attemptCount: number;
 };
@@ -117,6 +121,23 @@ export type RecommendationInput = MatchingPair & {
   recommendedAction: MatchingOutput["recommendedAction"];
 };
 
+export type MatchingRecommendationPublication =
+  | readonly [RecommendationInput, RecommendationInput]
+  | null;
+
+export type MatchingEvaluationPublication = MatchingEvaluationCompletion & {
+  recommendations: MatchingRecommendationPublication;
+};
+
+export type MatchingRecommendationRepair = MatchingEvaluationClaim & {
+  recommendations: MatchingRecommendationPublication;
+};
+
+export type MatchingPublicationResult = {
+  published: boolean;
+  recommendationRowsWritten: number;
+};
+
 export type MatchingRepository = {
   /** Load a CONFIRMED candidate profile, or null when not found/not confirmed. */
   getCandidateProfile(userId: string): Promise<CandidateMatchInput | null>;
@@ -128,24 +149,21 @@ export type MatchingRepository = {
   getActiveJob(jobId: string): Promise<JobMatchInput | null>;
   /** Job ids a candidate has already applied to. */
   listAppliedJobIds(candidateUserId: string): Promise<Set<string>>;
-  /** Existing recommendation for a candidate/job/type pair, if any. */
-  getRecommendation(
-    candidateUserId: string,
-    jobId: string,
-    type: RecommendationType,
-  ): Promise<{ id: string } | null>;
-  /** Upsert a recommendation keyed on (candidate, job, type). Returns the id. */
-  saveRecommendation(input: RecommendationInput): Promise<string>;
   /** Expire both audience recommendations for one pair. */
   deactivateRecommendations(pair: MatchingPair): Promise<number>;
-  /** Expire recommendations whose canonical pair key is not active. */
-  deactivateIneligiblePairs(activePairs: Set<string>): Promise<number>;
   getEvaluation(pair: MatchingPair): Promise<MatchingEvaluation | null>;
   claimEvaluation(
     input: MatchingEvaluationClaimInput,
+    options?: MatchingEvaluationClaimOptions,
   ): Promise<MatchingEvaluationClaimResult>;
-  /** Returns false when a newer claim fenced this completion out. */
-  completeEvaluation(input: MatchingEvaluationCompletion): Promise<boolean>;
+  /** Completes a RUNNING claim and publishes both audiences atomically. */
+  publishEvaluation(
+    input: MatchingEvaluationPublication,
+  ): Promise<MatchingPublicationResult>;
+  /** Repairs publication only while the exact COMPLETED evaluation still wins. */
+  repairRecommendations(
+    input: MatchingRecommendationRepair,
+  ): Promise<MatchingPublicationResult>;
   /** Returns false when a newer claim fenced this failure out. */
   failEvaluation(input: MatchingEvaluationFailure): Promise<boolean>;
   /** Record an agent run for observability. */

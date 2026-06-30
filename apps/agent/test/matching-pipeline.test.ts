@@ -9,8 +9,11 @@ import {
   matchingEvaluations as agentMatchingEvaluations,
 } from "../src/runtime/db/schema";
 import {
+  classifyEvaluationClaimConflict,
   createInMemoryMatchingRepository,
   mapCandidateProfileForMatching,
+  parsePersistedRecommendedAction,
+  RUNNING_EVALUATION_LEASE_MS,
 } from "../src/runtime/matching/repository";
 import { evaluateMatchingPair } from "../src/runtime/matching/evaluation";
 import { createMatchingFingerprint } from "../src/runtime/matching/fingerprint";
@@ -800,7 +803,7 @@ test("evaluation completion is fenced against a newer input claim", async () => 
     assert.fail("expected both changed inputs to be claimed");
   }
 
-  const staleCompleted = await repository.completeEvaluation({
+  const staleCompleted = await repository.publishEvaluation({
     ...first.claim,
     ruleScore: 80,
     matchScore: 80,
@@ -809,8 +812,9 @@ test("evaluation completion is fenced against a newer input claim", async () => 
     reasons: [],
     missingRequirements: [],
     riskFlags: [],
+    recommendations: null,
   });
-  const currentCompleted = await repository.completeEvaluation({
+  const currentCompleted = await repository.publishEvaluation({
     ...second.claim,
     ruleScore: 90,
     matchScore: 90,
@@ -819,10 +823,11 @@ test("evaluation completion is fenced against a newer input claim", async () => 
     reasons: [],
     missingRequirements: [],
     riskFlags: [],
+    recommendations: null,
   });
 
-  assert.equal(staleCompleted, false);
-  assert.equal(currentCompleted, true);
+  assert.equal(staleCompleted.published, false);
+  assert.equal(currentCompleted.published, true);
   assert.equal(repository.snapshotEvaluations()[0]?.matchScore, 90);
 });
 
@@ -920,4 +925,340 @@ test("evaluation failures are recorded and rethrown", async () => {
   const evaluation = repository.snapshotEvaluations()[0];
   assert.equal(evaluation?.status, "FAILED");
   assert.match(evaluation?.failureCode ?? "", /provider unavailable/);
+});
+
+test("publication failure rolls back recommendations before marking the claim failed", async () => {
+  const repository = createInMemoryMatchingRepository({
+    beforeRecommendationWrite(input) {
+      if (input.type === "TALENT_TO_COMPANY") {
+        throw new Error("publication failed");
+      }
+    },
+  });
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+
+  await assert.rejects(
+    evaluateMatchingPair(
+      repository,
+      { candidateUserId: "candidate-1", jobId: "job-1" },
+      {
+        rerank: async () => ({
+          output: {
+            matchScore: 90,
+            confidence: 0.9,
+            reasons: ["strong fit"],
+            missingRequirements: [],
+            riskFlags: [],
+            recommendedAction: "SUGGEST_APPLY",
+          },
+          llmInvoked: true,
+        }),
+      },
+    ),
+    /publication failed/,
+  );
+
+  assert.deepEqual(repository.snapshotRecommendations(), []);
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "FAILED");
+});
+
+test("failure recording cannot overwrite a completed evaluation", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedEvaluation({
+    candidateUserId: "candidate-1",
+    jobId: "job-1",
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+    status: "COMPLETED",
+    attemptCount: 2,
+  });
+
+  const failed = await repository.failEvaluation({
+    candidateUserId: "candidate-1",
+    jobId: "job-1",
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+    attemptCount: 2,
+    failureCode: "late failure",
+    retryable: true,
+  });
+
+  assert.equal(failed, false);
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
+});
+
+test("unchanged recommendation repair is fenced against a newer claim", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    {
+      rerank: async () => ({
+        output: {
+          matchScore: 90,
+          confidence: 0.9,
+          reasons: ["strong fit"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_APPLY",
+        },
+        llmInvoked: false,
+      }),
+    },
+  );
+  const completed = repository.snapshotEvaluations()[0]!;
+
+  const newer = await repository.claimEvaluation({
+    candidateUserId: completed.candidateUserId,
+    jobId: completed.jobId,
+    inputHash: "newer-hash",
+    scoringVersion: completed.scoringVersion,
+  });
+  assert.equal(newer.status, "claimed");
+
+  const repaired = await repository.repairRecommendations({
+    candidateUserId: completed.candidateUserId,
+    jobId: completed.jobId,
+    inputHash: completed.inputHash,
+    scoringVersion: completed.scoringVersion,
+    attemptCount: completed.attemptCount,
+    recommendations: null,
+  });
+
+  assert.equal(repaired.published, false);
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ status }) => status),
+    ["NEW", "NEW"],
+  );
+});
+
+test("RUNNING claims are busy until their bounded lease expires", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const now = new Date("2026-06-30T00:10:00.000Z");
+  const pair = { candidateUserId: "candidate-1", jobId: "job-1" };
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+    status: "RUNNING",
+    attemptCount: 4,
+    updatedAt: new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS + 1),
+  });
+
+  const fresh = await repository.claimEvaluation(
+    { ...pair, inputHash: "hash-1", scoringVersion: "matching-v1" },
+    { now },
+  );
+  assert.equal(fresh.status, "busy");
+
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+    status: "RUNNING",
+    attemptCount: 4,
+    updatedAt: new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS),
+  });
+  const atCutoff = await repository.claimEvaluation(
+    { ...pair, inputHash: "hash-1", scoringVersion: "matching-v1" },
+    { now },
+  );
+  assert.equal(atCutoff.status, "busy");
+
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+    status: "RUNNING",
+    attemptCount: 4,
+    updatedAt: new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS - 1),
+  });
+  const expired = await repository.claimEvaluation(
+    { ...pair, inputHash: "hash-1", scoringVersion: "matching-v1" },
+    { now },
+  );
+
+  assert.equal(expired.status, "claimed");
+  if (expired.status !== "claimed") {
+    assert.fail("expected expired RUNNING evaluation to be reclaimed");
+  }
+  assert.equal(expired.claim.attemptCount, 5);
+});
+
+test("claim conflict classification never reports mismatched input as unchanged", () => {
+  const request = {
+    candidateUserId: "candidate-1",
+    jobId: "job-1",
+    inputHash: "requested-hash",
+    scoringVersion: "matching-v1",
+  };
+  const persisted = {
+    id: "evaluation-1",
+    ...request,
+    inputHash: "newer-hash",
+    status: "COMPLETED" as const,
+    ruleScore: 90,
+    matchScore: 90,
+    confidence: 0.9,
+    recommendedAction: "SUGGEST_APPLY" as const,
+    reasons: [],
+    missingRequirements: [],
+    riskFlags: [],
+    failureCode: null,
+    attemptCount: 2,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  assert.equal(classifyEvaluationClaimConflict(request, persisted), "busy");
+  assert.equal(
+    classifyEvaluationClaimConflict(
+      { ...request, inputHash: persisted.inputHash },
+      persisted,
+    ),
+    "unchanged",
+  );
+});
+
+test("invalid persisted recommendation actions throw while null remains valid", () => {
+  assert.equal(parsePersistedRecommendedAction(null), null);
+  assert.equal(
+    parsePersistedRecommendedAction("SUGGEST_APPLY"),
+    "SUGGEST_APPLY",
+  );
+  assert.throws(
+    () => parsePersistedRecommendedAction("INVALID"),
+    /invalid persisted recommendedAction/,
+  );
+});
+
+test("candidate pipeline preloads candidate, jobs, and applications once", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job({ id: "job-1" }));
+  repository.seedJob(job({ id: "job-2" }));
+  const originalCandidate = repository.getCandidateProfile.bind(repository);
+  const originalJob = repository.getActiveJob.bind(repository);
+  const originalApplications = repository.listAppliedJobIds.bind(repository);
+  let candidateReads = 0;
+  let jobReads = 0;
+  let applicationReads = 0;
+  repository.getCandidateProfile = async (userId) => {
+    candidateReads += 1;
+    return originalCandidate(userId);
+  };
+  repository.getActiveJob = async (jobId) => {
+    jobReads += 1;
+    return originalJob(jobId);
+  };
+  repository.listAppliedJobIds = async (candidateUserId) => {
+    applicationReads += 1;
+    return originalApplications(candidateUserId);
+  };
+
+  await runJobMatchingForCandidate(repository, "candidate-1", fallbackAgents());
+
+  assert.deepEqual(
+    { candidateReads, jobReads, applicationReads },
+    { candidateReads: 1, jobReads: 0, applicationReads: 1 },
+  );
+});
+
+test("talent pipeline preloads its job and reads applications once per candidate", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate({ userId: "candidate-1" }));
+  repository.seedCandidate(candidate({ userId: "candidate-2" }));
+  repository.seedJob(job());
+  const originalCandidate = repository.getCandidateProfile.bind(repository);
+  const originalJob = repository.getActiveJob.bind(repository);
+  const originalApplications = repository.listAppliedJobIds.bind(repository);
+  let candidateReads = 0;
+  let jobReads = 0;
+  let applicationReads = 0;
+  repository.getCandidateProfile = async (userId) => {
+    candidateReads += 1;
+    return originalCandidate(userId);
+  };
+  repository.getActiveJob = async (jobId) => {
+    jobReads += 1;
+    return originalJob(jobId);
+  };
+  repository.listAppliedJobIds = async (candidateUserId) => {
+    applicationReads += 1;
+    return originalApplications(candidateUserId);
+  };
+
+  await runTalentMatchingForJob(repository, "job-1", fallbackAgents());
+
+  assert.deepEqual(
+    { candidateReads, jobReads, applicationReads },
+    { candidateReads: 0, jobReads: 1, applicationReads: 2 },
+  );
+});
+
+test("matching run reports explicit pair and recommendation accounting", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const candidateInput = candidate();
+  const unchangedJob = job({ id: "job-unchanged" });
+  const busyJob = job({ id: "job-busy" });
+  repository.seedCandidate(candidateInput);
+  repository.seedJob(job({ id: "job-new" }));
+  repository.seedJob(unchangedJob);
+  repository.seedJob(busyJob);
+  repository.seedJob(job({ id: "job-applied" }));
+  repository.seedApplication(candidateInput.userId, "job-applied");
+  repository.seedEvaluation({
+    candidateUserId: candidateInput.userId,
+    jobId: unchangedJob.id,
+    inputHash: createMatchingFingerprint(candidateInput, unchangedJob, {
+      hasApplied: false,
+    }),
+    status: "COMPLETED",
+    attemptCount: 1,
+  });
+  repository.seedEvaluation({
+    candidateUserId: candidateInput.userId,
+    jobId: busyJob.id,
+    inputHash: createMatchingFingerprint(candidateInput, busyJob, {
+      hasApplied: false,
+    }),
+    status: "RUNNING",
+    attemptCount: 1,
+  });
+
+  const result = await runJobMatchingForCandidate(
+    repository,
+    candidateInput.userId,
+    fallbackAgents(),
+  );
+
+  assert.deepEqual(
+    {
+      attempted: result.attempted,
+      claimed: result.claimed,
+      completed: result.completed,
+      unchanged: result.unchanged,
+      busy: result.busy,
+      ineligible: result.ineligible,
+      savedPairs: result.savedPairs,
+      recommendationRowsWritten: result.recommendationRowsWritten,
+      evaluated: result.evaluated,
+      saved: result.saved.length,
+    },
+    {
+      attempted: 4,
+      claimed: 2,
+      completed: 2,
+      unchanged: 1,
+      busy: 1,
+      ineligible: 1,
+      savedPairs: 1,
+      recommendationRowsWritten: 2,
+      evaluated: 4,
+      saved: 1,
+    },
+  );
 });

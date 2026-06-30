@@ -25,7 +25,17 @@ export type MatchingOutcome = {
 
 export type MatchingRunResult = {
   direction: MatchingDirection;
+  attempted: number;
+  claimed: number;
+  completed: number;
+  unchanged: number;
+  busy: number;
+  ineligible: number;
+  savedPairs: number;
+  recommendationRowsWritten: number;
+  /** Backward-compatible alias for attempted pairs. */
   evaluated: number;
+  /** Backward-compatible completed recommendation outcomes. */
   saved: MatchingOutcome[];
   skippedBelowThreshold: number;
   llmInvoked: boolean;
@@ -55,6 +65,7 @@ export async function runJobMatchingForCandidate(
   const jobs = await repository.listActiveJobs({
     excludeRecruiterUserId: candidateUserId,
   });
+  const appliedJobIds = await repository.listAppliedJobIds(candidateUserId);
   const results: PairResult[] = [];
   for (const job of jobs) {
     results.push({
@@ -63,7 +74,10 @@ export async function runJobMatchingForCandidate(
       result: await evaluateMatchingPair(
         repository,
         { candidateUserId, jobId: job.id },
-        { rerankDependencies },
+        {
+          rerankDependencies,
+          preloaded: { candidate, job, appliedJobIds },
+        },
       ),
     });
   }
@@ -90,13 +104,17 @@ export async function runTalentMatchingForJob(
   const candidates = await repository.listConfirmedCandidates();
   const results: PairResult[] = [];
   for (const candidate of candidates) {
+    const appliedJobIds = await repository.listAppliedJobIds(candidate.userId);
     results.push({
       candidateUserId: candidate.userId,
       jobId,
       result: await evaluateMatchingPair(
         repository,
         { candidateUserId: candidate.userId, jobId },
-        { rerankDependencies },
+        {
+          rerankDependencies,
+          preloaded: { candidate, job, appliedJobIds },
+        },
       ),
     });
   }
@@ -140,6 +158,26 @@ function finishRun(
 
   return {
     direction,
+    attempted: results.length,
+    claimed: results.filter(({ result }) => result.claimed).length,
+    completed: results.filter(
+      ({ result }) =>
+        result.status === "completed" ||
+        (result.status === "ineligible" && result.claimed),
+    ).length,
+    unchanged: results.filter(({ result }) => result.status === "unchanged")
+      .length,
+    busy: results.filter(({ result }) => result.status === "busy").length,
+    ineligible: results.filter(({ result }) => result.status === "ineligible")
+      .length,
+    savedPairs: results.filter(
+      ({ result }) =>
+        result.recommended && result.recommendationRowsWritten > 0,
+    ).length,
+    recommendationRowsWritten: results.reduce(
+      (total, { result }) => total + result.recommendationRowsWritten,
+      0,
+    ),
     evaluated: results.length,
     saved,
     skippedBelowThreshold: results.filter(
@@ -157,6 +195,14 @@ function emptyRun(
 ): MatchingRunResult {
   return {
     direction,
+    attempted: 0,
+    claimed: 0,
+    completed: 0,
+    unchanged: 0,
+    busy: 0,
+    ineligible: 0,
+    savedPairs: 0,
+    recommendationRowsWritten: 0,
     evaluated: 0,
     saved: [],
     skippedBelowThreshold: 0,

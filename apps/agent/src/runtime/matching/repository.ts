@@ -1,6 +1,7 @@
-import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, lt, ne, or, sql } from "drizzle-orm";
 import {
   MATCHING_SCORING_VERSION,
+  type MatchingEvaluationStatus,
   type MatchingOutput,
 } from "@shire/shared";
 
@@ -17,10 +18,16 @@ import {
   type CandidateMatchInput,
   type JobMatchInput,
   type MatchingEvaluation,
+  type MatchingEvaluationClaim,
+  type MatchingEvaluationClaimInput,
   type MatchingRepository,
   matchingPairKey,
+  type MatchingRecommendationPublication,
+  type RecommendationInput,
   type RecommendationSnapshot,
 } from "./types";
+
+export const RUNNING_EVALUATION_LEASE_MS = 5 * 60 * 1000;
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -140,22 +147,113 @@ function mapEvaluation(
 ): MatchingEvaluation {
   return {
     ...row,
-    recommendedAction: asRecommendedAction(row.recommendedAction),
+    recommendedAction: parsePersistedRecommendedAction(row.recommendedAction),
     reasons: row.reasons ?? [],
     missingRequirements: row.missingRequirements ?? [],
     riskFlags: row.riskFlags ?? [],
   };
 }
 
-function asRecommendedAction(
+export function parsePersistedRecommendedAction(
   value: string | null,
 ): MatchingOutput["recommendedAction"] | null {
-  return value === "SUGGEST_APPLY" ||
+  if (value === null) {
+    return null;
+  }
+  if (
+    value === "SUGGEST_APPLY" ||
     value === "SUGGEST_INVITE" ||
     value === "SAVE_ONLY" ||
     value === "IGNORE"
-    ? value
-    : null;
+  ) {
+    return value;
+  }
+  throw new Error(`invalid persisted recommendedAction: ${value}`);
+}
+
+export function classifyEvaluationClaimConflict(
+  input: MatchingEvaluationClaimInput,
+  evaluation: MatchingEvaluation,
+): "busy" | "unchanged" {
+  return evaluation.inputHash === input.inputHash &&
+    evaluation.scoringVersion === input.scoringVersion &&
+    evaluation.status === "COMPLETED"
+    ? "unchanged"
+    : "busy";
+}
+
+function evaluationFence(
+  input: MatchingEvaluationClaim,
+  status: MatchingEvaluationStatus,
+) {
+  return and(
+    eq(matchingEvaluations.candidateUserId, input.candidateUserId),
+    eq(matchingEvaluations.jobId, input.jobId),
+    eq(matchingEvaluations.inputHash, input.inputHash),
+    eq(matchingEvaluations.scoringVersion, input.scoringVersion),
+    eq(matchingEvaluations.attemptCount, input.attemptCount),
+    eq(matchingEvaluations.status, status),
+  );
+}
+
+type AgentTransaction = Parameters<
+  Parameters<AgentDatabase["transaction"]>[0]
+>[0];
+
+async function writeDrizzleRecommendations(
+  transaction: AgentTransaction,
+  input: MatchingEvaluationClaim,
+  publications: MatchingRecommendationPublication,
+  now: Date,
+): Promise<number> {
+  if (publications === null) {
+    const expired = await transaction
+      .update(recommendations)
+      .set({ status: "EXPIRED", updatedAt: now })
+      .where(
+        and(
+          eq(recommendations.candidateUserId, input.candidateUserId),
+          eq(recommendations.jobId, input.jobId),
+          ne(recommendations.status, "EXPIRED"),
+        ),
+      )
+      .returning({ id: recommendations.id });
+    return expired.length;
+  }
+
+  let written = 0;
+  for (const publication of publications) {
+    const values = {
+      ...publication,
+      confidence: String(publication.confidence),
+      status: "NEW" as const,
+      updatedAt: now,
+    };
+    const rows = await transaction
+      .insert(recommendations)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [
+          recommendations.candidateUserId,
+          recommendations.jobId,
+          recommendations.type,
+        ],
+        set: {
+          recruiterUserId: values.recruiterUserId,
+          matchScore: values.matchScore,
+          confidence: values.confidence,
+          reasons: values.reasons,
+          missingRequirements: values.missingRequirements,
+          riskFlags: values.riskFlags,
+          recommendedAction: values.recommendedAction,
+          status: "NEW",
+          updatedAt: now,
+        },
+      })
+      .returning({ id: recommendations.id });
+    written += rows.length;
+  }
+  return written;
 }
 
 export function createDrizzleMatchingRepository(
@@ -214,62 +312,6 @@ export function createDrizzleMatchingRepository(
       return new Set(rows.map((row) => row.jobId));
     },
 
-    async getRecommendation(candidateUserId, jobId, type) {
-      const [row] = await database
-        .select({ id: recommendations.id })
-        .from(recommendations)
-        .where(
-          and(
-            eq(recommendations.candidateUserId, candidateUserId),
-            eq(recommendations.jobId, jobId),
-            eq(recommendations.type, type),
-          ),
-        )
-        .limit(1);
-      return row ? { id: row.id } : null;
-    },
-
-    async saveRecommendation(input) {
-      const values = {
-        type: input.type,
-        candidateUserId: input.candidateUserId,
-        recruiterUserId: input.recruiterUserId,
-        jobId: input.jobId,
-        matchScore: input.matchScore,
-        confidence: String(input.confidence),
-        reasons: input.reasons,
-        missingRequirements: input.missingRequirements,
-        riskFlags: input.riskFlags,
-        recommendedAction: input.recommendedAction,
-        status: "NEW" as const,
-        updatedAt: new Date(),
-      };
-
-      const [row] = await database
-        .insert(recommendations)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [
-            recommendations.candidateUserId,
-            recommendations.jobId,
-            recommendations.type,
-          ],
-          set: {
-            recruiterUserId: values.recruiterUserId,
-            matchScore: values.matchScore,
-            confidence: values.confidence,
-            reasons: values.reasons,
-            missingRequirements: values.missingRequirements,
-            riskFlags: values.riskFlags,
-            recommendedAction: values.recommendedAction,
-            status: "NEW",
-            updatedAt: values.updatedAt,
-          },
-        })
-        .returning({ id: recommendations.id });
-      return row!.id;
-    },
-
     async deactivateRecommendations(pair) {
       const rows = await database
         .update(recommendations)
@@ -283,38 +325,6 @@ export function createDrizzleMatchingRepository(
         )
         .returning({ id: recommendations.id });
       return rows.length;
-    },
-
-    async deactivateIneligiblePairs(activePairs) {
-      const rows = await database
-        .select({
-          id: recommendations.id,
-          candidateUserId: recommendations.candidateUserId,
-          jobId: recommendations.jobId,
-        })
-        .from(recommendations)
-        .where(ne(recommendations.status, "EXPIRED"));
-      const staleIds = rows
-        .filter(
-          (row) =>
-            row.jobId !== null &&
-            !activePairs.has(
-              matchingPairKey({
-                candidateUserId: row.candidateUserId,
-                jobId: row.jobId,
-              }),
-            ),
-        )
-        .map((row) => row.id);
-      if (staleIds.length === 0) {
-        return 0;
-      }
-      const expired = await database
-        .update(recommendations)
-        .set({ status: "EXPIRED", updatedAt: new Date() })
-        .where(inArray(recommendations.id, staleIds))
-        .returning({ id: recommendations.id });
-      return expired.length;
     },
 
     async getEvaluation(pair) {
@@ -331,8 +341,9 @@ export function createDrizzleMatchingRepository(
       return row ? mapEvaluation(row) : null;
     },
 
-    async claimEvaluation(input) {
-      const now = new Date();
+    async claimEvaluation(input, options) {
+      const now = options?.now ?? new Date();
+      const leaseCutoff = new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS);
       const [row] = await database
         .insert(matchingEvaluations)
         .values({
@@ -369,6 +380,10 @@ export function createDrizzleMatchingRepository(
               eq(matchingEvaluations.status, "FAILED"),
               sql`${matchingEvaluations.failureCode} like 'RETRYABLE:%'`,
             ),
+            and(
+              eq(matchingEvaluations.status, "RUNNING"),
+              lt(matchingEvaluations.updatedAt, leaseCutoff),
+            ),
           ),
         })
         .returning();
@@ -386,38 +401,64 @@ export function createDrizzleMatchingRepository(
       if (!evaluation) {
         throw new Error("matching evaluation claim lost without a persisted row");
       }
-      return evaluation.status === "RUNNING"
-        ? { status: "busy", evaluation }
-        : { status: "unchanged", evaluation };
+      const status = classifyEvaluationClaimConflict(input, evaluation);
+      return { status, evaluation };
     },
 
-    async completeEvaluation(input) {
-      const rows = await database
-        .update(matchingEvaluations)
-        .set({
-          status: "COMPLETED",
-          ruleScore: input.ruleScore,
-          matchScore: input.matchScore,
-          confidence: input.confidence,
-          recommendedAction: input.recommendedAction,
-          reasons: input.reasons,
-          missingRequirements: input.missingRequirements,
-          riskFlags: input.riskFlags,
-          failureCode: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(matchingEvaluations.candidateUserId, input.candidateUserId),
-            eq(matchingEvaluations.jobId, input.jobId),
-            eq(matchingEvaluations.inputHash, input.inputHash),
-            eq(matchingEvaluations.scoringVersion, input.scoringVersion),
-            eq(matchingEvaluations.attemptCount, input.attemptCount),
-            eq(matchingEvaluations.status, "RUNNING"),
+    async publishEvaluation(input) {
+      return database.transaction(async (transaction) => {
+        const now = new Date();
+        const rows = await transaction
+          .update(matchingEvaluations)
+          .set({
+            status: "COMPLETED",
+            ruleScore: input.ruleScore,
+            matchScore: input.matchScore,
+            confidence: input.confidence,
+            recommendedAction: input.recommendedAction,
+            reasons: input.reasons,
+            missingRequirements: input.missingRequirements,
+            riskFlags: input.riskFlags,
+            failureCode: null,
+            updatedAt: now,
+          })
+          .where(evaluationFence(input, "RUNNING"))
+          .returning({ id: matchingEvaluations.id });
+        if (rows.length !== 1) {
+          return { published: false, recommendationRowsWritten: 0 };
+        }
+        return {
+          published: true,
+          recommendationRowsWritten: await writeDrizzleRecommendations(
+            transaction,
+            input,
+            input.recommendations,
+            now,
           ),
-        )
-        .returning({ id: matchingEvaluations.id });
-      return rows.length === 1;
+        };
+      });
+    },
+
+    async repairRecommendations(input) {
+      return database.transaction(async (transaction) => {
+        const rows = await transaction
+          .update(matchingEvaluations)
+          .set({ updatedAt: sql`${matchingEvaluations.updatedAt}` })
+          .where(evaluationFence(input, "COMPLETED"))
+          .returning({ id: matchingEvaluations.id });
+        if (rows.length !== 1) {
+          return { published: false, recommendationRowsWritten: 0 };
+        }
+        return {
+          published: true,
+          recommendationRowsWritten: await writeDrizzleRecommendations(
+            transaction,
+            input,
+            input.recommendations,
+            new Date(),
+          ),
+        };
+      });
     },
 
     async failEvaluation(input) {
@@ -428,19 +469,7 @@ export function createDrizzleMatchingRepository(
           failureCode: `${input.retryable ? "RETRYABLE" : "FINAL"}:${input.failureCode}`,
           updatedAt: new Date(),
         })
-        .where(
-          and(
-            eq(matchingEvaluations.candidateUserId, input.candidateUserId),
-            eq(matchingEvaluations.jobId, input.jobId),
-            eq(matchingEvaluations.inputHash, input.inputHash),
-            eq(matchingEvaluations.scoringVersion, input.scoringVersion),
-            eq(matchingEvaluations.attemptCount, input.attemptCount),
-            or(
-              eq(matchingEvaluations.status, "RUNNING"),
-              eq(matchingEvaluations.status, "COMPLETED"),
-            ),
-          ),
-        )
+        .where(evaluationFence(input, "RUNNING"))
         .returning({ id: matchingEvaluations.id });
       return rows.length === 1;
     },
@@ -463,7 +492,11 @@ export function createDrizzleMatchingRepository(
  * In-memory repository for unit tests. Avoids any Postgres dependency while
  * exercising the full pipeline (filter → rule score → rerank → save).
  */
-export function createInMemoryMatchingRepository(): MatchingRepository & {
+export function createInMemoryMatchingRepository(
+  options: {
+    beforeRecommendationWrite?: (input: RecommendationInput) => void;
+  } = {},
+): MatchingRepository & {
   seedCandidate(candidate: CandidateMatchInput): void;
   seedJob(job: JobMatchInput): void;
   seedApplication(candidateUserId: string, jobId: string): void;
@@ -482,6 +515,53 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
   const applied = new Map<string, Set<string>>();
   const savedRecommendations = new Map<string, RecommendationSnapshot>();
   const evaluations = new Map<string, MatchingEvaluation>();
+
+  function stageRecommendations(
+    input: MatchingEvaluationClaim,
+    publications: MatchingRecommendationPublication,
+  ) {
+    const staged = new Map(savedRecommendations);
+    let written = 0;
+    if (publications === null) {
+      for (const [key, recommendation] of staged) {
+        if (
+          recommendation.candidateUserId === input.candidateUserId &&
+          recommendation.jobId === input.jobId &&
+          recommendation.status !== "EXPIRED"
+        ) {
+          staged.set(key, { ...recommendation, status: "EXPIRED" });
+          written += 1;
+        }
+      }
+      return { staged, written };
+    }
+
+    for (const publication of publications) {
+      options.beforeRecommendationWrite?.(publication);
+      const key = `${publication.candidateUserId}:${publication.jobId}:${publication.type}`;
+      const existing = staged.get(key);
+      staged.set(key, {
+        id: existing?.id ?? crypto.randomUUID(),
+        type: publication.type,
+        candidateUserId: publication.candidateUserId,
+        jobId: publication.jobId,
+        matchScore: publication.matchScore,
+        recommendedAction: publication.recommendedAction,
+        status: "NEW",
+      });
+      written += 1;
+    }
+    return { staged, written };
+  }
+
+  function commitRecommendations(
+    staged: Map<string, RecommendationSnapshot>,
+  ) {
+    savedRecommendations.clear();
+    for (const [key, recommendation] of staged) {
+      savedRecommendations.set(key, recommendation);
+    }
+  }
 
   return {
     seedCandidate(candidate) {
@@ -541,27 +621,6 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
     async listAppliedJobIds(candidateUserId) {
       return new Set(applied.get(candidateUserId) ?? []);
     },
-    async getRecommendation(candidateUserId, jobId, type) {
-      const found = savedRecommendations.get(
-        `${candidateUserId}:${jobId}:${type}`,
-      );
-      return found ? { id: found.id } : null;
-    },
-    async saveRecommendation(input) {
-      const key = `${input.candidateUserId}:${input.jobId}:${input.type}`;
-      const existing = savedRecommendations.get(key);
-      const recommendation: RecommendationSnapshot = {
-        id: existing?.id ?? crypto.randomUUID(),
-        type: input.type,
-        candidateUserId: input.candidateUserId,
-        jobId: input.jobId,
-        matchScore: input.matchScore,
-        recommendedAction: input.recommendedAction,
-        status: "NEW",
-      };
-      savedRecommendations.set(key, recommendation);
-      return recommendation.id;
-    },
     async deactivateRecommendations(pair) {
       let count = 0;
       for (const [key, recommendation] of savedRecommendations) {
@@ -579,30 +638,14 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
       }
       return count;
     },
-    async deactivateIneligiblePairs(activePairs) {
-      let count = 0;
-      for (const [key, recommendation] of savedRecommendations) {
-        if (
-          recommendation.status !== "EXPIRED" &&
-          !activePairs.has(matchingPairKey(recommendation))
-        ) {
-          savedRecommendations.set(key, {
-            ...recommendation,
-            status: "EXPIRED",
-          });
-          count += 1;
-        }
-      }
-      return count;
-    },
     async getEvaluation(pair) {
       return evaluations.get(matchingPairKey(pair)) ?? null;
     },
-    async claimEvaluation(input) {
+    async claimEvaluation(input, claimOptions) {
       const key = matchingPairKey(input);
       const existing = evaluations.get(key);
+      const now = claimOptions?.now ?? new Date();
       if (!existing) {
-        const now = new Date();
         const evaluation: MatchingEvaluation = {
           id: crypto.randomUUID(),
           ...input,
@@ -632,7 +675,11 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
       const retryable =
         existing.status === "FAILED" &&
         existing.failureCode?.startsWith("RETRYABLE:");
-      if (changed || existing.status === "PENDING" || retryable) {
+      const leaseExpired =
+        existing.status === "RUNNING" &&
+        existing.updatedAt.getTime() <
+          now.getTime() - RUNNING_EVALUATION_LEASE_MS;
+      if (changed || existing.status === "PENDING" || retryable || leaseExpired) {
         const attemptCount = existing.attemptCount + 1;
         evaluations.set(key, {
           ...existing,
@@ -647,18 +694,17 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
           riskFlags: [],
           failureCode: null,
           attemptCount,
-          updatedAt: new Date(),
+          updatedAt: now,
         });
         return {
           status: "claimed",
           claim: { ...input, attemptCount },
         };
       }
-      return existing.status === "RUNNING"
-        ? { status: "busy", evaluation: existing }
-        : { status: "unchanged", evaluation: existing };
+      const status = classifyEvaluationClaimConflict(input, existing);
+      return { status, evaluation: existing };
     },
-    async completeEvaluation(input) {
+    async publishEvaluation(input) {
       const key = matchingPairKey(input);
       const existing = evaluations.get(key);
       if (
@@ -668,8 +714,12 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
         existing.scoringVersion !== input.scoringVersion ||
         existing.attemptCount !== input.attemptCount
       ) {
-        return false;
+        return { published: false, recommendationRowsWritten: 0 };
       }
+      const { staged, written } = stageRecommendations(
+        input,
+        input.recommendations,
+      );
       evaluations.set(key, {
         ...existing,
         status: "COMPLETED",
@@ -683,14 +733,33 @@ export function createInMemoryMatchingRepository(): MatchingRepository & {
         failureCode: null,
         updatedAt: new Date(),
       });
-      return true;
+      commitRecommendations(staged);
+      return { published: true, recommendationRowsWritten: written };
+    },
+    async repairRecommendations(input) {
+      const existing = evaluations.get(matchingPairKey(input));
+      if (
+        !existing ||
+        existing.status !== "COMPLETED" ||
+        existing.inputHash !== input.inputHash ||
+        existing.scoringVersion !== input.scoringVersion ||
+        existing.attemptCount !== input.attemptCount
+      ) {
+        return { published: false, recommendationRowsWritten: 0 };
+      }
+      const { staged, written } = stageRecommendations(
+        input,
+        input.recommendations,
+      );
+      commitRecommendations(staged);
+      return { published: true, recommendationRowsWritten: written };
     },
     async failEvaluation(input) {
       const key = matchingPairKey(input);
       const existing = evaluations.get(key);
       if (
         !existing ||
-        (existing.status !== "RUNNING" && existing.status !== "COMPLETED") ||
+        existing.status !== "RUNNING" ||
         existing.inputHash !== input.inputHash ||
         existing.scoringVersion !== input.scoringVersion ||
         existing.attemptCount !== input.attemptCount
