@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { MATCHING_EVALUATION_STATUSES } from "@shire/shared";
-import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 
 import {
   matchingEvaluationStatusEnum as agentMatchingEvaluationStatusEnum,
@@ -26,9 +26,13 @@ import {
 
 function matchingEvaluationTableContract(table: PgTable) {
   const config = getTableConfig(table);
+  const dialect = new PgDialect();
 
   return {
     name: config.name,
+    confidenceMode: config.columns.find(
+      (column) => column.name === "confidence",
+    )?.dataType,
     columns: config.columns.map((column) => ({
       name: column.name,
       type: column.columnType,
@@ -49,6 +53,10 @@ function matchingEvaluationTableContract(table: PgTable) {
         onDelete: foreignKey.onDelete,
       };
     }),
+    checks: config.checks.map((constraint) => ({
+      name: constraint.name,
+      sql: dialect.sqlToQuery(constraint.value).sql,
+    })),
   };
 }
 
@@ -65,6 +73,7 @@ test("matching evaluation schemas share the canonical persisted record contract"
   assert.deepEqual(agentContract, webContract);
   assert.deepEqual(agentContract, {
     name: "matching_evaluations",
+    confidenceMode: "number",
     columns: [
       { name: "id", type: "PgUUID", notNull: true, hasDefault: true },
       {
@@ -101,7 +110,7 @@ test("matching evaluation schemas share the canonical persisted record contract"
       },
       {
         name: "confidence",
-        type: "PgNumeric",
+        type: "PgNumericNumber",
         notNull: false,
         hasDefault: false,
       },
@@ -173,6 +182,24 @@ test("matching evaluation schemas share the canonical persisted record contract"
         foreignColumns: ["id"],
         foreignTable: "jobs",
         onDelete: "cascade",
+      },
+    ],
+    checks: [
+      {
+        name: "matching_evaluations_confidence_range_check",
+        sql: '"matching_evaluations"."confidence" is null or "matching_evaluations"."confidence" between 0 and 1',
+      },
+      {
+        name: "matching_evaluations_rule_score_range_check",
+        sql: '"matching_evaluations"."rule_score" is null or "matching_evaluations"."rule_score" between 0 and 100',
+      },
+      {
+        name: "matching_evaluations_match_score_range_check",
+        sql: '"matching_evaluations"."match_score" is null or "matching_evaluations"."match_score" between 0 and 100',
+      },
+      {
+        name: "matching_evaluations_attempt_count_nonnegative_check",
+        sql: '"matching_evaluations"."attempt_count" >= 0',
       },
     ],
   });

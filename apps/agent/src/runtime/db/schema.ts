@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   customType,
   index,
   integer,
@@ -166,7 +168,11 @@ export const matchingEvaluations = pgTable(
     status: matchingEvaluationStatusEnum("status").notNull(),
     ruleScore: integer("rule_score"),
     matchScore: integer("match_score"),
-    confidence: numeric("confidence", { precision: 3, scale: 2 }),
+    confidence: numeric("confidence", {
+      precision: 3,
+      scale: 2,
+      mode: "number",
+    }),
     recommendedAction: text("recommended_action"),
     reasons: jsonb("reasons").$type<string[]>().default([]).notNull(),
     missingRequirements: jsonb("missing_requirements")
@@ -185,6 +191,22 @@ export const matchingEvaluations = pgTable(
     ),
     index("matching_evaluations_status_idx").on(table.status),
     index("matching_evaluations_updated_at_idx").on(table.updatedAt),
+    check(
+      "matching_evaluations_confidence_range_check",
+      sql`${table.confidence} is null or ${table.confidence} between 0 and 1`,
+    ),
+    check(
+      "matching_evaluations_rule_score_range_check",
+      sql`${table.ruleScore} is null or ${table.ruleScore} between 0 and 100`,
+    ),
+    check(
+      "matching_evaluations_match_score_range_check",
+      sql`${table.matchScore} is null or ${table.matchScore} between 0 and 100`,
+    ),
+    check(
+      "matching_evaluations_attempt_count_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
   ],
 );
 

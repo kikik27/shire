@@ -16,7 +16,11 @@ CREATE TABLE "matching_evaluations" (
 	"failure_code" text,
 	"attempt_count" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "matching_evaluations_confidence_range_check" CHECK ("matching_evaluations"."confidence" is null or "matching_evaluations"."confidence" between 0 and 1),
+	CONSTRAINT "matching_evaluations_rule_score_range_check" CHECK ("matching_evaluations"."rule_score" is null or "matching_evaluations"."rule_score" between 0 and 100),
+	CONSTRAINT "matching_evaluations_match_score_range_check" CHECK ("matching_evaluations"."match_score" is null or "matching_evaluations"."match_score" between 0 and 100),
+	CONSTRAINT "matching_evaluations_attempt_count_nonnegative_check" CHECK ("matching_evaluations"."attempt_count" >= 0)
 );
 --> statement-breakpoint
 ALTER TABLE "matching_evaluations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

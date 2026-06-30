@@ -1,5 +1,5 @@
 {
-  "id": "79a95529-c0a3-4515-9c26-66d51fcdfa3a",
+  "id": "7c4a883d-ed34-4fb6-8192-97ef66cfa80a",
   "prevId": "d6bde561-4d02-477d-a9ba-d1cf83190d99",
   "version": "7",
   "dialect": "postgresql",
@@ -750,7 +750,24 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "matching_evaluations_confidence_range_check": {
+          "name": "matching_evaluations_confidence_range_check",
+          "value": "\"matching_evaluations\".\"confidence\" is null or \"matching_evaluations\".\"confidence\" between 0 and 1"
+        },
+        "matching_evaluations_rule_score_range_check": {
+          "name": "matching_evaluations_rule_score_range_check",
+          "value": "\"matching_evaluations\".\"rule_score\" is null or \"matching_evaluations\".\"rule_score\" between 0 and 100"
+        },
+        "matching_evaluations_match_score_range_check": {
+          "name": "matching_evaluations_match_score_range_check",
+          "value": "\"matching_evaluations\".\"match_score\" is null or \"matching_evaluations\".\"match_score\" between 0 and 100"
+        },
+        "matching_evaluations_attempt_count_nonnegative_check": {
+          "name": "matching_evaluations_attempt_count_nonnegative_check",
+          "value": "\"matching_evaluations\".\"attempt_count\" >= 0"
+        }
+      },
       "isRLSEnabled": true
     },
     "public.recommendations": {
