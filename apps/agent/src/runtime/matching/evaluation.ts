@@ -59,7 +59,10 @@ export async function evaluateMatchingPair(
     };
   }
 
-  const inputHash = createMatchingFingerprint(candidate, job);
+  const appliedJobIds = await repository.listAppliedJobIds(candidate.userId);
+  const inputHash = createMatchingFingerprint(candidate, job, {
+    hasApplied: appliedJobIds.has(job.id),
+  });
   const claimResult = await repository.claimEvaluation({
     ...pair,
     inputHash,
@@ -94,6 +97,7 @@ export async function evaluateMatchingPair(
       repository,
       candidate.userId,
       job,
+      appliedJobIds,
     );
     if (!filter.allowed) {
       const completed = await persistIneligible(

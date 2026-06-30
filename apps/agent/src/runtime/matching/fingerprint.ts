@@ -20,9 +20,13 @@ function normalizeList(values: string[]): string[] {
 export function createMatchingFingerprint(
   candidate: CandidateMatchInput,
   job: JobMatchInput,
+  eligibility: { hasApplied: boolean },
 ): string {
   const canonicalInput = {
     scoringVersion: MATCHING_SCORING_VERSION,
+    eligibility: {
+      hasApplied: eligibility.hasApplied,
+    },
     candidate: {
       userId: candidate.userId.trim(),
       fullName: normalizeText(candidate.fullName),
@@ -48,12 +52,10 @@ export function createMatchingFingerprint(
       id: job.id.trim(),
       recruiterUserId: job.recruiterUserId.trim(),
       title: normalizeText(job.title),
-      description: normalizeText(job.description),
       companyName: normalizeText(job.companyName),
       location: normalizeText(job.location),
       remote: Boolean(job.remote),
       salaryRange: normalizeText(job.salaryRange),
-      jobType: normalizeText(job.jobType),
       experienceLevel: normalizeText(job.experienceLevel),
       skillsRequired: normalizeList(job.skillsRequired),
       status: normalizeText(job.status),

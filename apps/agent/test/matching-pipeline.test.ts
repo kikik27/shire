@@ -471,7 +471,9 @@ test("completed unchanged pairs skip reranking", async () => {
   repository.seedEvaluation({
     candidateUserId: candidateInput.userId,
     jobId: jobInput.id,
-    inputHash: createMatchingFingerprint(candidateInput, jobInput),
+    inputHash: createMatchingFingerprint(candidateInput, jobInput, {
+      hasApplied: false,
+    }),
     status: "COMPLETED",
     attemptCount: 1,
   });
@@ -622,6 +624,113 @@ test("newly ineligible input expires both recommendation directions", async () =
     repository.snapshotRecommendations().map(({ status }) => status),
     ["EXPIRED", "EXPIRED"],
   );
+});
+
+test("applying after recommendation completes a new ineligible evaluation without reactivation", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  let rerankCalls = 0;
+  const dependencies = {
+    rerank: async () => {
+      rerankCalls += 1;
+      return {
+        output: {
+          matchScore: 90,
+          confidence: 0.9,
+          reasons: ["strong fit"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_APPLY" as const,
+        },
+        llmInvoked: true,
+      };
+    },
+  };
+
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  repository.seedApplication("candidate-1", "job-1");
+
+  const applied = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  const unchanged = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+
+  assert.equal(applied.status, "ineligible");
+  assert.equal(unchanged.status, "unchanged");
+  assert.equal(rerankCalls, 1);
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 2);
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ status }) => status),
+    ["EXPIRED", "EXPIRED"],
+  );
+});
+
+test("pair evaluation reuses one application lookup for versioning and filtering", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  const listAppliedJobIds = repository.listAppliedJobIds.bind(repository);
+  let applicationReads = 0;
+  repository.listAppliedJobIds = async (candidateUserId) => {
+    applicationReads += 1;
+    return listAppliedJobIds(candidateUserId);
+  };
+
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    {
+      rerank: async () => ({
+        output: {
+          matchScore: 80,
+          confidence: 0.8,
+          reasons: [],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SAVE_ONLY",
+        },
+        llmInvoked: false,
+      }),
+    },
+  );
+
+  assert.equal(applicationReads, 1);
+});
+
+test("pending evaluations are unprocessed and claim attempt one", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const pair = { candidateUserId: "candidate-1", jobId: "job-1" };
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    status: "PENDING",
+    attemptCount: 0,
+  });
+
+  const claimed = await repository.claimEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+  });
+
+  assert.equal(claimed.status, "claimed");
+  if (claimed.status !== "claimed") {
+    assert.fail("expected pending evaluation to be claimed");
+  }
+  assert.equal(claimed.claim.attemptCount, 1);
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "RUNNING");
 });
 
 test("reactivating unchanged input restores recommendations without reranking", async () => {

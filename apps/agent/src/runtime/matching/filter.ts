@@ -28,6 +28,7 @@ export async function filterCandidateToJob(
   repository: MatchingRepository,
   candidateUserId: string,
   job: { id: string; recruiterUserId: string; status: string },
+  appliedJobIds?: ReadonlySet<string>,
 ): Promise<FilterResult> {
   if (job.status !== "ACTIVE") {
     return { allowed: false, reason: "job-not-active" };
@@ -35,7 +36,8 @@ export async function filterCandidateToJob(
   if (job.recruiterUserId === candidateUserId) {
     return { allowed: false, reason: "self-owned-job" };
   }
-  const applied = await repository.listAppliedJobIds(candidateUserId);
+  const applied =
+    appliedJobIds ?? (await repository.listAppliedJobIds(candidateUserId));
   if (applied.has(job.id)) {
     return { allowed: false, reason: "already-applied" };
   }

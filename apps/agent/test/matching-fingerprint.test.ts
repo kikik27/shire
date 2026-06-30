@@ -49,9 +49,17 @@ function job(overrides: Partial<JobMatchInput> = {}): JobMatchInput {
   };
 }
 
+function fingerprint(
+  candidateInput = candidate(),
+  jobInput = job(),
+  hasApplied = false,
+) {
+  return createMatchingFingerprint(candidateInput, jobInput, { hasApplied });
+}
+
 test("matching fingerprint is stable for equivalent case, whitespace, and array ordering", () => {
-  const baseline = createMatchingFingerprint(candidate(), job());
-  const equivalent = createMatchingFingerprint(
+  const baseline = fingerprint();
+  const equivalent = fingerprint(
     candidate({
       fullName: "  maya okafor ",
       headline: " senior frontend engineer ",
@@ -81,7 +89,7 @@ test("matching fingerprint is stable for equivalent case, whitespace, and array 
 });
 
 test("matching fingerprint changes for scoring and filter inputs but not timestamps", () => {
-  const baseline = createMatchingFingerprint(candidate(), job());
+  const baseline = fingerprint();
   const variants: Array<[CandidateMatchInput, JobMatchInput]> = [
     [candidate({ skills: ["TypeScript"] }), job()],
     [candidate({ expectedSalary: { min: 180_000, currency: "USD" } }), job()],
@@ -89,12 +97,11 @@ test("matching fingerprint changes for scoring and filter inputs but not timesta
     [candidate(), job({ recruiterUserId: "candidate-1" })],
     [candidate(), job({ remote: false })],
     [candidate(), job({ riskScore: 80 })],
-    [candidate(), job({ description: "Maintain a legacy UI." })],
   ];
 
   for (const [candidateInput, jobInput] of variants) {
     assert.notEqual(
-      createMatchingFingerprint(candidateInput, jobInput),
+      fingerprint(candidateInput, jobInput),
       baseline,
     );
   }
@@ -108,14 +115,29 @@ test("matching fingerprint changes for scoring and filter inputs but not timesta
     createdAt: new Date("2025-01-01T00:00:00.000Z"),
   };
   assert.equal(
-    createMatchingFingerprint(candidateWithTimestamp, jobWithTimestamp),
+    fingerprint(candidateWithTimestamp, jobWithTimestamp),
     baseline,
   );
   assert.equal(
-    createMatchingFingerprint(
+    fingerprint(
       candidate({ summary: "Metadata not consumed by matching." }),
       job(),
     ),
     baseline,
+  );
+  assert.equal(
+    fingerprint(candidate(), job({ description: "Different description." })),
+    baseline,
+  );
+  assert.equal(
+    fingerprint(candidate(), job({ jobType: "CONTRACT" })),
+    baseline,
+  );
+});
+
+test("matching fingerprint changes when the candidate applies", () => {
+  assert.notEqual(
+    fingerprint(candidate(), job(), false),
+    fingerprint(candidate(), job(), true),
   );
 });
