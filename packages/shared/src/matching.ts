@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const MATCHING_EVALUATION_STATUSES = [
+  "PENDING",
+  "RUNNING",
+  "COMPLETED",
+  "FAILED",
+] as const;
+
+export type MatchingEvaluationStatus =
+  (typeof MATCHING_EVALUATION_STATUSES)[number];
+
+export const MATCHING_SCORING_VERSION = "matching-v1";
+
 /**
  * Matching pipeline output contract shared by apps/agent (produces it) and
  * apps/web (persists + renders it). Source of truth:

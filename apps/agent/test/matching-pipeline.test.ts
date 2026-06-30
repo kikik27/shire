@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { MATCHING_EVALUATION_STATUSES } from "@shire/shared";
+import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
+
+import {
+  matchingEvaluationStatusEnum as agentMatchingEvaluationStatusEnum,
+  matchingEvaluations as agentMatchingEvaluations,
+} from "../src/runtime/db/schema";
 import {
   createInMemoryMatchingRepository,
   mapCandidateProfileForMatching,
@@ -12,6 +19,164 @@ import {
 import { fallbackOutput, rerankMatch } from "../src/runtime/matching/rerank";
 import { scoreMatch } from "../src/runtime/matching/rule-score";
 import type { CandidateMatchInput, JobMatchInput } from "../src/runtime/matching/types";
+import {
+  matchingEvaluationStatusEnum as webMatchingEvaluationStatusEnum,
+  matchingEvaluations as webMatchingEvaluations,
+} from "../../web/lib/server/db/schema";
+
+function matchingEvaluationTableContract(table: PgTable) {
+  const config = getTableConfig(table);
+
+  return {
+    name: config.name,
+    columns: config.columns.map((column) => ({
+      name: column.name,
+      type: column.columnType,
+      notNull: column.notNull,
+      hasDefault: column.default !== undefined,
+    })),
+    indexes: config.indexes.map((tableIndex) => ({
+      name: tableIndex.config.name,
+      columns: tableIndex.config.columns.map((column) => column.name),
+      unique: tableIndex.config.unique,
+    })),
+    foreignKeys: config.foreignKeys.map((foreignKey) => {
+      const reference = foreignKey.reference();
+      return {
+        columns: reference.columns.map((column) => column.name),
+        foreignColumns: reference.foreignColumns.map((column) => column.name),
+        foreignTable: getTableConfig(reference.foreignTable).name,
+        onDelete: foreignKey.onDelete,
+      };
+    }),
+  };
+}
+
+test("matching evaluation schemas share the canonical persisted record contract", () => {
+  const agentContract = matchingEvaluationTableContract(agentMatchingEvaluations);
+  const webContract = matchingEvaluationTableContract(webMatchingEvaluations);
+
+  assert.deepEqual(agentMatchingEvaluationStatusEnum.enumValues, [
+    ...MATCHING_EVALUATION_STATUSES,
+  ]);
+  assert.deepEqual(webMatchingEvaluationStatusEnum.enumValues, [
+    ...MATCHING_EVALUATION_STATUSES,
+  ]);
+  assert.deepEqual(agentContract, webContract);
+  assert.deepEqual(agentContract, {
+    name: "matching_evaluations",
+    columns: [
+      { name: "id", type: "PgUUID", notNull: true, hasDefault: true },
+      {
+        name: "candidate_user_id",
+        type: "PgUUID",
+        notNull: true,
+        hasDefault: false,
+      },
+      { name: "job_id", type: "PgUUID", notNull: true, hasDefault: false },
+      { name: "input_hash", type: "PgText", notNull: true, hasDefault: false },
+      {
+        name: "scoring_version",
+        type: "PgText",
+        notNull: true,
+        hasDefault: false,
+      },
+      {
+        name: "status",
+        type: "PgEnumColumn",
+        notNull: true,
+        hasDefault: false,
+      },
+      {
+        name: "rule_score",
+        type: "PgInteger",
+        notNull: false,
+        hasDefault: false,
+      },
+      {
+        name: "match_score",
+        type: "PgInteger",
+        notNull: false,
+        hasDefault: false,
+      },
+      {
+        name: "confidence",
+        type: "PgNumeric",
+        notNull: false,
+        hasDefault: false,
+      },
+      {
+        name: "recommended_action",
+        type: "PgText",
+        notNull: false,
+        hasDefault: false,
+      },
+      { name: "reasons", type: "PgJsonb", notNull: true, hasDefault: true },
+      {
+        name: "missing_requirements",
+        type: "PgJsonb",
+        notNull: true,
+        hasDefault: true,
+      },
+      { name: "risk_flags", type: "PgJsonb", notNull: true, hasDefault: true },
+      {
+        name: "failure_code",
+        type: "PgText",
+        notNull: false,
+        hasDefault: false,
+      },
+      {
+        name: "attempt_count",
+        type: "PgInteger",
+        notNull: true,
+        hasDefault: true,
+      },
+      {
+        name: "created_at",
+        type: "PgTimestamp",
+        notNull: true,
+        hasDefault: true,
+      },
+      {
+        name: "updated_at",
+        type: "PgTimestamp",
+        notNull: true,
+        hasDefault: true,
+      },
+    ],
+    indexes: [
+      {
+        name: "matching_evaluations_candidate_job_unique",
+        columns: ["candidate_user_id", "job_id"],
+        unique: true,
+      },
+      {
+        name: "matching_evaluations_status_idx",
+        columns: ["status"],
+        unique: false,
+      },
+      {
+        name: "matching_evaluations_updated_at_idx",
+        columns: ["updated_at"],
+        unique: false,
+      },
+    ],
+    foreignKeys: [
+      {
+        columns: ["candidate_user_id"],
+        foreignColumns: ["id"],
+        foreignTable: "app_users",
+        onDelete: "cascade",
+      },
+      {
+        columns: ["job_id"],
+        foreignColumns: ["id"],
+        foreignTable: "jobs",
+        onDelete: "cascade",
+      },
+    ],
+  });
+});
 
 function candidate(overrides: Partial<CandidateMatchInput> = {}): CandidateMatchInput {
   return {

@@ -1,6 +1,7 @@
 import {
   boolean,
   customType,
+  index,
   integer,
   jsonb,
   numeric,
@@ -13,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import {
+  MATCHING_EVALUATION_STATUSES,
   PROFILE_STATUSES,
   RECOMMENDATION_STATUSES,
   RECOMMENDATION_TYPES,
@@ -65,6 +67,10 @@ export const recommendationTypeEnum = pgEnum("recommendation_type", [
 export const recommendationStatusEnum = pgEnum("recommendation_status", [
   ...RECOMMENDATION_STATUSES,
 ]);
+export const matchingEvaluationStatusEnum = pgEnum(
+  "matching_evaluation_status",
+  [...MATCHING_EVALUATION_STATUSES],
+);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -167,6 +173,43 @@ export const applications = pgTable(
     ...timestamps,
   },
   (table) => [uniqueIndex("applications_job_candidate_unique").on(table.jobId, table.candidateUserId)],
+).enableRLS();
+
+export const matchingEvaluations = pgTable(
+  "matching_evaluations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    candidateUserId: uuid("candidate_user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    inputHash: text("input_hash").notNull(),
+    scoringVersion: text("scoring_version").notNull(),
+    status: matchingEvaluationStatusEnum("status").notNull(),
+    ruleScore: integer("rule_score"),
+    matchScore: integer("match_score"),
+    confidence: numeric("confidence", { precision: 3, scale: 2 }),
+    recommendedAction: text("recommended_action"),
+    reasons: jsonb("reasons").$type<string[]>().default([]).notNull(),
+    missingRequirements: jsonb("missing_requirements")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+    failureCode: text("failure_code"),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("matching_evaluations_candidate_job_unique").on(
+      table.candidateUserId,
+      table.jobId,
+    ),
+    index("matching_evaluations_status_idx").on(table.status),
+    index("matching_evaluations_updated_at_idx").on(table.updatedAt),
+  ],
 ).enableRLS();
 
 export const agentRuns = pgTable("agent_runs", {

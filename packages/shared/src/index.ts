@@ -1,8 +1,11 @@
 export {
+  MATCHING_EVALUATION_STATUSES,
+  MATCHING_SCORING_VERSION,
   MatchingOutputSchema,
   recommendActionFromScore,
   MATCHING_SAVE_THRESHOLD,
   MATCHING_STRONG_THRESHOLD,
+  type MatchingEvaluationStatus,
   type MatchingOutput,
 } from "./matching";
 

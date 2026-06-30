@@ -1,3 +1,5 @@
+import type { MatchingEvaluationStatus } from "@shire/shared";
+
 /**
  * Domain types consumed by the matching pipeline. These are deliberately plain
  * (no Drizzle, no Mastra) so the rule-score and filter engines are pure
@@ -39,6 +41,26 @@ export type JobMatchInput = {
   status: string;
   riskLevel: string;
   riskScore: number;
+};
+
+export type MatchingEvaluation = {
+  id: string;
+  candidateUserId: string;
+  jobId: string;
+  inputHash: string;
+  scoringVersion: string;
+  status: MatchingEvaluationStatus;
+  ruleScore: number | null;
+  matchScore: number | null;
+  confidence: number | null;
+  recommendedAction: string | null;
+  reasons: string[];
+  missingRequirements: string[];
+  riskFlags: string[];
+  failureCode: string | null;
+  attemptCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type MatchingRepository = {
