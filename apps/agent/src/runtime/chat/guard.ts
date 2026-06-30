@@ -11,6 +11,7 @@ export type BlockedChatGuardDecision = Exclude<
 >;
 
 import { classifySecurityIndicator } from "../security/indicators";
+import { selectChatSecurityInput } from "./security-input";
 
 export const PROMPT_INJECTION_RESPONSE =
   "I can't follow instructions that attempt to override my rules or access protected context. I can only assist with Shire-related recruitment and employment topics.";
@@ -75,7 +76,7 @@ export function classifyChatRequest(body: unknown): ChatGuardDecision {
     return { decision: "out-of-scope", messageLength };
   }
 
-  const indicator = classifySecurityIndicator(body);
+  const indicator = classifySecurityIndicator(selectChatSecurityInput(body));
   if (indicator.level === "blocked") {
     return { decision: "prompt-injection", messageLength };
   }

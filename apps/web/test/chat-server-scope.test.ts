@@ -130,14 +130,62 @@ test("job reference data is explicitly untrusted and bounded", async () => {
     skillsRequired: string[];
     title: string;
   };
-  assert.equal(projected.title.length, 200);
-  assert.equal(projected.companyName.length, 200);
-  assert.equal(projected.description.length, 3_000);
-  assert.equal(projected.location.length, 200);
-  assert.equal(projected.salaryRange.length, 200);
-  assert.equal(projected.skillsRequired.length, 20);
-  assert.ok(projected.skillsRequired.every((skill) => skill.length <= 100));
+  assert.equal(projected.title.length, 160);
+  assert.equal(projected.companyName.length, 160);
+  assert.equal(projected.description.length, 1_600);
+  assert.equal(projected.location.length, 160);
+  assert.equal(projected.salaryRange.length, 160);
+  assert.equal(projected.skillsRequired.length, 12);
+  assert.ok(projected.skillsRequired.every((skill) => skill.length <= 80));
   assert.ok(context.system.length <= 40_000);
+});
+
+test("forwarded trusted context stays byte-bounded and Unicode-safe", async () => {
+  const emoji = String.fromCodePoint(0x1f600);
+  const noisyText = `${"\u0001".repeat(2_000)}${emoji.repeat(8_000)}`;
+  const oversizedProfile: CandidateProfile = {
+    ...candidateProfile,
+    displayName: noisyText,
+    bio: noisyText,
+    skills: Array.from({ length: 100 }, () => noisyText),
+    roleTargets: Array.from({ length: 100 }, () => noisyText),
+    location: noisyText,
+    timezone: noisyText,
+    languages: Array.from({ length: 100 }, () => noisyText),
+  };
+  const job = persistedJob({
+    title: noisyText,
+    companyName: noisyText,
+    description: noisyText,
+    location: noisyText,
+    salaryRange: noisyText,
+    skillsRequired: Array.from({ length: 100 }, () => noisyText),
+  });
+
+  const context = await buildAuthenticatedChatContext({
+    userId: "candidate-user",
+    role: "candidate",
+    profile: oversizedProfile,
+    requestedScope: {
+      role: "candidate",
+      resourceType: "job",
+      resourceId: job.id,
+    },
+    resourceRepository: {
+      getJob: async () => job,
+    },
+  });
+  const forwardedBody = {
+    ...context,
+    messages: [{ role: "user", content: "Is this role a fit?" }],
+  };
+
+  assert.ok(
+    Buffer.byteLength(JSON.stringify(forwardedBody), "utf8") <= 32 * 1024,
+  );
+  assert.deepEqual(context.context, []);
+  assert.doesNotMatch(context.system, /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/);
+  assert.doesNotMatch(context.system, /[\ud800-\udbff](?![\udc00-\udfff])/);
 });
 
 test("candidate cannot use a non-active job context", async () => {

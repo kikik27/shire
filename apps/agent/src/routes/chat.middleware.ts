@@ -23,6 +23,7 @@ import { guardSecurityPrompt } from "../runtime/security/guard";
 import { confirmSecurityRiskWithLlm } from "../runtime/security/guard-llm";
 import { evaluateSecurityPolicy } from "../runtime/security/policy";
 import { hasValidServiceToken } from "../runtime/auth/internal";
+import { selectChatSecurityInput } from "../runtime/chat/security-input";
 
 const chatLogger = logger.child({ component: "chat-middleware" });
 
@@ -288,14 +289,15 @@ async function applySecurityGuard(
 ) {
   const securityIndicatorClassifier =
     dependencies.securityIndicatorClassifier ?? classifySecurityIndicator;
-  const existingSecurityIndicator = securityIndicatorClassifier(request.body);
+  const securityInput = selectChatSecurityInput(request.body);
+  const existingSecurityIndicator = securityIndicatorClassifier(securityInput);
   if (existingSecurityIndicator.level !== "suspicious") {
     return;
   }
 
   try {
     const securityGuardDecision = await resolveSecurityGuardDecision(
-      request.body,
+      securityInput,
       existingSecurityIndicator.text,
       dependencies,
     );

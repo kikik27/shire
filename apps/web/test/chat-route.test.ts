@@ -122,6 +122,7 @@ test("candidate can chat about a real active job", async () => {
       resourceType: "job",
       resourceId: job.id,
       resourceLabel: "Browser-controlled title",
+      trustedContextSource: "browser-spoof",
       messages: [],
     }),
   );
@@ -139,6 +140,7 @@ test("candidate can chat about a real active job", async () => {
     String(capture.body?.system),
     /Browser-controlled title/,
   );
+  assert.equal(capture.body?.trustedContextSource, "shire-web-v1");
 });
 
 test("recruiter can chat about an owned job", async () => {

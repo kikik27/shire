@@ -29,6 +29,7 @@ import {
   ChatScopeAuthorizationError,
 } from "../../../../lib/chat/server-scope";
 import type { ChatResourceType, ChatScopeRequest } from "../../../../lib/chat/types";
+import { TRUSTED_CHAT_CONTEXT_SOURCE } from "@shire/shared";
 
 export const runtime = "nodejs";
 const CHAT_AGENT_HEADER_TIMEOUT_MS = 60_000;
@@ -184,6 +185,7 @@ export function createChatPostHandler(
       });
       const forwardedBody = {
         ...trusted,
+        trustedContextSource: TRUSTED_CHAT_CONTEXT_SOURCE,
         messages: requestMessages(body),
       };
 
