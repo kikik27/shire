@@ -1,15 +1,13 @@
 import {
-  MATCHING_SAVE_THRESHOLD,
   MATCHING_STRONG_THRESHOLD,
   type MatchingOutput,
 } from "@shire/shared";
 import { logger } from "../logger";
-import { filterCandidateToJob, filterTalentToJob } from "./filter";
 import {
-  computeRuleScore,
-  rerankMatch,
-  type RerankDependencies,
-} from "./rerank";
+  evaluateMatchingPair,
+  type MatchingPairEvaluationResult,
+} from "./evaluation";
+import type { RerankDependencies } from "./rerank";
 import type { MatchingRepository } from "./types";
 
 const pipelineLogger = logger.child({ component: "matching-pipeline" });
@@ -51,71 +49,26 @@ export async function runJobMatchingForCandidate(
       { candidateUserId },
       "job matching skipped: candidate profile not confirmed",
     );
-    return {
-      direction: "candidate-to-job",
-      evaluated: 0,
-      saved: [],
-      skippedBelowThreshold: 0,
-      llmInvoked: false,
-      durationMs: Date.now() - startedAt,
-    };
+    return emptyRun("candidate-to-job", startedAt);
   }
 
   const jobs = await repository.listActiveJobs({
     excludeRecruiterUserId: candidateUserId,
   });
-
-  const outcomes: MatchingOutcome[] = [];
-  let skippedBelowThreshold = 0;
-  let llmInvoked = false;
-
+  const results: PairResult[] = [];
   for (const job of jobs) {
-    const filter = await filterCandidateToJob(repository, candidateUserId, job);
-    if (!filter.allowed) {
-      continue;
-    }
-
-    const ruleScore = computeRuleScore(candidate, job);
-
-    // Retrieval-first: skip the LLM entirely when the rule score is already
-    // well below the save threshold. Only the reduced, promising set reranks.
-    if (ruleScore.score < MATCHING_SAVE_THRESHOLD - 5) {
-      skippedBelowThreshold += 1;
-      continue;
-    }
-
-    const rerank = await rerankMatch(
-      candidate,
-      job,
-      ruleScore,
-      "job-rerank",
-      rerankDependencies,
-    );
-    llmInvoked = llmInvoked || rerank.llmInvoked;
-
-    const outcome = await persistIfEligible(
-      repository,
-      rerank.output,
+    results.push({
       candidateUserId,
-      job.recruiterUserId,
-      job.id,
-      "candidate-to-job",
-    );
-    if (outcome) {
-      outcomes.push(outcome);
-    } else {
-      skippedBelowThreshold += 1;
-    }
+      jobId: job.id,
+      result: await evaluateMatchingPair(
+        repository,
+        { candidateUserId, jobId: job.id },
+        { rerankDependencies },
+      ),
+    });
   }
 
-  return finishRun(
-    "candidate-to-job",
-    jobs.length,
-    outcomes,
-    skippedBelowThreshold,
-    llmInvoked,
-    startedAt,
-  );
+  return finishRun("candidate-to-job", results, startedAt);
 }
 
 /**
@@ -128,132 +81,86 @@ export async function runTalentMatchingForJob(
   rerankDependencies: RerankDependencies = {},
 ): Promise<MatchingRunResult> {
   const startedAt = Date.now();
-  const jobs = await repository.listActiveJobs();
-  const job = jobs.find((entry) => entry.id === jobId);
+  const job = await repository.getActiveJob(jobId);
   if (!job) {
     pipelineLogger.info({ jobId }, "talent matching skipped: job not active");
-    return {
-      direction: "job-to-candidate",
-      evaluated: 0,
-      saved: [],
-      skippedBelowThreshold: 0,
-      llmInvoked: false,
-      durationMs: Date.now() - startedAt,
-    };
+    return emptyRun("job-to-candidate", startedAt);
   }
 
   const candidates = await repository.listConfirmedCandidates();
-  const outcomes: MatchingOutcome[] = [];
-  let skippedBelowThreshold = 0;
-  let llmInvoked = false;
-
+  const results: PairResult[] = [];
   for (const candidate of candidates) {
-    const filter = await filterTalentToJob(candidate, job);
-    if (!filter.allowed) {
-      continue;
-    }
-
-    const ruleScore = computeRuleScore(candidate, job);
-    if (ruleScore.score < MATCHING_SAVE_THRESHOLD - 5) {
-      skippedBelowThreshold += 1;
-      continue;
-    }
-
-    const rerank = await rerankMatch(
-      candidate,
-      job,
-      ruleScore,
-      "talent-rerank",
-      rerankDependencies,
-    );
-    llmInvoked = llmInvoked || rerank.llmInvoked;
-
-    const outcome = await persistIfEligible(
-      repository,
-      rerank.output,
-      candidate.userId,
-      job.recruiterUserId,
-      job.id,
-      "job-to-candidate",
-    );
-    if (outcome) {
-      outcomes.push(outcome);
-    } else {
-      skippedBelowThreshold += 1;
-    }
+    results.push({
+      candidateUserId: candidate.userId,
+      jobId,
+      result: await evaluateMatchingPair(
+        repository,
+        { candidateUserId: candidate.userId, jobId },
+        { rerankDependencies },
+      ),
+    });
   }
 
-  return finishRun(
-    "job-to-candidate",
-    candidates.length,
-    outcomes,
-    skippedBelowThreshold,
-    llmInvoked,
-    startedAt,
-  );
+  return finishRun("job-to-candidate", results, startedAt);
 }
 
-async function persistIfEligible(
-  repository: MatchingRepository,
-  output: MatchingOutput,
-  candidateUserId: string,
-  recruiterUserId: string,
-  jobId: string,
-  direction: MatchingDirection,
-): Promise<MatchingOutcome | null> {
-  if (
-    output.recommendedAction === "IGNORE" ||
-    output.matchScore < MATCHING_SAVE_THRESHOLD
-  ) {
-    return null;
-  }
-
-  const type = direction === "candidate-to-job" ? "JOB_TO_CANDIDATE" : "TALENT_TO_COMPANY";
-  await repository.saveRecommendation({
-    type,
-    candidateUserId,
-    recruiterUserId,
-    jobId,
-    matchScore: output.matchScore,
-    confidence: output.confidence,
-    reasons: output.reasons,
-    missingRequirements: output.missingRequirements,
-    riskFlags: output.riskFlags,
-    recommendedAction: output.recommendedAction,
-  });
-
-  const strong = output.matchScore >= MATCHING_STRONG_THRESHOLD;
-  if (strong) {
-    pipelineLogger.info(
-      { candidateUserId, jobId, matchScore: output.matchScore, type },
-      "strong recommendation: eligible for notification",
-    );
-  }
-
-  return {
-    candidateUserId,
-    jobId,
-    matchScore: output.matchScore,
-    recommendedAction: output.recommendedAction,
-    saved: true,
-    strong,
-  };
-}
+type PairResult = {
+  candidateUserId: string;
+  jobId: string;
+  result: MatchingPairEvaluationResult;
+};
 
 function finishRun(
   direction: MatchingDirection,
-  evaluated: number,
-  saved: MatchingOutcome[],
-  skippedBelowThreshold: number,
-  llmInvoked: boolean,
+  results: PairResult[],
+  startedAt: number,
+): MatchingRunResult {
+  const saved = results.flatMap(({ candidateUserId, jobId, result }) => {
+    if (result.status !== "completed" || !result.recommended) {
+      return [];
+    }
+    const strong = result.output.matchScore >= MATCHING_STRONG_THRESHOLD;
+    if (strong) {
+      pipelineLogger.info(
+        { candidateUserId, jobId, matchScore: result.output.matchScore },
+        "strong recommendation: eligible for notification",
+      );
+    }
+    return [
+      {
+        candidateUserId,
+        jobId,
+        matchScore: result.output.matchScore,
+        recommendedAction: result.output.recommendedAction,
+        saved: true,
+        strong,
+      },
+    ];
+  });
+
+  return {
+    direction,
+    evaluated: results.length,
+    saved,
+    skippedBelowThreshold: results.filter(
+      ({ result }) =>
+        result.status === "completed" && result.recommended === false,
+    ).length,
+    llmInvoked: results.some(({ result }) => result.llmInvoked),
+    durationMs: Date.now() - startedAt,
+  };
+}
+
+function emptyRun(
+  direction: MatchingDirection,
   startedAt: number,
 ): MatchingRunResult {
   return {
     direction,
-    evaluated,
-    saved,
-    skippedBelowThreshold,
-    llmInvoked,
+    evaluated: 0,
+    saved: [],
+    skippedBelowThreshold: 0,
+    llmInvoked: false,
     durationMs: Date.now() - startedAt,
   };
 }

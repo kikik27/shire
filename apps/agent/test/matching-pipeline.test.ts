@@ -12,6 +12,8 @@ import {
   createInMemoryMatchingRepository,
   mapCandidateProfileForMatching,
 } from "../src/runtime/matching/repository";
+import { evaluateMatchingPair } from "../src/runtime/matching/evaluation";
+import { createMatchingFingerprint } from "../src/runtime/matching/fingerprint";
 import {
   runJobMatchingForCandidate,
   runTalentMatchingForJob,
@@ -271,8 +273,10 @@ test("job matching saves a recommendation for a strong candidate/job pair", asyn
   assert.equal(result.llmInvoked, false);
 
   const snapshot = repository.snapshotRecommendations();
-  assert.equal(snapshot.length, 1);
-  assert.equal(snapshot[0].type, "JOB_TO_CANDIDATE");
+  assert.deepEqual(
+    snapshot.map((recommendation) => recommendation.type).sort(),
+    ["JOB_TO_CANDIDATE", "TALENT_TO_COMPANY"],
+  );
 });
 
 test("job matching skips the candidate's own jobs", async () => {
@@ -351,7 +355,10 @@ test("talent matching saves recommendations for an active job's candidates", asy
   assert.equal(result.saved[0].jobId, "job-1");
 
   const snapshot = repository.snapshotRecommendations();
-  assert.equal(snapshot[0].type, "TALENT_TO_COMPANY");
+  assert.deepEqual(
+    snapshot.map((recommendation) => recommendation.type).sort(),
+    ["JOB_TO_CANDIDATE", "TALENT_TO_COMPANY"],
+  );
 });
 
 test("talent matching skips an inactive job", async () => {
@@ -453,4 +460,355 @@ test("rerank parses JSON text for direct model providers", async () => {
   assert.equal(structuredOutputWasSent, false);
   assert.equal(result.output.matchScore, 88);
   assert.equal(result.output.recommendedAction, "SUGGEST_INVITE");
+});
+
+test("completed unchanged pairs skip reranking", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const candidateInput = candidate();
+  const jobInput = job();
+  repository.seedCandidate(candidateInput);
+  repository.seedJob(jobInput);
+  repository.seedEvaluation({
+    candidateUserId: candidateInput.userId,
+    jobId: jobInput.id,
+    inputHash: createMatchingFingerprint(candidateInput, jobInput),
+    status: "COMPLETED",
+    attemptCount: 1,
+  });
+  let rerankCalls = 0;
+
+  const result = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: candidateInput.userId, jobId: jobInput.id },
+    {
+      rerank: async () => {
+        rerankCalls += 1;
+        throw new Error("must not rerank");
+      },
+    },
+  );
+
+  assert.equal(result.status, "unchanged");
+  assert.equal(rerankCalls, 0);
+});
+
+test("below-threshold pairs are completed and skipped when unchanged", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(
+    candidate({
+      skills: ["cobol"],
+      preferredRoles: [],
+      yearsExperience: 0,
+      portfolioUrl: undefined,
+      githubUrl: undefined,
+      linkedinUrl: undefined,
+    }),
+  );
+  repository.seedJob(job());
+  let rerankCalls = 0;
+  const dependencies = {
+    rerank: async () => {
+      rerankCalls += 1;
+      throw new Error("below-threshold pair must not rerank");
+    },
+  };
+
+  const first = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  const second = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+
+  assert.equal(first.status, "completed");
+  assert.equal(first.recommended, false);
+  assert.equal(second.status, "unchanged");
+  assert.equal(rerankCalls, 0);
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
+});
+
+test("changed matching input reranks and upserts both recommendation directions once", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  let rerankCalls = 0;
+  const dependencies = {
+    rerank: async () => {
+      rerankCalls += 1;
+      return {
+        output: {
+          matchScore: 90,
+          confidence: 0.9,
+          reasons: ["strong fit"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_APPLY" as const,
+        },
+        llmInvoked: true,
+      };
+    },
+  };
+
+  const first = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  const unchanged = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  const initialRecommendations = repository.snapshotRecommendations();
+  repository.seedCandidate(candidate({ headline: "Staff Frontend Engineer" }));
+  const changed = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  const updatedRecommendations = repository.snapshotRecommendations();
+
+  assert.equal(first.status, "completed");
+  assert.equal(first.recommended, true);
+  assert.equal(unchanged.status, "unchanged");
+  assert.equal(changed.status, "completed");
+  assert.equal(rerankCalls, 2);
+  assert.equal(updatedRecommendations.length, 2);
+  assert.deepEqual(
+    updatedRecommendations.map(({ id }) => id).sort(),
+    initialRecommendations.map(({ id }) => id).sort(),
+  );
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 2);
+});
+
+test("newly ineligible input expires both recommendation directions", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  const dependencies = {
+    rerank: async () => ({
+      output: {
+        matchScore: 90,
+        confidence: 0.9,
+        reasons: ["strong fit"],
+        missingRequirements: [],
+        riskFlags: [],
+        recommendedAction: "SUGGEST_APPLY" as const,
+      },
+      llmInvoked: false,
+    }),
+  };
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+
+  repository.seedJob(job({ recruiterUserId: "candidate-1" }));
+  const result = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+
+  assert.equal(result.status, "ineligible");
+  assert.equal(result.recommended, false);
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ status }) => status),
+    ["EXPIRED", "EXPIRED"],
+  );
+});
+
+test("reactivating unchanged input restores recommendations without reranking", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  let rerankCalls = 0;
+  const dependencies = {
+    rerank: async () => {
+      rerankCalls += 1;
+      return {
+        output: {
+          matchScore: 90,
+          confidence: 0.9,
+          reasons: ["strong fit"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_APPLY" as const,
+        },
+        llmInvoked: true,
+      };
+    },
+  };
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  repository.seedJob(job({ status: "DRAFT" }));
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+  repository.seedJob(job());
+
+  const restored = await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    dependencies,
+  );
+
+  assert.equal(restored.status, "unchanged");
+  assert.equal(rerankCalls, 1);
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ status }) => status),
+    ["NEW", "NEW"],
+  );
+});
+
+test("evaluation completion is fenced against a newer input claim", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const pair = { candidateUserId: "candidate-1", jobId: "job-1" };
+  const first = await repository.claimEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+  });
+  const second = await repository.claimEvaluation({
+    ...pair,
+    inputHash: "hash-2",
+    scoringVersion: "matching-v1",
+  });
+  assert.equal(first.status, "claimed");
+  assert.equal(second.status, "claimed");
+  if (first.status !== "claimed" || second.status !== "claimed") {
+    assert.fail("expected both changed inputs to be claimed");
+  }
+
+  const staleCompleted = await repository.completeEvaluation({
+    ...first.claim,
+    ruleScore: 80,
+    matchScore: 80,
+    confidence: 0.8,
+    recommendedAction: "SAVE_ONLY",
+    reasons: [],
+    missingRequirements: [],
+    riskFlags: [],
+  });
+  const currentCompleted = await repository.completeEvaluation({
+    ...second.claim,
+    ruleScore: 90,
+    matchScore: 90,
+    confidence: 0.9,
+    recommendedAction: "SUGGEST_APPLY",
+    reasons: [],
+    missingRequirements: [],
+    riskFlags: [],
+  });
+
+  assert.equal(staleCompleted, false);
+  assert.equal(currentCompleted, true);
+  assert.equal(repository.snapshotEvaluations()[0]?.matchScore, 90);
+});
+
+test("stale workers cannot overwrite recommendations from a newer claim", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  let releaseFirst!: (value: {
+    output: {
+      matchScore: number;
+      confidence: number;
+      reasons: string[];
+      missingRequirements: string[];
+      riskFlags: string[];
+      recommendedAction: "SAVE_ONLY";
+    };
+    llmInvoked: boolean;
+  }) => void;
+  let markFirstStarted!: () => void;
+  const firstStarted = new Promise<void>((resolve) => {
+    markFirstStarted = resolve;
+  });
+  const firstRerank = new Promise<Parameters<typeof releaseFirst>[0]>(
+    (resolve) => {
+      releaseFirst = resolve;
+    },
+  );
+
+  const staleWorker = evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    {
+      rerank: async () => {
+        markFirstStarted();
+        return firstRerank;
+      },
+    },
+  );
+  await firstStarted;
+  repository.seedCandidate(candidate({ headline: "Staff Frontend Engineer" }));
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    {
+      rerank: async () => ({
+        output: {
+          matchScore: 90,
+          confidence: 0.9,
+          reasons: ["new input"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_APPLY" as const,
+        },
+        llmInvoked: true,
+      }),
+    },
+  );
+  releaseFirst({
+    output: {
+      matchScore: 75,
+      confidence: 0.7,
+      reasons: ["stale input"],
+      missingRequirements: [],
+      riskFlags: [],
+      recommendedAction: "SAVE_ONLY",
+    },
+    llmInvoked: true,
+  });
+  await staleWorker;
+
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ matchScore }) => matchScore),
+    [90, 90],
+  );
+});
+
+test("evaluation failures are recorded and rethrown", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+
+  await assert.rejects(
+    evaluateMatchingPair(
+      repository,
+      { candidateUserId: "candidate-1", jobId: "job-1" },
+      {
+        rerank: async () => {
+          throw new Error("provider unavailable");
+        },
+      },
+    ),
+    /provider unavailable/,
+  );
+
+  const evaluation = repository.snapshotEvaluations()[0];
+  assert.equal(evaluation?.status, "FAILED");
+  assert.match(evaluation?.failureCode ?? "", /provider unavailable/);
 });

@@ -36,6 +36,7 @@ await Promise.all([
   import("./security-policy.test"),
   import("./storage-diagnostics.test"),
   import("./matching-rule-score.test"),
+  import("./matching-fingerprint.test"),
   import("./matching-pipeline.test"),
   import("./job-contracts.test"),
   import("./in-memory-job-queue.test"),
