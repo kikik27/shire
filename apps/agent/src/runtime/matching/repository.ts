@@ -312,21 +312,6 @@ export function createDrizzleMatchingRepository(
       return new Set(rows.map((row) => row.jobId));
     },
 
-    async deactivateRecommendations(pair) {
-      const rows = await database
-        .update(recommendations)
-        .set({ status: "EXPIRED", updatedAt: new Date() })
-        .where(
-          and(
-            eq(recommendations.candidateUserId, pair.candidateUserId),
-            eq(recommendations.jobId, pair.jobId),
-            ne(recommendations.status, "EXPIRED"),
-          ),
-        )
-        .returning({ id: recommendations.id });
-      return rows.length;
-    },
-
     async getEvaluation(pair) {
       const [row] = await database
         .select()
@@ -620,23 +605,6 @@ export function createInMemoryMatchingRepository(
     },
     async listAppliedJobIds(candidateUserId) {
       return new Set(applied.get(candidateUserId) ?? []);
-    },
-    async deactivateRecommendations(pair) {
-      let count = 0;
-      for (const [key, recommendation] of savedRecommendations) {
-        if (
-          recommendation.candidateUserId === pair.candidateUserId &&
-          recommendation.jobId === pair.jobId &&
-          recommendation.status !== "EXPIRED"
-        ) {
-          savedRecommendations.set(key, {
-            ...recommendation,
-            status: "EXPIRED",
-          });
-          count += 1;
-        }
-      }
-      return count;
     },
     async getEvaluation(pair) {
       return evaluations.get(matchingPairKey(pair)) ?? null;

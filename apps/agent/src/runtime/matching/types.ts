@@ -149,8 +149,6 @@ export type MatchingRepository = {
   getActiveJob(jobId: string): Promise<JobMatchInput | null>;
   /** Job ids a candidate has already applied to. */
   listAppliedJobIds(candidateUserId: string): Promise<Set<string>>;
-  /** Expire both audience recommendations for one pair. */
-  deactivateRecommendations(pair: MatchingPair): Promise<number>;
   getEvaluation(pair: MatchingPair): Promise<MatchingEvaluation | null>;
   claimEvaluation(
     input: MatchingEvaluationClaimInput,

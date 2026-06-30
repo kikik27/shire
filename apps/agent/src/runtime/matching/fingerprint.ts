@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 
 import { MATCHING_SCORING_VERSION } from "@shire/shared";
 
-import type { CandidateMatchInput, JobMatchInput } from "./types";
+import type {
+  CandidateMatchInput,
+  JobMatchInput,
+  MatchingPair,
+} from "./types";
 
 function normalizeText(value: string | undefined): string | null {
   return value === undefined
@@ -15,6 +19,21 @@ function normalizeList(values: string[]): string[] {
     .map((value) => normalizeText(value) ?? "")
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right));
+}
+
+function hashCanonicalInput(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+export function createUnavailableMatchingFingerprint(
+  pair: MatchingPair,
+  availability: { candidateAvailable: boolean; jobAvailable: boolean },
+): string {
+  return hashCanonicalInput({
+    scoringVersion: MATCHING_SCORING_VERSION,
+    pair,
+    availability,
+  });
 }
 
 export function createMatchingFingerprint(
@@ -64,7 +83,5 @@ export function createMatchingFingerprint(
     },
   };
 
-  return createHash("sha256")
-    .update(JSON.stringify(canonicalInput))
-    .digest("hex");
+  return hashCanonicalInput(canonicalInput);
 }

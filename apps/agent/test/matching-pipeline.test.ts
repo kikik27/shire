@@ -629,6 +629,49 @@ test("newly ineligible input expires both recommendation directions", async () =
   );
 });
 
+test("missing active entity is persisted as a fenced ineligible evaluation", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  await evaluateMatchingPair(
+    repository,
+    { candidateUserId: "candidate-1", jobId: "job-1" },
+    {
+      rerank: async () => ({
+        output: {
+          matchScore: 90,
+          confidence: 0.9,
+          reasons: ["strong fit"],
+          missingRequirements: [],
+          riskFlags: [],
+          recommendedAction: "SUGGEST_APPLY",
+        },
+        llmInvoked: true,
+      }),
+    },
+  );
+  repository.seedJob(job({ status: "DRAFT" }));
+
+  const missing = await evaluateMatchingPair(repository, {
+    candidateUserId: "candidate-1",
+    jobId: "job-1",
+  });
+  const unchanged = await evaluateMatchingPair(repository, {
+    candidateUserId: "candidate-1",
+    jobId: "job-1",
+  });
+
+  assert.equal(missing.status, "ineligible");
+  assert.equal(missing.claimed, true);
+  assert.equal(unchanged.status, "unchanged");
+  assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 2);
+  assert.deepEqual(
+    repository.snapshotRecommendations().map(({ status }) => status),
+    ["EXPIRED", "EXPIRED"],
+  );
+});
+
 test("applying after recommendation completes a new ineligible evaluation without reactivation", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate());
@@ -736,7 +779,7 @@ test("pending evaluations are unprocessed and claim attempt one", async () => {
   assert.equal(repository.snapshotEvaluations()[0]?.status, "RUNNING");
 });
 
-test("reactivating unchanged input restores recommendations without reranking", async () => {
+test("reactivating an unavailable pair reevaluates before restoring recommendations", async () => {
   const repository = createInMemoryMatchingRepository();
   repository.seedCandidate(candidate());
   repository.seedJob(job());
@@ -776,8 +819,8 @@ test("reactivating unchanged input restores recommendations without reranking", 
     dependencies,
   );
 
-  assert.equal(restored.status, "unchanged");
-  assert.equal(rerankCalls, 1);
+  assert.equal(restored.status, "completed");
+  assert.equal(rerankCalls, 2);
   assert.deepEqual(
     repository.snapshotRecommendations().map(({ status }) => status),
     ["NEW", "NEW"],
