@@ -62,7 +62,7 @@ test("uses each persisted Bull job's attempts for processor finality", () => {
   );
 });
 
-test("retains pollable jobs but removes terminal matching reconciliation ids", () => {
+test("retains terminal jobs until reconciliation needs to reuse their id", () => {
   assert.deepEqual(createBullJobOptions({ attempts: 3, backoffMs: 5_000 }), {
     attempts: 3,
     backoff: { type: "exponential", delay: 5_000 },
@@ -87,13 +87,12 @@ test("uses a deterministic Bull-safe custom id for semantic deduplication keys",
       attempts: 3,
       backoffMs: 5_000,
       jobId,
-      removeOnTerminal: true,
     }),
     {
       attempts: 3,
       backoff: { type: "exponential", delay: 5_000 },
-      removeOnComplete: true,
-      removeOnFail: true,
+      removeOnComplete: false,
+      removeOnFail: false,
       jobId,
     },
   );
@@ -145,12 +144,21 @@ test("durable enqueue rejects retained ids whose persisted request conflicts", a
   assert.equal(addCalls, 0);
 });
 
-test("durable enqueue detects an identical job won by a concurrent producer", async () => {
+test("durable enqueue replaces an identical terminal matching job when work is stale again", async () => {
   const request = matchingRequest();
-  const persisted = bullJob(request);
-  const localFacade = {
+  let removed = false;
+  const existing = {
     ...bullJob(request),
-    timestamp: 2_000,
+    getState: async () => "completed",
+    remove: async () => {
+      removed = true;
+    },
+  };
+  const replacement = {
+    ...bullJob(request),
+    timestamp: 3_000,
+    attemptsMade: 0,
+    getState: async () => "waiting",
   };
   let getCalls = 0;
 
@@ -158,14 +166,42 @@ test("durable enqueue detects an identical job won by a concurrent producer", as
     {
       getJob: async () => {
         getCalls += 1;
-        return getCalls === 1 ? undefined : persisted;
+        if (getCalls === 1) return existing;
+        return replacement;
       },
-      add: async () => localFacade,
+      add: async () => replacement,
     },
     request,
-    { attempts: 3, backoffMs: 5_000 },
+    { attempts: 3, backoffMs: 5_000, now: () => 3_000 },
   );
 
+  assert.equal(removed, true);
+  assert.equal(envelope.createdAt, new Date(3_000).toISOString());
+  assert.equal(envelope.deduplicated, undefined);
+});
+
+test("durable enqueue detects an identical job won by a concurrent producer", async () => {
+  const request = matchingRequest();
+  const persisted = bullJob(request);
+  let getCalls = 0;
+  let addedOptions: { timestamp?: number } | undefined;
+
+  const envelope = await enqueueBullJob(
+    {
+      getJob: async () => {
+        getCalls += 1;
+        return getCalls === 1 ? undefined : persisted;
+      },
+      add: async (_name, _data, options) => {
+        addedOptions = options;
+        return persisted;
+      },
+    },
+    request,
+    { attempts: 3, backoffMs: 5_000, now: () => 2_000 },
+  );
+
+  assert.equal(addedOptions?.timestamp, 2_000);
   assert.equal(envelope.createdAt, new Date(1_000).toISOString());
   assert.equal(envelope.deduplicated, true);
 });

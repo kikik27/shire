@@ -30,6 +30,7 @@ export type BullJobLike = {
   returnvalue: JobResult | null;
   failedReason?: string;
   getState: () => Promise<string>;
+  remove?: () => Promise<void>;
 };
 
 export type BullQueueLike = {
@@ -69,14 +70,17 @@ export function createBullJobOptions(input: {
   attempts: number;
   backoffMs: number;
   jobId?: string;
-  removeOnTerminal?: boolean;
+  timestamp?: number;
 }): JobsOptions {
   return {
     attempts: input.attempts,
     backoff: { type: "exponential", delay: input.backoffMs },
-    removeOnComplete: input.removeOnTerminal ?? false,
-    removeOnFail: input.removeOnTerminal ?? false,
+    removeOnComplete: false,
+    removeOnFail: false,
     ...(input.jobId ? { jobId: input.jobId } : {}),
+    ...(input.timestamp !== undefined
+      ? { timestamp: input.timestamp }
+      : {}),
   };
 }
 
@@ -148,7 +152,7 @@ export async function mapBullJobEnvelope(
 export async function enqueueBullJob(
   queue: BullQueueLike,
   request: JobRequest,
-  options: { attempts: number; backoffMs: number },
+  options: { attempts: number; backoffMs: number; now?: () => number },
 ): Promise<JobEnvelope> {
   const jobId = request.deduplicationKey
     ? createBullDeduplicationJobId(request.deduplicationKey)
@@ -161,20 +165,33 @@ export async function enqueueBullJob(
           `Deduplication key conflict: ${request.deduplicationKey}`,
         );
       }
-      return {
-        ...(await mapBullJobEnvelope(existing))!,
-        deduplicated: true,
-      };
+      const state = await existing.getState();
+      if (
+        request.name === "matching-pair" &&
+        (state === "completed" || state === "failed") &&
+        existing.remove
+      ) {
+        await existing.remove();
+      } else {
+        return {
+          ...(await mapBullJobEnvelope(existing))!,
+          deduplicated: true,
+        };
+      }
     }
   }
 
+  const enqueueTimestamp = jobId
+    ? (options.now?.() ?? Date.now())
+    : undefined;
   const job = await queue.add(
     request.name,
     request,
     createBullJobOptions({
-      ...options,
+      attempts: options.attempts,
+      backoffMs: options.backoffMs,
       jobId,
-      removeOnTerminal: request.name === "matching-pair" && Boolean(jobId),
+      timestamp: enqueueTimestamp,
     }),
   );
   if (jobId) {
@@ -184,7 +201,11 @@ export async function enqueueBullJob(
         `Deduplication key conflict: ${request.deduplicationKey}`,
       );
     }
-    if (persisted && persisted.timestamp !== job.timestamp) {
+    if (
+      persisted &&
+      enqueueTimestamp !== undefined &&
+      job.timestamp !== enqueueTimestamp
+    ) {
       return {
         ...(await mapBullJobEnvelope(persisted))!,
         deduplicated: true,
