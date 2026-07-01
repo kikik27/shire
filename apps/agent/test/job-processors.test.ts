@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createJobProcessors } from "../src/runtime/jobs/job-processors";
+import { matchingFailureRetryable } from "../src/runtime/jobs/matching.processor";
 
 test("dispatches deterministic onchain jobs without an LLM", async () => {
   let llmCalls = 0;
@@ -77,4 +78,36 @@ test("dispatches one canonical matching pair job", async () => {
       context: { jobId: "job-1", attempt: 1, signal },
     },
   ]);
+});
+
+test("matching failures follow the configured queue-attempt lifecycle", () => {
+  const signal = new AbortController().signal;
+
+  assert.equal(
+    matchingFailureRetryable({
+      jobId: "job-1",
+      attempt: 1,
+      maxAttempts: 3,
+      signal,
+    }),
+    true,
+  );
+  assert.equal(
+    matchingFailureRetryable({
+      jobId: "job-1",
+      attempt: 2,
+      maxAttempts: 3,
+      signal,
+    }),
+    true,
+  );
+  assert.equal(
+    matchingFailureRetryable({
+      jobId: "job-1",
+      attempt: 3,
+      maxAttempts: 3,
+      signal,
+    }),
+    false,
+  );
 });

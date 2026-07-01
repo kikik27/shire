@@ -11,6 +11,9 @@ import type {
 export const RUNNING_EVALUATION_LEASE_MS = 5 * 60 * 1000;
 /** Initial attempt plus two scheduler-driven retries for one input fingerprint. */
 export const MAX_MATCHING_EVALUATION_ATTEMPTS = 3;
+/** Exceeds the default BullMQ exponential backoff horizon by a wide margin. */
+export const RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS =
+  30 * 60 * 1000;
 
 function normalizeText(value: string | undefined): string | null {
   return value === undefined
@@ -90,6 +93,21 @@ type ReconciliationEvaluation = {
   updatedAt: Date;
 };
 
+type EvaluationFingerprint = Pick<
+  ReconciliationEvaluation,
+  "inputHash" | "scoringVersion"
+>;
+
+export function nextMatchingEvaluationAttemptCount(
+  input: EvaluationFingerprint,
+  evaluation: EvaluationFingerprint & { attemptCount: number },
+): number {
+  return evaluation.inputHash !== input.inputHash ||
+    evaluation.scoringVersion !== input.scoringVersion
+    ? 1
+    : evaluation.attemptCount + 1;
+}
+
 export function matchingQueueGeneration(
   inputHash: string,
   evaluation: ReconciliationEvaluation | null,
@@ -119,7 +137,9 @@ export function shouldReconcileMatchingPair(
   if (evaluation.status === "FAILED") {
     return (
       evaluation.attemptCount < MAX_MATCHING_EVALUATION_ATTEMPTS &&
-      (evaluation.failureCode?.startsWith("RETRYABLE:") ?? false)
+      (evaluation.failureCode?.startsWith("RETRYABLE:") ?? false) &&
+      evaluation.updatedAt.getTime() <
+        now.getTime() - RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS
     );
   }
   if (evaluation.status === "RUNNING") {

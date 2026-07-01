@@ -10,6 +10,7 @@ import type { RecommendationSchedulerRepository } from "../src/runtime/jobs/reco
 import {
   MAX_MATCHING_EVALUATION_ATTEMPTS,
   matchingQueueGeneration,
+  RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS,
   shouldReconcileMatchingPair,
 } from "../src/runtime/matching/fingerprint";
 import { createInMemoryMatchingRepository } from "../src/runtime/matching/repository";
@@ -97,6 +98,11 @@ test("reconciles only stale or retryable matching evaluation states", () => {
         ...evaluation,
         status: "FAILED",
         failureCode: "RETRYABLE:timeout",
+        updatedAt: new Date(
+          now.getTime() -
+            RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS -
+            1,
+        ),
       },
       now,
     ),
@@ -169,6 +175,52 @@ test("reconciles only stale or retryable matching evaluation states", () => {
   );
 });
 
+test("retryable reconciliation waits beyond the Bull backoff cooldown", () => {
+  const now = new Date("2026-06-30T12:00:00.000Z");
+  const evaluation = {
+    inputHash: "current-hash",
+    scoringVersion: MATCHING_SCORING_VERSION,
+    status: "FAILED" as const,
+    failureCode: "RETRYABLE:timeout",
+    attemptCount: 1,
+    updatedAt: now,
+  };
+
+  assert.equal(
+    shouldReconcileMatchingPair("current-hash", evaluation, now),
+    false,
+  );
+  assert.equal(
+    shouldReconcileMatchingPair(
+      "current-hash",
+      {
+        ...evaluation,
+        updatedAt: new Date(
+          now.getTime() -
+            RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS,
+        ),
+      },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldReconcileMatchingPair(
+      "current-hash",
+      {
+        ...evaluation,
+        updatedAt: new Date(
+          now.getTime() -
+            RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS -
+            1,
+        ),
+      },
+      now,
+    ),
+    true,
+  );
+});
+
 test("matching queue generation follows the canonical evaluation lifecycle", () => {
   const evaluation = {
     inputHash: "current-hash",
@@ -220,6 +272,11 @@ test("retryable reconciliation emits a stable next-generation descriptor", async
     status: "FAILED",
     failureCode: "RETRYABLE:timeout",
     attemptCount: 1,
+    updatedAt: new Date(
+      Date.now() -
+        RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS -
+        1,
+    ),
   });
 
   const firstRetry = await repository.reconcileMatchingPairs({ limit: 1 });
@@ -244,7 +301,8 @@ test("retryable reconciliation emits a stable next-generation descriptor", async
 });
 
 test("expires both recommendation audiences in bounded unavailable-pair batches", async () => {
-  const repository = createInMemoryMatchingRepository();
+  let now = new Date("2026-06-30T12:00:00.000Z");
+  const repository = createInMemoryMatchingRepository({ now: () => now });
   repository.seedCandidate({
     userId: "candidate-001",
     skills: ["TypeScript"],
@@ -308,15 +366,21 @@ test("expires both recommendation audiences in bounded unavailable-pair batches"
     profileStatus: "DRAFT",
   });
 
+  const fenced = await repository.expireUnavailableRecommendations({
+    limit: 1,
+    updatedBefore: now,
+  });
+  now = new Date(now.getTime() + 1);
   const first = await repository.expireUnavailableRecommendations({
     limit: 1,
-    updatedBefore: new Date(),
+    updatedBefore: now,
   });
   const second = await repository.expireUnavailableRecommendations({
     limit: 1,
-    updatedBefore: new Date(),
+    updatedBefore: now,
   });
 
+  assert.equal(fenced, 0);
   assert.equal(first, 1);
   assert.equal(second, 1);
   assert.deepEqual(

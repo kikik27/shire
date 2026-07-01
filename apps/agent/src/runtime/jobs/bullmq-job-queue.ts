@@ -142,7 +142,11 @@ export function createBullMqJobRuntime(input: {
   backoffMs: number;
   process: (
     job: ProcessableJob,
-    context: { attempt: number; signal: AbortSignal },
+    context: {
+      attempt: number;
+      maxAttempts?: number;
+      signal: AbortSignal;
+    },
   ) => Promise<JobResult>;
 }): DurableJobRuntime {
   const connection = parseRedisConnection(input.redisUrl);
@@ -162,6 +166,7 @@ export function createBullMqJobRuntime(input: {
           } as ProcessableJob,
           {
             attempt: job.attemptsMade + 1,
+            maxAttempts: input.attempts,
             signal: abortController.signal,
           },
         );

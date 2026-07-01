@@ -1,7 +1,10 @@
 import type {
   JobResultMap,
 } from "./job-contracts";
-import type { JobProcessor } from "./job-processor";
+import type {
+  JobExecutionContext,
+  JobProcessor,
+} from "./job-processor";
 import { getAgentDatabase } from "../db";
 import { createDrizzleMatchingRepository } from "../matching/repository";
 import { evaluateMatchingPair } from "../matching/evaluation";
@@ -13,6 +16,15 @@ import {
 type JobMatchingResult = JobResultMap["job-matching"];
 type TalentMatchingResult = JobResultMap["talent-matching"];
 type MatchingPairResult = JobResultMap["matching-pair"];
+
+export function matchingFailureRetryable(
+  context: JobExecutionContext,
+): boolean {
+  return (
+    context.maxAttempts === undefined ||
+    context.attempt < context.maxAttempts
+  );
+}
 
 function summarizeSaved(count: number, strong: number): {
   status: JobMatchingResult["status"];
@@ -137,7 +149,7 @@ export const talentMatchingProcessor: JobProcessor<"talent-matching"> = {
 export const matchingPairProcessor: JobProcessor<"matching-pair"> = {
   name: "matching-pair",
   llmPolicy: "required",
-  async process(payload): Promise<MatchingPairResult> {
+  async process(payload, context): Promise<MatchingPairResult> {
     const database = getAgentDatabase();
     if (!database) {
       return {
@@ -153,10 +165,16 @@ export const matchingPairProcessor: JobProcessor<"matching-pair"> = {
     const startedAt = Date.now();
     const repository = createDrizzleMatchingRepository(database);
     try {
-      const result = await evaluateMatchingPair(repository, {
-        candidateUserId: payload.candidateId,
-        jobId: payload.jobId,
-      });
+      const result = await evaluateMatchingPair(
+        repository,
+        {
+          candidateUserId: payload.candidateId,
+          jobId: payload.jobId,
+        },
+        {
+          failureRetryable: matchingFailureRetryable(context),
+        },
+      );
       const summary: MatchingPairResult = {
         status: result.status,
         claimed: result.claimed,

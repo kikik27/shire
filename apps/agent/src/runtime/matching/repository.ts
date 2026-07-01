@@ -40,7 +40,9 @@ import {
 } from "./types";
 import {
   createMatchingFingerprint,
+  MAX_MATCHING_EVALUATION_ATTEMPTS,
   matchingQueueGeneration,
+  nextMatchingEvaluationAttemptCount,
   RUNNING_EVALUATION_LEASE_MS,
   shouldReconcileMatchingPair,
 } from "./fingerprint";
@@ -263,12 +265,25 @@ async function getDrizzleEvaluation(
   return row ? mapEvaluation(row) : null;
 }
 
+export function matchingEvaluationAttemptCountSql(
+  input: Pick<MatchingEvaluationClaimInput, "inputHash" | "scoringVersion">,
+) {
+  return sql<number>`case when ${or(
+    ne(matchingEvaluations.inputHash, input.inputHash),
+    ne(matchingEvaluations.scoringVersion, input.scoringVersion),
+  )} then 1 else ${matchingEvaluations.attemptCount} + 1 end`;
+}
+
 async function claimDrizzleEvaluation(
   executor: AgentQueryExecutor,
   input: MatchingEvaluationClaimInput,
   now: Date,
 ) {
   const leaseCutoff = new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS);
+  const changedInput = or(
+    ne(matchingEvaluations.inputHash, input.inputHash),
+    ne(matchingEvaluations.scoringVersion, input.scoringVersion),
+  );
   const [row] = await executor
     .insert(matchingEvaluations)
     .values({
@@ -294,21 +309,28 @@ async function claimDrizzleEvaluation(
         missingRequirements: [],
         riskFlags: [],
         failureCode: null,
-        attemptCount: sql`${matchingEvaluations.attemptCount} + 1`,
+        attemptCount: matchingEvaluationAttemptCountSql(input),
         updatedAt: now,
       },
       setWhere: or(
-        ne(matchingEvaluations.inputHash, input.inputHash),
-        ne(matchingEvaluations.scoringVersion, input.scoringVersion),
-        eq(matchingEvaluations.status, "PENDING"),
         and(
-          eq(matchingEvaluations.status, "FAILED"),
-          sql`${matchingEvaluations.failureCode} like 'RETRYABLE:%'`,
+          lt(
+            matchingEvaluations.attemptCount,
+            MAX_MATCHING_EVALUATION_ATTEMPTS,
+          ),
+          or(
+            eq(matchingEvaluations.status, "PENDING"),
+            and(
+              eq(matchingEvaluations.status, "FAILED"),
+              sql`${matchingEvaluations.failureCode} like 'RETRYABLE:%'`,
+            ),
+            and(
+              eq(matchingEvaluations.status, "RUNNING"),
+              lt(matchingEvaluations.updatedAt, leaseCutoff),
+            ),
+          ),
         ),
-        and(
-          eq(matchingEvaluations.status, "RUNNING"),
-          lt(matchingEvaluations.updatedAt, leaseCutoff),
-        ),
+        changedInput,
       ),
     })
     .returning();
@@ -736,6 +758,7 @@ export function createDrizzleMatchingRepository(
 export function createInMemoryMatchingRepository(
   options: {
     beforeRecommendationWrite?: (input: RecommendationInput) => void;
+    now?: () => Date;
   } = {},
 ): MatchingRepository & {
   seedCandidate(candidate: CandidateMatchInput): void;
@@ -754,12 +777,15 @@ export function createInMemoryMatchingRepository(
   const candidates = new Map<string, CandidateMatchInput>();
   const jobStore = new Map<string, JobMatchInput>();
   const applied = new Map<string, Set<string>>();
-  const savedRecommendations = new Map<string, RecommendationSnapshot>();
+  type StoredRecommendation = RecommendationSnapshot & { updatedAt: Date };
+  const savedRecommendations = new Map<string, StoredRecommendation>();
   const evaluations = new Map<string, MatchingEvaluation>();
+  const now = options.now ?? (() => new Date());
 
   function stageRecommendations(
     input: MatchingEvaluationClaim,
     publications: MatchingRecommendationPublication,
+    updatedAt: Date,
   ) {
     const staged = new Map(savedRecommendations);
     let written = 0;
@@ -770,7 +796,7 @@ export function createInMemoryMatchingRepository(
           recommendation.jobId === input.jobId &&
           recommendation.status !== "EXPIRED"
         ) {
-          staged.set(key, { ...recommendation, status: "EXPIRED" });
+          staged.set(key, { ...recommendation, status: "EXPIRED", updatedAt });
           written += 1;
         }
       }
@@ -789,6 +815,7 @@ export function createInMemoryMatchingRepository(
         matchScore: publication.matchScore,
         recommendedAction: publication.recommendedAction,
         status: "NEW",
+        updatedAt,
       });
       written += 1;
     }
@@ -796,7 +823,7 @@ export function createInMemoryMatchingRepository(
   }
 
   function commitRecommendations(
-    staged: Map<string, RecommendationSnapshot>,
+    staged: Map<string, StoredRecommendation>,
   ) {
     savedRecommendations.clear();
     for (const [key, recommendation] of staged) {
@@ -844,8 +871,12 @@ export function createInMemoryMatchingRepository(
       existing.status === "RUNNING" &&
       existing.updatedAt.getTime() <
         now.getTime() - RUNNING_EVALUATION_LEASE_MS;
-    if (changed || existing.status === "PENDING" || retryable || leaseExpired) {
-      const attemptCount = existing.attemptCount + 1;
+    if (
+      changed ||
+      (existing.attemptCount < MAX_MATCHING_EVALUATION_ATTEMPTS &&
+        (existing.status === "PENDING" || retryable || leaseExpired))
+    ) {
+      const attemptCount = nextMatchingEvaluationAttemptCount(input, existing);
       evaluations.set(key, {
         ...existing,
         ...input,
@@ -993,7 +1024,7 @@ export function createInMemoryMatchingRepository(
             : undefined,
       };
     },
-    async expireUnavailableRecommendations({ limit }) {
+    async expireUnavailableRecommendations({ limit, updatedBefore }) {
       let expired = 0;
       for (const [key, recommendation] of savedRecommendations) {
         if (expired >= limit) {
@@ -1005,6 +1036,7 @@ export function createInMemoryMatchingRepository(
           : undefined;
         if (
           recommendation.status !== "EXPIRED" &&
+          recommendation.updatedAt.getTime() < updatedBefore.getTime() &&
           (!candidate ||
             candidate.profileStatus !== "CONFIRMED" ||
             !job ||
@@ -1014,6 +1046,7 @@ export function createInMemoryMatchingRepository(
           savedRecommendations.set(key, {
             ...recommendation,
             status: "EXPIRED",
+            updatedAt: now(),
           });
           expired += 1;
         }
@@ -1074,6 +1107,7 @@ export function createInMemoryMatchingRepository(
       const { staged, written } = stageRecommendations(
         input,
         input.recommendations,
+        now(),
       );
       evaluations.set(key, {
         ...existing,
@@ -1105,6 +1139,7 @@ export function createInMemoryMatchingRepository(
       const { staged, written } = stageRecommendations(
         input,
         input.recommendations,
+        now(),
       );
       commitRecommendations(staged);
       return { published: true, recommendationRowsWritten: written };
@@ -1133,9 +1168,10 @@ export function createInMemoryMatchingRepository(
       // No-op: in-memory tests do not assert agent_runs rows.
     },
     snapshotRecommendations() {
-      return [...savedRecommendations.values()].map((recommendation) => ({
-        ...recommendation,
-      }));
+      return [...savedRecommendations.values()].map((recommendation) => {
+        const { updatedAt: _updatedAt, ...snapshot } = recommendation;
+        return { ...snapshot };
+      });
     },
     snapshotEvaluations() {
       return [...evaluations.values()].map((evaluation) => ({

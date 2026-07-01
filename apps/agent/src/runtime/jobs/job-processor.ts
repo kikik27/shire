@@ -7,6 +7,7 @@ import type {
 export type JobExecutionContext = {
   jobId: string;
   attempt: number;
+  maxAttempts?: number;
   signal: AbortSignal;
 };
 

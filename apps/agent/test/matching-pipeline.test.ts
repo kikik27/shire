@@ -11,13 +11,18 @@ import {
 import {
   classifyEvaluationClaimConflict,
   createInMemoryMatchingRepository,
+  matchingEvaluationAttemptCountSql,
   mapCandidateProfileForMatching,
   parsePersistedRecommendedAction,
   retryPostgresSerialization,
   RUNNING_EVALUATION_LEASE_MS,
 } from "../src/runtime/matching/repository";
 import { evaluateMatchingPair } from "../src/runtime/matching/evaluation";
-import { createMatchingFingerprint } from "../src/runtime/matching/fingerprint";
+import {
+  createMatchingFingerprint,
+  MAX_MATCHING_EVALUATION_ATTEMPTS,
+  nextMatchingEvaluationAttemptCount,
+} from "../src/runtime/matching/fingerprint";
 import {
   runJobMatchingForCandidate,
   runTalentMatchingForJob,
@@ -588,7 +593,7 @@ test("changed matching input reranks and upserts both recommendation directions 
     updatedRecommendations.map(({ id }) => id).sort(),
     initialRecommendations.map(({ id }) => id).sort(),
   );
-  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 2);
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 1);
 });
 
 test("newly ineligible input expires both recommendation directions", async () => {
@@ -717,7 +722,7 @@ test("applying after recommendation completes a new ineligible evaluation withou
   assert.equal(unchanged.status, "unchanged");
   assert.equal(rerankCalls, 1);
   assert.equal(repository.snapshotEvaluations()[0]?.status, "COMPLETED");
-  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 2);
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 1);
   assert.deepEqual(
     repository.snapshotRecommendations().map(({ status }) => status),
     ["EXPIRED", "EXPIRED"],
@@ -778,6 +783,84 @@ test("pending evaluations are unprocessed and claim attempt one", async () => {
   }
   assert.equal(claimed.claim.attemptCount, 1);
   assert.equal(repository.snapshotEvaluations()[0]?.status, "RUNNING");
+});
+
+test("changed fingerprints receive a fresh bounded evaluation budget", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const pair = { candidateUserId: "candidate-1", jobId: "job-1" };
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "old-hash",
+    scoringVersion: "matching-v1",
+    status: "FAILED",
+    failureCode: "FINAL:exhausted",
+    attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+  });
+
+  assert.equal(
+    nextMatchingEvaluationAttemptCount(
+      { inputHash: "new-hash", scoringVersion: "matching-v1" },
+      {
+        inputHash: "old-hash",
+        scoringVersion: "matching-v1",
+        attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+      },
+    ),
+    1,
+  );
+  const claimed = await repository.claimEvaluation({
+    ...pair,
+    inputHash: "new-hash",
+    scoringVersion: "matching-v1",
+  });
+
+  assert.equal(claimed.status, "claimed");
+  if (claimed.status !== "claimed") {
+    assert.fail("expected changed fingerprint to be claimed");
+  }
+  assert.equal(claimed.claim.attemptCount, 1);
+  assert.equal(repository.snapshotEvaluations()[0]?.attemptCount, 1);
+});
+
+test("changed scoring versions receive a fresh bounded evaluation budget", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const pair = { candidateUserId: "candidate-1", jobId: "job-1" };
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "same-hash",
+    scoringVersion: "matching-v0",
+    status: "FAILED",
+    failureCode: "FINAL:exhausted",
+    attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+  });
+
+  const claimed = await repository.claimEvaluation({
+    ...pair,
+    inputHash: "same-hash",
+    scoringVersion: "matching-v1",
+  });
+
+  assert.equal(claimed.status, "claimed");
+  if (claimed.status !== "claimed") {
+    assert.fail("expected changed scoring version to be claimed");
+  }
+  assert.equal(claimed.claim.attemptCount, 1);
+});
+
+test("Drizzle claim attempt SQL resets changed input and increments unchanged input", () => {
+  const dialect = new PgDialect();
+  const query = dialect.sqlToQuery(
+    matchingEvaluationAttemptCountSql({
+      inputHash: "new-hash",
+      scoringVersion: "matching-v2",
+    }),
+  );
+
+  assert.match(
+    query.sql,
+    /case when .*"input_hash" <> \$1.*"scoring_version" <> \$2.*then 1 else "matching_evaluations"\."attempt_count" \+ 1 end/,
+  );
+  assert.deepEqual(query.params, ["new-hash", "matching-v2"]);
 });
 
 test("reactivating an unavailable pair keeps its unchanged evaluation", async () => {
@@ -1009,7 +1092,66 @@ test("evaluation failures are recorded and rethrown", async () => {
 
   const evaluation = repository.snapshotEvaluations()[0];
   assert.equal(evaluation?.status, "FAILED");
-  assert.match(evaluation?.failureCode ?? "", /provider unavailable/);
+  assert.equal(evaluation?.failureCode, "RETRYABLE:provider unavailable");
+});
+
+test("the final evaluation-budget failure is persisted as final", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+  repository.seedEvaluation({
+    candidateUserId: "candidate-1",
+    jobId: "job-1",
+    inputHash: createMatchingFingerprint(candidate(), job(), {
+      hasApplied: false,
+    }),
+    status: "FAILED",
+    failureCode: "RETRYABLE:provider unavailable",
+    attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS - 1,
+  });
+
+  await assert.rejects(
+    evaluateMatchingPair(
+      repository,
+      { candidateUserId: "candidate-1", jobId: "job-1" },
+      {
+        rerank: async () => {
+          throw new Error("provider unavailable");
+        },
+      },
+    ),
+    /provider unavailable/,
+  );
+
+  assert.equal(
+    repository.snapshotEvaluations()[0]?.failureCode,
+    "FINAL:provider unavailable",
+  );
+});
+
+test("the evaluator can mark a queue-final failure as final before its own budget", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+
+  await assert.rejects(
+    evaluateMatchingPair(
+      repository,
+      { candidateUserId: "candidate-1", jobId: "job-1" },
+      {
+        failureRetryable: false,
+        rerank: async () => {
+          throw new Error("last Bull attempt");
+        },
+      },
+    ),
+    /last Bull attempt/,
+  );
+
+  assert.equal(
+    repository.snapshotEvaluations()[0]?.failureCode,
+    "FINAL:last Bull attempt",
+  );
 });
 
 test("publication failure rolls back recommendations before marking the claim failed", async () => {
@@ -1129,7 +1271,7 @@ test("RUNNING claims are busy until their bounded lease expires", async () => {
     inputHash: "hash-1",
     scoringVersion: "matching-v1",
     status: "RUNNING",
-    attemptCount: 4,
+    attemptCount: 2,
     updatedAt: new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS + 1),
   });
 
@@ -1144,7 +1286,7 @@ test("RUNNING claims are busy until their bounded lease expires", async () => {
     inputHash: "hash-1",
     scoringVersion: "matching-v1",
     status: "RUNNING",
-    attemptCount: 4,
+    attemptCount: 2,
     updatedAt: new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS),
   });
   const atCutoff = await repository.claimEvaluation(
@@ -1158,7 +1300,7 @@ test("RUNNING claims are busy until their bounded lease expires", async () => {
     inputHash: "hash-1",
     scoringVersion: "matching-v1",
     status: "RUNNING",
-    attemptCount: 4,
+    attemptCount: 2,
     updatedAt: new Date(now.getTime() - RUNNING_EVALUATION_LEASE_MS - 1),
   });
   const expired = await repository.claimEvaluation(
@@ -1170,7 +1312,28 @@ test("RUNNING claims are busy until their bounded lease expires", async () => {
   if (expired.status !== "claimed") {
     assert.fail("expected expired RUNNING evaluation to be reclaimed");
   }
-  assert.equal(expired.claim.attemptCount, 5);
+  assert.equal(expired.claim.attemptCount, 3);
+});
+
+test("same-fingerprint claims stop at the evaluation-attempt budget", async () => {
+  const repository = createInMemoryMatchingRepository();
+  const pair = { candidateUserId: "candidate-1", jobId: "job-1" };
+  repository.seedEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+    status: "FAILED",
+    failureCode: "RETRYABLE:timeout",
+    attemptCount: MAX_MATCHING_EVALUATION_ATTEMPTS,
+  });
+
+  const result = await repository.claimEvaluation({
+    ...pair,
+    inputHash: "hash-1",
+    scoringVersion: "matching-v1",
+  });
+
+  assert.equal(result.status, "busy");
 });
 
 test("claim conflict classification never reports mismatched input as unchanged", () => {

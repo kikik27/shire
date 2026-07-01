@@ -5,6 +5,7 @@ import {
 } from "@shire/shared";
 
 import { filterCandidateToJob } from "./filter";
+import { MAX_MATCHING_EVALUATION_ATTEMPTS } from "./fingerprint";
 import {
   computeRuleScore,
   fallbackOutput,
@@ -43,6 +44,7 @@ export type MatchingPairEvaluationResult = MatchingPairEvaluationAccounting &
   );
 
 export type MatchingEvaluationDependencies = {
+  failureRetryable?: boolean;
   rerank?: typeof rerankMatch;
   rerankDependencies?: RerankDependencies;
 };
@@ -210,7 +212,9 @@ export async function evaluateMatchingPair(
     await repository.failEvaluation({
       ...claim,
       failureCode: error instanceof Error ? error.message : "matching failed",
-      retryable: true,
+      retryable:
+        (dependencies.failureRetryable ?? true) &&
+        claim.attemptCount < MAX_MATCHING_EVALUATION_ATTEMPTS,
     });
     throw error;
   }

@@ -7,7 +7,11 @@ import type { DurableJobRuntime } from "../runtime/jobs/bullmq-job-queue";
 
 export type ProcessJob = (
   job: ProcessableJob,
-  context: { attempt: number; signal: AbortSignal },
+  context: {
+    attempt: number;
+    maxAttempts?: number;
+    signal: AbortSignal;
+  },
 ) => Promise<JobResult>;
 
 export type RuntimeJobServicesDependencies = {
