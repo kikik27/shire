@@ -62,12 +62,12 @@ test("uses each persisted Bull job's attempts for processor finality", () => {
   );
 });
 
-test("removes terminal jobs so deterministic ids can be reused after recovery", () => {
+test("retains pollable jobs but removes terminal matching reconciliation ids", () => {
   assert.deepEqual(createBullJobOptions({ attempts: 3, backoffMs: 5_000 }), {
     attempts: 3,
     backoff: { type: "exponential", delay: 5_000 },
-    removeOnComplete: true,
-    removeOnFail: true,
+    removeOnComplete: false,
+    removeOnFail: false,
   });
 });
 
@@ -87,6 +87,7 @@ test("uses a deterministic Bull-safe custom id for semantic deduplication keys",
       attempts: 3,
       backoffMs: 5_000,
       jobId,
+      removeOnTerminal: true,
     }),
     {
       attempts: 3,

@@ -69,12 +69,13 @@ export function createBullJobOptions(input: {
   attempts: number;
   backoffMs: number;
   jobId?: string;
+  removeOnTerminal?: boolean;
 }): JobsOptions {
   return {
     attempts: input.attempts,
     backoff: { type: "exponential", delay: input.backoffMs },
-    removeOnComplete: true,
-    removeOnFail: true,
+    removeOnComplete: input.removeOnTerminal ?? false,
+    removeOnFail: input.removeOnTerminal ?? false,
     ...(input.jobId ? { jobId: input.jobId } : {}),
   };
 }
@@ -170,7 +171,11 @@ export async function enqueueBullJob(
   const job = await queue.add(
     request.name,
     request,
-    createBullJobOptions({ ...options, jobId }),
+    createBullJobOptions({
+      ...options,
+      jobId,
+      removeOnTerminal: request.name === "matching-pair" && Boolean(jobId),
+    }),
   );
   if (jobId) {
     const persisted = await queue.getJob(jobId);
