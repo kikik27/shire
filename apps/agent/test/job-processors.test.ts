@@ -80,34 +80,55 @@ test("dispatches one canonical matching pair job", async () => {
   ]);
 });
 
-test("matching failures follow the configured queue-attempt lifecycle", () => {
+test("matching failure finality follows error permanence and queue attempts", () => {
   const signal = new AbortController().signal;
 
   assert.equal(
-    matchingFailureRetryable({
-      jobId: "job-1",
-      attempt: 1,
-      maxAttempts: 3,
-      signal,
-    }),
+    matchingFailureRetryable(
+      {
+        jobId: "job-1",
+        attempt: 1,
+        maxAttempts: 3,
+        signal,
+      },
+      new Error("invalid matching input"),
+    ),
+    false,
+  );
+  assert.equal(
+    matchingFailureRetryable(
+      {
+        jobId: "job-1",
+        attempt: 1,
+        maxAttempts: 3,
+        signal,
+      },
+      new Error("provider temporarily unavailable"),
+    ),
     true,
   );
   assert.equal(
-    matchingFailureRetryable({
-      jobId: "job-1",
-      attempt: 2,
-      maxAttempts: 3,
-      signal,
-    }),
+    matchingFailureRetryable(
+      {
+        jobId: "job-1",
+        attempt: 2,
+        maxAttempts: 3,
+        signal,
+      },
+      new Error("provider temporarily unavailable"),
+    ),
     true,
   );
   assert.equal(
-    matchingFailureRetryable({
-      jobId: "job-1",
-      attempt: 3,
-      maxAttempts: 3,
-      signal,
-    }),
+    matchingFailureRetryable(
+      {
+        jobId: "job-1",
+        attempt: 3,
+        maxAttempts: 3,
+        signal,
+      },
+      new Error("provider temporarily unavailable"),
+    ),
     false,
   );
 });

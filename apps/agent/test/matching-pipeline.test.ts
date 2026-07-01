@@ -1083,16 +1083,19 @@ test("evaluation failures are recorded and rethrown", async () => {
       { candidateUserId: "candidate-1", jobId: "job-1" },
       {
         rerank: async () => {
-          throw new Error("provider unavailable");
+          throw new Error("provider temporarily unavailable");
         },
       },
     ),
-    /provider unavailable/,
+    /provider temporarily unavailable/,
   );
 
   const evaluation = repository.snapshotEvaluations()[0];
   assert.equal(evaluation?.status, "FAILED");
-  assert.equal(evaluation?.failureCode, "RETRYABLE:provider unavailable");
+  assert.equal(
+    evaluation?.failureCode,
+    "RETRYABLE:provider temporarily unavailable",
+  );
 });
 
 test("the final evaluation-budget failure is persisted as final", async () => {
@@ -1116,16 +1119,16 @@ test("the final evaluation-budget failure is persisted as final", async () => {
       { candidateUserId: "candidate-1", jobId: "job-1" },
       {
         rerank: async () => {
-          throw new Error("provider unavailable");
+          throw new Error("provider temporarily unavailable");
         },
       },
     ),
-    /provider unavailable/,
+    /provider temporarily unavailable/,
   );
 
   assert.equal(
     repository.snapshotEvaluations()[0]?.failureCode,
-    "FINAL:provider unavailable",
+    "FINAL:provider temporarily unavailable",
   );
 });
 
@@ -1139,7 +1142,7 @@ test("the evaluator can mark a queue-final failure as final before its own budge
       repository,
       { candidateUserId: "candidate-1", jobId: "job-1" },
       {
-        failureRetryable: false,
+        failureRetryable: () => false,
         rerank: async () => {
           throw new Error("last Bull attempt");
         },
@@ -1164,19 +1167,48 @@ test("a changed fingerprint does not inherit queued fingerprint finality", async
       repository,
       { candidateUserId: "candidate-1", jobId: "job-1" },
       {
-        failureRetryable: false,
+        failureRetryable: () => false,
         queuedInputHash: "stale-queued-fingerprint",
         rerank: async () => {
-          throw new Error("provider unavailable");
+          throw new Error("provider temporarily unavailable");
         },
       },
     ),
-    /provider unavailable/,
+    /provider temporarily unavailable/,
   );
 
   const evaluation = repository.snapshotEvaluations()[0];
   assert.equal(evaluation?.attemptCount, 1);
-  assert.equal(evaluation?.failureCode, "RETRYABLE:provider unavailable");
+  assert.equal(
+    evaluation?.failureCode,
+    "RETRYABLE:provider temporarily unavailable",
+  );
+});
+
+test("a changed fingerprint cannot make a permanent queue failure retryable", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+
+  await assert.rejects(
+    evaluateMatchingPair(
+      repository,
+      { candidateUserId: "candidate-1", jobId: "job-1" },
+      {
+        failureRetryable: () => false,
+        queuedInputHash: "stale-queued-fingerprint",
+        rerank: async () => {
+          throw new Error("invalid matching input");
+        },
+      },
+    ),
+    /invalid matching input/,
+  );
+
+  assert.equal(
+    repository.snapshotEvaluations()[0]?.failureCode,
+    "FINAL:invalid matching input",
+  );
 });
 
 test("publication failure rolls back recommendations before marking the claim failed", async () => {

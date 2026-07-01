@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   Queue,
@@ -16,7 +17,7 @@ import type {
 } from "./job-contracts";
 import { isRetryableJobError } from "./job-errors";
 
-type BullJobLike = {
+export type BullJobLike = {
   id?: string;
   name: string;
   data: JobRequest;
@@ -31,6 +32,39 @@ type BullJobLike = {
   getState: () => Promise<string>;
 };
 
+export type BullQueueLike = {
+  getJob(jobId: string): Promise<BullJobLike | undefined>;
+  add(
+    name: string,
+    data: JobRequest,
+    options: JobsOptions,
+  ): Promise<BullJobLike>;
+};
+
+export function bullRetryCooldownMs(input: {
+  attempts: number;
+  backoffMs: number;
+}): number {
+  if (input.attempts <= 1) {
+    return 0;
+  }
+  return Math.min(
+    Number.MAX_SAFE_INTEGER,
+    input.backoffMs * 2 ** (input.attempts - 2),
+  );
+}
+
+export function bullJobExecutionContext(
+  job: Pick<BullJobLike, "attemptsMade" | "opts">,
+  signal: AbortSignal,
+) {
+  return {
+    attempt: job.attemptsMade + 1,
+    maxAttempts: job.opts.attempts,
+    signal,
+  };
+}
+
 export function createBullJobOptions(input: {
   attempts: number;
   backoffMs: number;
@@ -39,8 +73,8 @@ export function createBullJobOptions(input: {
   return {
     attempts: input.attempts,
     backoff: { type: "exponential", delay: input.backoffMs },
-    removeOnComplete: false,
-    removeOnFail: false,
+    removeOnComplete: true,
+    removeOnFail: true,
     ...(input.jobId ? { jobId: input.jobId } : {}),
   };
 }
@@ -110,6 +144,45 @@ export async function mapBullJobEnvelope(
   } as JobEnvelope;
 }
 
+export async function enqueueBullJob(
+  queue: BullQueueLike,
+  request: JobRequest,
+  options: { attempts: number; backoffMs: number },
+): Promise<JobEnvelope> {
+  const jobId = request.deduplicationKey
+    ? createBullDeduplicationJobId(request.deduplicationKey)
+    : undefined;
+  if (jobId) {
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+      if (!isDeepStrictEqual(existing.data, request)) {
+        throw new Error(
+          `Deduplication key conflict: ${request.deduplicationKey}`,
+        );
+      }
+      return {
+        ...(await mapBullJobEnvelope(existing))!,
+        deduplicated: true,
+      };
+    }
+  }
+
+  const job = await queue.add(
+    request.name,
+    request,
+    createBullJobOptions({ ...options, jobId }),
+  );
+  if (jobId) {
+    const persisted = await queue.getJob(jobId);
+    if (persisted && !isDeepStrictEqual(persisted.data, request)) {
+      throw new Error(
+        `Deduplication key conflict: ${request.deduplicationKey}`,
+      );
+    }
+  }
+  return (await mapBullJobEnvelope(job))!;
+}
+
 export type DurableJobRuntime = {
   enqueue(request: JobRequest): Promise<JobEnvelope>;
   get(jobId: string, candidateId?: string): Promise<JobEnvelope | undefined>;
@@ -164,11 +237,10 @@ export function createBullMqJobRuntime(input: {
             name: job.data.name,
             payload: job.data.payload,
           } as ProcessableJob,
-          {
-            attempt: job.attemptsMade + 1,
-            maxAttempts: input.attempts,
-            signal: abortController.signal,
-          },
+          bullJobExecutionContext(
+            job as unknown as BullJobLike,
+            abortController.signal,
+          ),
         );
       } catch (error) {
         if (!isRetryableJobError(error)) {
@@ -187,15 +259,11 @@ export function createBullMqJobRuntime(input: {
 
   return {
     async enqueue(request) {
-      const jobId = request.deduplicationKey
-        ? createBullDeduplicationJobId(request.deduplicationKey)
-        : undefined;
-      const job = await queue.add(
-        request.name,
+      return enqueueBullJob(
+        queue as unknown as BullQueueLike,
         request,
-        createBullJobOptions({ ...input, jobId }),
+        input,
       );
-      return (await mapBullJobEnvelope(job as unknown as BullJobLike))!;
     },
     async get(jobId, candidateId) {
       const job = await queue.getJob(jobId);

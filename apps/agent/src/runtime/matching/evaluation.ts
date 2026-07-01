@@ -13,6 +13,7 @@ import {
   type RerankDependencies,
   type RerankResult,
 } from "./rerank";
+import { isRetryableJobError } from "../jobs/job-errors";
 import type {
   MatchingEvaluation,
   MatchingPair,
@@ -44,7 +45,7 @@ export type MatchingPairEvaluationResult = MatchingPairEvaluationAccounting &
   );
 
 export type MatchingEvaluationDependencies = {
-  failureRetryable?: boolean;
+  failureRetryable?: (error: unknown) => boolean;
   queuedInputHash?: string;
   rerank?: typeof rerankMatch;
   rerankDependencies?: RerankDependencies;
@@ -217,8 +218,9 @@ export async function evaluateMatchingPair(
       ...claim,
       failureCode: error instanceof Error ? error.message : "matching failed",
       retryable:
+        isRetryableJobError(error) &&
         (!queueAttemptMatchesClaim ||
-          (dependencies.failureRetryable ?? true)) &&
+          (dependencies.failureRetryable?.(error) ?? true)) &&
         claim.attemptCount < MAX_MATCHING_EVALUATION_ATTEMPTS,
     });
     throw error;

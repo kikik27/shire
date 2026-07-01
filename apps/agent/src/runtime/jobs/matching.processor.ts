@@ -5,6 +5,7 @@ import type {
   JobExecutionContext,
   JobProcessor,
 } from "./job-processor";
+import { isRetryableJobError } from "./job-errors";
 import { getAgentDatabase } from "../db";
 import { createDrizzleMatchingRepository } from "../matching/repository";
 import { evaluateMatchingPair } from "../matching/evaluation";
@@ -19,10 +20,12 @@ type MatchingPairResult = JobResultMap["matching-pair"];
 
 export function matchingFailureRetryable(
   context: JobExecutionContext,
+  error: unknown,
 ): boolean {
   return (
-    context.maxAttempts === undefined ||
-    context.attempt < context.maxAttempts
+    isRetryableJobError(error) &&
+    (context.maxAttempts === undefined ||
+      context.attempt < context.maxAttempts)
   );
 }
 
@@ -172,7 +175,8 @@ export const matchingPairProcessor: JobProcessor<"matching-pair"> = {
           jobId: payload.jobId,
         },
         {
-          failureRetryable: matchingFailureRetryable(context),
+          failureRetryable: (error) =>
+            matchingFailureRetryable(context, error),
           queuedInputHash: payload.inputHash,
         },
       );

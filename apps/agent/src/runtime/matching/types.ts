@@ -182,6 +182,7 @@ export type MatchingRepository = {
     limit: number;
     cursor?: MatchingReconciliationCursor;
     now?: Date;
+    retryCooldownMs: number;
   }): Promise<MatchingReconciliationResult>;
   expireUnavailableRecommendations(options: {
     limit: number;

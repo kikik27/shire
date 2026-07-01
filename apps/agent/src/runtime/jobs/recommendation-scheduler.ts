@@ -15,6 +15,7 @@ export type RecommendationSchedulerRepository = Pick<
 export type RecommendationSchedulerDependencies = {
   enabled: boolean;
   intervalMs: number;
+  retryCooldownMs: number;
   getRepository: () => RecommendationSchedulerRepository | undefined;
   enqueue: (request: JobRequest) => Promise<{ deduplicated?: boolean } | unknown>;
   setInterval?: typeof setInterval;
@@ -85,8 +86,8 @@ export class RecommendationScheduler {
         limit: 500,
         cursor: this.cursor,
         now,
+        retryCooldownMs: this.dependencies.retryCooldownMs,
       });
-      this.cursor = reconciliation.nextCursor;
       let pairJobs = 0;
       let deduplicated = 0;
       for (const pair of reconciliation.pairs) {
@@ -117,6 +118,7 @@ export class RecommendationScheduler {
           pairJobs += 1;
         }
       }
+      this.cursor = reconciliation.nextCursor;
 
       schedulerLogger.info(
         {

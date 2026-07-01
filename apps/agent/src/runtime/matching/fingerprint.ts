@@ -11,9 +11,6 @@ import type {
 export const RUNNING_EVALUATION_LEASE_MS = 5 * 60 * 1000;
 /** Initial attempt plus two scheduler-driven retries for one input fingerprint. */
 export const MAX_MATCHING_EVALUATION_ATTEMPTS = 3;
-/** Exceeds the default BullMQ exponential backoff horizon by a wide margin. */
-export const RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS =
-  30 * 60 * 1000;
 
 function normalizeText(value: string | undefined): string | null {
   return value === undefined
@@ -123,6 +120,7 @@ export function shouldReconcileMatchingPair(
   inputHash: string,
   evaluation: ReconciliationEvaluation | null,
   now = new Date(),
+  retryCooldownMs = 0,
 ): boolean {
   if (
     !evaluation ||
@@ -139,7 +137,7 @@ export function shouldReconcileMatchingPair(
       evaluation.attemptCount < MAX_MATCHING_EVALUATION_ATTEMPTS &&
       (evaluation.failureCode?.startsWith("RETRYABLE:") ?? false) &&
       evaluation.updatedAt.getTime() <
-        now.getTime() - RETRYABLE_EVALUATION_RECONCILIATION_COOLDOWN_MS
+        now.getTime() - retryCooldownMs
     );
   }
   if (evaluation.status === "RUNNING") {
