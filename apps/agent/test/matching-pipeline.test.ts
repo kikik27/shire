@@ -1154,6 +1154,31 @@ test("the evaluator can mark a queue-final failure as final before its own budge
   );
 });
 
+test("a changed fingerprint does not inherit queued fingerprint finality", async () => {
+  const repository = createInMemoryMatchingRepository();
+  repository.seedCandidate(candidate());
+  repository.seedJob(job());
+
+  await assert.rejects(
+    evaluateMatchingPair(
+      repository,
+      { candidateUserId: "candidate-1", jobId: "job-1" },
+      {
+        failureRetryable: false,
+        queuedInputHash: "stale-queued-fingerprint",
+        rerank: async () => {
+          throw new Error("provider unavailable");
+        },
+      },
+    ),
+    /provider unavailable/,
+  );
+
+  const evaluation = repository.snapshotEvaluations()[0];
+  assert.equal(evaluation?.attemptCount, 1);
+  assert.equal(evaluation?.failureCode, "RETRYABLE:provider unavailable");
+});
+
 test("publication failure rolls back recommendations before marking the claim failed", async () => {
   const repository = createInMemoryMatchingRepository({
     beforeRecommendationWrite(input) {

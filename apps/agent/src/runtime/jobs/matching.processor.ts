@@ -173,6 +173,7 @@ export const matchingPairProcessor: JobProcessor<"matching-pair"> = {
         },
         {
           failureRetryable: matchingFailureRetryable(context),
+          queuedInputHash: payload.inputHash,
         },
       );
       const summary: MatchingPairResult = {

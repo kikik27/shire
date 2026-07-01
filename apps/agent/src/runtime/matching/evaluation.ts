@@ -45,6 +45,7 @@ export type MatchingPairEvaluationResult = MatchingPairEvaluationAccounting &
 
 export type MatchingEvaluationDependencies = {
   failureRetryable?: boolean;
+  queuedInputHash?: string;
   rerank?: typeof rerankMatch;
   rerankDependencies?: RerankDependencies;
 };
@@ -209,11 +210,15 @@ export async function evaluateMatchingPair(
       recommendationRowsWritten: publication.recommendationRowsWritten,
     };
   } catch (error) {
+    const queueAttemptMatchesClaim =
+      dependencies.queuedInputHash === undefined ||
+      dependencies.queuedInputHash === claim.inputHash;
     await repository.failEvaluation({
       ...claim,
       failureCode: error instanceof Error ? error.message : "matching failed",
       retryable:
-        (dependencies.failureRetryable ?? true) &&
+        (!queueAttemptMatchesClaim ||
+          (dependencies.failureRetryable ?? true)) &&
         claim.attemptCount < MAX_MATCHING_EVALUATION_ATTEMPTS,
     });
     throw error;
