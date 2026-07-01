@@ -145,6 +145,31 @@ test("durable enqueue rejects retained ids whose persisted request conflicts", a
   assert.equal(addCalls, 0);
 });
 
+test("durable enqueue detects an identical job won by a concurrent producer", async () => {
+  const request = matchingRequest();
+  const persisted = bullJob(request);
+  const localFacade = {
+    ...bullJob(request),
+    timestamp: 2_000,
+  };
+  let getCalls = 0;
+
+  const envelope = await enqueueBullJob(
+    {
+      getJob: async () => {
+        getCalls += 1;
+        return getCalls === 1 ? undefined : persisted;
+      },
+      add: async () => localFacade,
+    },
+    request,
+    { attempts: 3, backoffMs: 5_000 },
+  );
+
+  assert.equal(envelope.createdAt, new Date(1_000).toISOString());
+  assert.equal(envelope.deduplicated, true);
+});
+
 test("maps delayed BullMQ jobs with ownership and retry metadata", async () => {
   const envelope = await mapBullJobEnvelope(
     {

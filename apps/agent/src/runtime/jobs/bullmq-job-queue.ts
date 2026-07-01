@@ -184,6 +184,12 @@ export async function enqueueBullJob(
         `Deduplication key conflict: ${request.deduplicationKey}`,
       );
     }
+    if (persisted && persisted.timestamp !== job.timestamp) {
+      return {
+        ...(await mapBullJobEnvelope(persisted))!,
+        deduplicated: true,
+      };
+    }
   }
   return (await mapBullJobEnvelope(job))!;
 }
