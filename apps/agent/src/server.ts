@@ -184,7 +184,7 @@ export async function runServer(argv: readonly string[] = process.argv.slice(2))
     runtimeLogger.info({ jobName }, "dispatching job");
 
     try {
-      const result = await jobRegistry[jobName]();
+      const result = await jobRegistry[jobName](argv.slice(1));
 
       if ("agent" in result && "workflow" in result) {
         runtimeLogger.info(

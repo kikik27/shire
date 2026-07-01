@@ -45,18 +45,78 @@ test("cv parse job returns data from the local source", async () => {
   assert.deepEqual(result.usage, []);
 });
 
-test("job matching job returns data from the local source", async () => {
-  const result = await runJobMatchingJob();
-
-  assert.equal(result.routing.capability, "job-rerank");
-  assert.deepEqual(result.usage, []);
+test("job matching CLI requires a candidate id", async () => {
+  await assert.rejects(runJobMatchingJob([]), /candidate id is required/i);
 });
 
-test("talent matching job returns data from the local source", async () => {
-  const result = await runTalentMatchingJob();
+test("job matching CLI routes the candidate through canonical matching", async () => {
+  const calls: unknown[] = [];
+  const result = await runJobMatchingJob(["candidate-123"], {
+    createJobId: () => "manual-job-matching",
+    process: async (payload, context) => {
+      calls.push({ payload, context });
+      return {
+        status: "ready",
+        saved: 1,
+        evaluated: 2,
+        strong: 1,
+        llmInvoked: true,
+        durationMs: 12,
+      };
+    },
+  });
 
+  assert.equal(calls.length, 1);
+  const call = calls[0] as {
+    payload: unknown;
+    context: { jobId: string; attempt: number; signal: AbortSignal };
+  };
+  assert.deepEqual(call.payload, { candidateId: "candidate-123" });
+  assert.equal(call.context.jobId, "manual-job-matching");
+  assert.equal(call.context.attempt, 1);
+  assert.ok(call.context.signal instanceof AbortSignal);
+  assert.equal(result.job, "job-matching");
+  assert.equal(result.routing.capability, "job-rerank");
+  assert.equal(result.status, "ready");
+  assert.equal(result.saved, 1);
+  assert.equal("data" in result, false);
+});
+
+test("talent matching CLI requires a job id", async () => {
+  await assert.rejects(runTalentMatchingJob([]), /job id is required/i);
+});
+
+test("talent matching CLI routes the job through canonical matching", async () => {
+  const calls: unknown[] = [];
+  const result = await runTalentMatchingJob(["job-123"], {
+    createJobId: () => "manual-talent-matching",
+    process: async (payload, context) => {
+      calls.push({ payload, context });
+      return {
+        status: "ready",
+        saved: 1,
+        evaluated: 3,
+        strong: 1,
+        llmInvoked: true,
+        durationMs: 15,
+      };
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  const call = calls[0] as {
+    payload: unknown;
+    context: { jobId: string; attempt: number; signal: AbortSignal };
+  };
+  assert.deepEqual(call.payload, { jobId: "job-123" });
+  assert.equal(call.context.jobId, "manual-talent-matching");
+  assert.equal(call.context.attempt, 1);
+  assert.ok(call.context.signal instanceof AbortSignal);
+  assert.equal(result.job, "talent-matching");
   assert.equal(result.routing.capability, "talent-rerank");
-  assert.deepEqual(result.usage, []);
+  assert.equal(result.status, "ready");
+  assert.equal(result.saved, 1);
+  assert.equal("data" in result, false);
 });
 
 test("dispute summary job returns data from the local source", async () => {
