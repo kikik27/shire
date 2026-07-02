@@ -32,6 +32,7 @@ function seedRecommendation(
     jobId: string;
     matchScore: number;
     recommendedAction: string;
+    status: "NEW" | "SEEN" | "ACCEPTED" | "REJECTED" | "EXPIRED";
     candidate: {
       displayName?: string;
       headline?: string;
@@ -62,7 +63,7 @@ function seedRecommendation(
     missingRequirements: [],
     riskFlags: [],
     recommendedAction: overrides.recommendedAction ?? "SUGGEST_APPLY",
-    status: "NEW",
+    status: overrides.status ?? "NEW",
     createdAt: now,
     updatedAt: now,
     candidate: overrides.candidate,
@@ -134,6 +135,37 @@ test("candidate recommendations GET orders by match score descending", async () 
   assert.deepEqual(
     body.recommendations.map((r: { matchScore: number }) => r.matchScore),
     [95, 83, 71],
+  );
+});
+
+test("candidate recommendations GET excludes expired matches", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const candidate = await profiles.resolveUser("did:privy:candidate");
+  const recommendations = createInMemoryRecommendationsRepository();
+  seedRecommendation(recommendations, {
+    candidateUserId: candidate.id,
+    matchScore: 91,
+    status: "EXPIRED",
+  });
+  seedRecommendation(recommendations, {
+    candidateUserId: candidate.id,
+    matchScore: 82,
+    status: "NEW",
+  });
+  const handlers = createCandidateRecommendationsRouteHandlers({
+    resolveAuthenticatedUser: authenticated(),
+    profileRepository: profiles,
+    recommendationsRepository: recommendations,
+  });
+
+  const response = await handlers.GET(
+    getRequest("http://localhost/api/candidate/recommendations"),
+  );
+  const body = await response.json();
+
+  assert.deepEqual(
+    body.recommendations.map((row: { matchScore: number }) => row.matchScore),
+    [82],
   );
 });
 

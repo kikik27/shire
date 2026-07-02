@@ -129,8 +129,18 @@ export type Application = {
   matchScore: number;
   riskScore: number;
   stakeId?: string;
+  stakeTx?: string;
+  stakeAmount?: number;
   appliedAt: number;
   updatedAt: number;
+};
+
+export type CandidateJobMatch = {
+  score: number;
+  confidence?: number;
+  reasons: string[];
+  missingRequirements: string[];
+  recommendedAction: string;
 };
 
 export type Stake = {

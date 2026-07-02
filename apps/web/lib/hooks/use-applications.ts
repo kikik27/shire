@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
+import { CANDIDATE_DASHBOARD_QUERY_KEY } from "@/lib/hooks/use-candidate-dashboard";
 import type { Application } from "@/lib/types";
 
 type ApiApplication = Omit<Application, "candidateId" | "appliedAt"> & {
@@ -27,6 +28,8 @@ function toApplication(application: ApiApplication): Application {
     message: application.message,
     matchScore: application.matchScore,
     riskScore: application.riskScore,
+    stakeTx: application.stakeTx,
+    stakeAmount: application.stakeAmount,
     appliedAt: application.createdAt,
     updatedAt: application.updatedAt,
   };
@@ -106,7 +109,14 @@ export function useApplyJob() {
       return (await readApplicationsResponse(response)) as Application;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["applications"] });
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: CANDIDATE_DASHBOARD_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({ queryKey: ["applications"] }),
+        queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+        queryClient.invalidateQueries({ queryKey: ["recommendations"] }),
+      ]);
     },
   });
 }

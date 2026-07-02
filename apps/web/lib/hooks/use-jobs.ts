@@ -6,14 +6,14 @@ import { useAccessToken } from "@/lib/auth/use-access-token";
 import type { JobDraftValues } from "@/lib/schemas";
 import { StakeStatus, type Job } from "@/lib/types";
 
-type ApiJob = Omit<
+export type ApiJob = Omit<
   Job,
   "recruiterId" | "stakeStatus"
 > & {
   recruiterUserId: string;
 };
 
-function authorizationHeaders(accessToken?: string) {
+export function authorizationHeaders(accessToken?: string) {
   const headers: Record<string, string> = {};
   if (accessToken) {
     headers.authorization = `Bearer ${accessToken}`;
@@ -21,7 +21,7 @@ function authorizationHeaders(accessToken?: string) {
   return headers;
 }
 
-function toJob(job: ApiJob): Job {
+export function apiJobToJob(job: ApiJob): Job {
   return {
     id: job.id,
     recruiterId: job.recruiterUserId,
@@ -53,10 +53,10 @@ async function readJobsResponse(response: Response) {
   }
   const body = (await response.json()) as { jobs?: ApiJob[]; job?: ApiJob };
   if (body.jobs) {
-    return body.jobs.map(toJob);
+    return body.jobs.map(apiJobToJob);
   }
   if (body.job) {
-    return toJob(body.job);
+    return apiJobToJob(body.job);
   }
   throw new Error("Jobs response was invalid.");
 }

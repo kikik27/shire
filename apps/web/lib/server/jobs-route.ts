@@ -16,6 +16,10 @@ import {
   createDrizzleProfileRepository,
   type ProfileRepository,
 } from "./profile-repository";
+import {
+  createDrizzleRecommendationsRepository,
+  type CandidateJobRecommendationRepository,
+} from "./recommendations-repository";
 import { serverErrorResponse } from "./route-errors";
 
 type ResolveAuthenticatedUser = (request: Request) => Promise<AuthenticatedUser>;
@@ -28,6 +32,10 @@ export type JobsRouteDependencies = {
   resolveAuthenticatedUser?: ResolveAuthenticatedUser;
   profileRepository?: ProfileRepository;
   jobsRepository?: JobsRepository;
+};
+
+export type CandidateJobRouteDependencies = JobsRouteDependencies & {
+  recommendationsRepository?: CandidateJobRecommendationRepository;
 };
 
 async function authenticatedUserId(
@@ -122,6 +130,52 @@ export function createCandidateJobsRouteHandlers(
       const userId = await authenticatedUserId(request, authenticate, profiles());
       return NextResponse.json({
         jobs: await jobs().listActiveJobs({ excludeRecruiterUserId: userId }),
+      });
+    } catch (error) {
+      return serverErrorResponse(error);
+    }
+  }
+
+  return { GET };
+}
+
+export function createCandidateJobRouteHandlers(
+  dependencies: CandidateJobRouteDependencies = {},
+) {
+  const authenticate =
+    dependencies.resolveAuthenticatedUser ?? resolveAuthenticatedUser;
+  const profiles = () =>
+    dependencies.profileRepository ?? createDrizzleProfileRepository();
+  const jobs = () => dependencies.jobsRepository ?? createDrizzleJobsRepository();
+  const recommendations = () =>
+    dependencies.recommendationsRepository ??
+    createDrizzleRecommendationsRepository();
+
+  async function GET(request: Request, context: JobRouteContext) {
+    try {
+      const userId = await authenticatedUserId(request, authenticate, profiles());
+      const { id } = await context.params;
+      const job = await jobs().getJob(id);
+      if (
+        !job ||
+        job.status !== "ACTIVE" ||
+        job.recruiterUserId === userId
+      ) {
+        return NextResponse.json({ error: "job-not-found" }, { status: 404 });
+      }
+      const recommendation =
+        await recommendations().getCandidateJobRecommendation(userId, id);
+      return NextResponse.json({
+        job,
+        match: recommendation
+          ? {
+              score: recommendation.matchScore,
+              confidence: recommendation.confidence,
+              reasons: recommendation.reasons,
+              missingRequirements: recommendation.missingRequirements,
+              recommendedAction: recommendation.recommendedAction,
+            }
+          : null,
       });
     } catch (error) {
       return serverErrorResponse(error);

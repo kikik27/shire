@@ -149,6 +149,24 @@ export function CandidateRecommendations() {
   const { data, isLoading, error } = useCandidateRecommendations();
 
   return (
+    <CandidateRecommendationList
+      recommendations={data}
+      isLoading={isLoading}
+      error={error}
+    />
+  );
+}
+
+export function CandidateRecommendationList({
+  recommendations,
+  isLoading = false,
+  error,
+}: {
+  recommendations?: Recommendation[];
+  isLoading?: boolean;
+  error?: unknown;
+}) {
+  return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Recommended jobs</CardTitle>
@@ -165,11 +183,11 @@ export function CandidateRecommendations() {
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
             Could not load recommendations.
           </div>
-        ) : !data || data.length === 0 ? (
+        ) : !recommendations || recommendations.length === 0 ? (
           <EmptyState message="No job recommendations yet. Shire refreshes matches automatically every 15 minutes." />
         ) : (
           <ul>
-            {data.map((recommendation) => (
+            {recommendations.map((recommendation) => (
               <RecommendationRow
                 key={recommendation.id}
                 recommendation={recommendation}

@@ -4,13 +4,10 @@ import { use } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Briefcase, Clock, DollarSign, MapPin, RotateCw, Zap } from "lucide-react";
-import { computeMatch, computeRisk, offerSafety, recommendStake } from "@/lib/ai";
-import { useCandidateApiJobs } from "@/lib/hooks/use-jobs";
+import { useCandidateJob } from "@/lib/hooks/use-candidate-dashboard";
 import { PageHeader } from "@/components/shared/page-header";
 import { AiInsightCard } from "@/components/ai/ai-insight-card";
-import { WarningPanel } from "@/components/trust/warning-panel";
 import { StakeRecommendationCard } from "@/components/ai/stake-recommendation-card";
-import { OfferSafetyPanel } from "@/components/ai/offer-safety-panel";
 import { ApplyButton } from "@/components/applications/apply-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -41,13 +38,12 @@ export default function CandidateJobDetailPage({
 }) {
   const { id } = use(params);
   const {
-    data: jobs = [],
+    data,
     isLoading,
     isError,
     isFetching,
     refetch,
-  } = useCandidateApiJobs();
-  const job = jobs.find((j) => j.id === id);
+  } = useCandidateJob(id);
 
   if (isLoading) {
     return (
@@ -85,12 +81,8 @@ export default function CandidateJobDetailPage({
       </div>
     );
   }
-  if (!job) return notFound();
-
-  const match = computeMatch(job, null);
-  const risk = computeRisk(job, null);
-  const stake = recommendStake(job, null);
-  const safety = offerSafety(job);
+  if (!data) return notFound();
+  const { job, match } = data;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
@@ -138,6 +130,8 @@ export default function CandidateJobDetailPage({
             </span>
           </>
         )}
+        <span aria-hidden="true">/</span>
+        <span>{job.riskLevel.toLowerCase()} risk</span>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -148,7 +142,7 @@ export default function CandidateJobDetailPage({
         ))}
       </div>
 
-      <div className="prose prose-sm dark:prose-invert max-w-none rounded-2xl border border-border bg-card p-5">
+      <div className="prose prose-sm dark:prose-invert max-w-none rounded-lg border border-border bg-card p-5">
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
           {job.description}
         </p>
@@ -156,14 +150,20 @@ export default function CandidateJobDetailPage({
 
       <Separator />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {match ? (
         <AiInsightCard match={match} />
-        <WarningPanel risk={risk} />
-      </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          A match evaluation is not available for this role yet.
+        </p>
+      )}
 
-      <StakeRecommendationCard rec={stake} />
-
-      {safety.flags.length > 0 && <OfferSafetyPanel safety={safety} />}
+      <StakeRecommendationCard
+        recruiterStake={job.stakeAmount}
+        candidateStakeRequired={job.candidateStakeRequired}
+        candidateStake={job.candidateStakeAmount}
+        token={job.stakeToken}
+      />
     </div>
   );
 }
