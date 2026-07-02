@@ -239,7 +239,10 @@ test("durable terminal retry race returns the producer winner as deduplicated", 
     ...bullJob(request),
     getState: async () => "completed",
     retry: async () => {
-      throw new Error("Job is not in the completed state");
+      throw Object.assign(
+        new Error("Job is not in the completed state"),
+        { code: -3 },
+      );
     },
   };
   const winner = {
@@ -264,6 +267,34 @@ test("durable terminal retry race returns the producer winner as deduplicated", 
 
   assert.equal(envelope.status, "completed");
   assert.equal(envelope.deduplicated, true);
+});
+
+test("durable terminal retry propagates Redis failures instead of claiming deduplication", async () => {
+  const request = matchingRequest();
+  const redisError = Object.assign(new Error("socket reset"), {
+    code: "ECONNRESET",
+  });
+  const existing = {
+    ...bullJob(request),
+    getState: async () => "completed",
+    retry: async () => {
+      throw redisError;
+    },
+  };
+
+  await assert.rejects(
+    enqueueBullJob(
+      {
+        getJob: async () => existing,
+        add: async () => {
+          throw new Error("add must not be called");
+        },
+      },
+      request,
+      { attempts: 3, backoffMs: 5_000 },
+    ),
+    (error) => error === redisError,
+  );
 });
 
 test("durable enqueue detects an identical job won by a concurrent producer", async () => {

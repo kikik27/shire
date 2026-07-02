@@ -145,6 +145,14 @@ function matchesRequest(data: BullJobData, request: JobRequest): boolean {
   return isDeepStrictEqual(requestFromBullData(data), request);
 }
 
+function isBullJobNotInStateError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === -3
+  );
+}
+
 function mapStatus(state: string): JobEnvelope["status"] {
   if (state === "active") return "active";
   if (state === "completed") return "completed";
@@ -242,6 +250,9 @@ export async function enqueueBullJob(
           });
           return (await mapBullJobEnvelope(existing))!;
         } catch (error) {
+          if (!isBullJobNotInStateError(error)) {
+            throw error;
+          }
           const winner = await queue.getJob(jobId);
           if (
             winner &&
