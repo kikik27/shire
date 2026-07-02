@@ -5,6 +5,42 @@ import {
   answerProductQuestion,
   ProductQnaError,
 } from "../src/runtime/knowledge/product-qna";
+import { enrichChatRequestWithProductKnowledge } from "../src/runtime/knowledge/product-context";
+
+function chatBody(question: string) {
+  return {
+    scope: { role: "candidate" },
+    messages: [{ role: "user", content: question }],
+  };
+}
+
+test("social chat skips product retrieval", async () => {
+  let calls = 0;
+  const result = await enrichChatRequestWithProductKnowledge(
+    chatBody("Hi"),
+    async () => {
+      calls += 1;
+      return [];
+    },
+  );
+
+  assert.equal(calls, 0);
+  assert.equal(result.retrievalSkipped, true);
+});
+
+test("product policy questions use retrieval", async () => {
+  let calls = 0;
+  const result = await enrichChatRequestWithProductKnowledge(
+    chatBody("How does Shire staking work?"),
+    async () => {
+      calls += 1;
+      return [];
+    },
+  );
+
+  assert.equal(calls, 1);
+  assert.equal(result.retrievalSkipped, false);
+});
 
 test("rejects empty product questions before calling the model", async () => {
   await assert.rejects(

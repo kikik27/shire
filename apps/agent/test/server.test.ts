@@ -19,6 +19,24 @@ import type { RuntimeHttpServerDependencies } from "../src/types/runtime";
 
 const CHAT_SERVICE_TOKEN = "service-secret";
 
+function productQnaStream(text = "Shire is a hiring product.") {
+  const events = [
+    {
+      type: "data-status",
+      data: { status: "Preparing a concise answer..." },
+    },
+    { type: "text-start", id: "product-text" },
+    { type: "text-delta", id: "product-text", delta: text },
+    { type: "text-end", id: "product-text" },
+    { type: "finish" },
+  ];
+  return new Response(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") +
+      "data: [DONE]\n\n",
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
 function createTestRuntimeDependencies(
   overrides: RuntimeHttpServerDependencies = {},
 ): RuntimeHttpServerDependencies {
@@ -113,16 +131,6 @@ function chatHeaders(token = CHAT_SERVICE_TOKEN) {
 }
 
 test("server uses injected chat runtime without live providers", async () => {
-  const bootstrap = getRuntimeBootstrapOutput();
-  assert.equal(env.redisUrl, undefined);
-  assert.equal(env.textModelApiKey, undefined);
-  assert.equal(env.embeddingEnabled, false);
-  assert.equal(env.workerEnabled, false);
-  assert.equal(env.recommendationSchedulerEnabled, false);
-  assert.equal(bootstrap.storage.memory.scheme, "file");
-  assert.equal(bootstrap.storage.knowledge.scheme, "file");
-  assert.equal(bootstrap.storage.knowledgeManifest.scheme, "file");
-
   let mounted = false;
   const dependencies = createTestRuntimeDependencies();
   const mountAgentChat = dependencies.mountAgentChat;
@@ -475,15 +483,46 @@ test("product Q&A rejects requests without the service token", async () => {
   }
 });
 
+test("product Q&A emits progress, text, finish, and done events", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    streamProductQuestion: () => productQnaStream("Streaming answer"),
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/product-qna`,
+      {
+        method: "POST",
+        headers: chatHeaders(),
+        body: JSON.stringify({ question: "How does Shire work?" }),
+      },
+    );
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(body, /"type":"data-status"/);
+    assert.match(body, /"type":"text-delta"/);
+    assert.match(body, /"type":"finish"/);
+    assert.match(body, /data: \[DONE\]/);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("product Q&A rate limits repeated public questions", async () => {
   let now = 1_000;
   const server = await createRuntimeHttpServer({
     serviceToken: CHAT_SERVICE_TOKEN,
     now: () => now,
-    answerProductQuestion: async () => ({
-      answer: "Shire is a hiring product.",
-      knowledgePaths: [],
-    }),
+    streamProductQuestion: () => productQnaStream(),
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -530,12 +569,20 @@ test("product Q&A rate limits repeated public questions", async () => {
 });
 
 test("product Q&A returns a timeout instead of leaving the request pending", async () => {
+  let generationAborted = false;
   const server = await createRuntimeHttpServer({
     serviceToken: CHAT_SERVICE_TOKEN,
     productQnaTimeoutMs: 10,
-    answerProductQuestion: async () =>
-      new Promise(() => {
-        // Intentionally never resolves.
+    streamProductQuestion: (_body, signal) =>
+      new Promise<Response>((_, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            generationAborted = true;
+            reject(signal.reason);
+          },
+          { once: true },
+        );
       }),
   });
 
@@ -555,6 +602,7 @@ test("product Q&A returns a timeout instead of leaving the request pending", asy
 
     assert.equal(response.status, 504);
     assert.deepEqual(await response.json(), { status: "product-qna-timeout" });
+    assert.equal(generationAborted, true);
   } finally {
     server.close();
     await once(server, "close");

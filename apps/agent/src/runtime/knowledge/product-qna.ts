@@ -54,7 +54,7 @@ export class ProductQnaError extends Error {
 
 const MAX_PRODUCT_QUESTION_LENGTH = 1_000;
 const productQnaLogger = logger.child({ component: "product-qna" });
-const PRODUCT_ONLY_CODE_REQUEST_RESPONSE =
+export const PRODUCT_ONLY_CODE_REQUEST_RESPONSE =
   "I can help with how to use Shire as a product, but I cannot provide code, API snippets, CLI commands, or implementation details here. Ask me about onboarding, roles, staking, escrow, AI matching, disputes, or the hiring flow.";
 
 const codeRequestPattern =
@@ -63,7 +63,7 @@ const codeRequestPattern =
 const codeOutputPattern =
   /```|<\/?[a-z][\s\S]*?>|\b(import|export|function|const|let|var|class|interface|type)\s+\w+|=>|\b(npm|pnpm|yarn|curl|npx)\s+/i;
 
-function normalizeQuestion(input: unknown) {
+export function normalizeProductQuestion(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new ProductQnaError(
       "invalid-product-question",
@@ -90,7 +90,7 @@ function normalizeQuestion(input: unknown) {
   return trimmed;
 }
 
-function dedupeKnowledge(results: KnowledgeResult[]) {
+export function dedupeProductKnowledge(results: KnowledgeResult[]) {
   const seen = new Set<string>();
   const selected: KnowledgeResult[] = [];
 
@@ -132,7 +132,7 @@ function extractText(response: ProductQnaAgentResponse) {
   return "";
 }
 
-function isCodeRequest(question: string) {
+export function isProductCodeRequest(question: string) {
   return codeRequestPattern.test(question);
 }
 
@@ -148,15 +148,15 @@ export async function answerProductQuestion(
   } = {},
 ): Promise<ProductQnaResponse> {
   const startedAt = Date.now();
-  const question = normalizeQuestion(body);
+  const question = normalizeProductQuestion(body);
   productQnaLogger.info(
     {
       questionLength: question.length,
-      codeRequest: isCodeRequest(question),
+      codeRequest: isProductCodeRequest(question),
     },
     "product Q&A normalized question",
   );
-  if (isCodeRequest(question)) {
+  if (isProductCodeRequest(question)) {
     return {
       answer: PRODUCT_ONLY_CODE_REQUEST_RESPONSE,
       knowledgePaths: [],
@@ -166,7 +166,7 @@ export async function answerProductQuestion(
   const search =
     dependencies.searchPublicProductKnowledge ?? searchPublicProductKnowledge;
   const retrievalStartedAt = Date.now();
-  const knowledge = dedupeKnowledge(await search(question));
+  const knowledge = dedupeProductKnowledge(await search(question));
   productQnaLogger.info(
     {
       durationMs: Date.now() - retrievalStartedAt,

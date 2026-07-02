@@ -3,10 +3,9 @@ import type { Express } from "express";
 import { env } from "../env";
 import { logger } from "../runtime/logger";
 import { enforceChatRateLimit } from "../runtime/chat/caller";
-import {
-  answerProductQuestion,
-  ProductQnaError,
-} from "../runtime/knowledge/product-qna";
+import { ProductQnaError } from "../runtime/knowledge/product-qna";
+import { streamProductQuestion } from "../runtime/knowledge/product-qna-stream";
+import { createAiSdkHiddenReasoningStreamSanitizer } from "../runtime/chat/stream-sanitizer";
 import { hasValidServiceToken } from "../runtime/auth/internal";
 import type { RateLimiter } from "../runtime/auth/rate-limit";
 
@@ -17,7 +16,7 @@ export interface ProductQnaRouteDependencies {
   serviceToken?: string;
   rateLimiter: RateLimiter;
   now?: () => number;
-  answerProductQuestion?: typeof answerProductQuestion;
+  streamProductQuestion?: typeof streamProductQuestion;
   timeoutMs?: number;
 }
 
@@ -36,6 +35,17 @@ export function mountProductQnaRoute(
       response.status(401).json({ status: "unauthorized" });
       return;
     }
+
+    const controller = new AbortController();
+    const abortFromClient = () => controller.abort(new Error("client-aborted"));
+    request.once("aborted", abortFromClient);
+    response.once("close", () => {
+      if (!response.writableEnded) abortFromClient();
+    });
+    const timeout = setTimeout(() => {
+      controller.abort(new ProductQnaTimeoutError(timeoutMs));
+    }, timeoutMs);
+    timeout.unref?.();
 
     try {
       const rateResult = await enforceChatRateLimit(
@@ -75,20 +85,29 @@ export function mountProductQnaRoute(
         "product Q&A request accepted",
       );
 
-      const answer = await withTimeout(
-        (dependencies.answerProductQuestion ?? answerProductQuestion)(
-          request.body,
+      const upstream = await waitForStream(
+        Promise.resolve(
+          (dependencies.streamProductQuestion ?? streamProductQuestion)(
+            request.body,
+            controller.signal,
+          ),
         ),
-        timeoutMs,
+        controller.signal,
       );
+      response
+        .status(upstream.status)
+        .set(
+          "content-type",
+          upstream.headers.get("content-type") ?? "text/event-stream",
+        )
+        .set("cache-control", "no-cache, no-transform");
+      await pipeProductStream(upstream, response);
       qnaLogger.info(
         {
           durationMs: Date.now() - startedAt,
-          knowledgePathCount: answer.knowledgePaths.length,
         },
         "product Q&A request completed",
       );
-      response.json(answer);
     } catch (error) {
       if (error instanceof ProductQnaError) {
         response.status(400).json({
@@ -98,7 +117,11 @@ export function mountProductQnaRoute(
         return;
       }
 
-      if (error instanceof ProductQnaTimeoutError) {
+      const abortReason = controller.signal.reason;
+      if (
+        error instanceof ProductQnaTimeoutError ||
+        abortReason instanceof ProductQnaTimeoutError
+      ) {
         qnaLogger.error(
           {
             err: error,
@@ -107,12 +130,25 @@ export function mountProductQnaRoute(
           },
           "product Q&A timed out",
         );
-        response.status(504).json({ status: "product-qna-timeout" });
+        if (!response.headersSent) {
+          response.status(504).json({ status: "product-qna-timeout" });
+        } else {
+          response.end();
+        }
         return;
       }
 
-      qnaLogger.error({ err: error }, "product Q&A failed");
-      response.status(502).json({ status: "product-qna-unavailable" });
+      if (!controller.signal.aborted) {
+        qnaLogger.error({ err: error }, "product Q&A failed");
+      }
+      if (!response.headersSent) {
+        response.status(502).json({ status: "product-qna-unavailable" });
+      } else {
+        response.end();
+      }
+    } finally {
+      clearTimeout(timeout);
+      request.off("aborted", abortFromClient);
     }
   });
 }
@@ -124,18 +160,42 @@ class ProductQnaTimeoutError extends Error {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-  let timeout: NodeJS.Timeout | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => {
-      reject(new ProductQnaTimeoutError(timeoutMs));
-    }, timeoutMs);
-    timeout.unref?.();
-  });
+function waitForStream<T>(promise: Promise<T>, signal: AbortSignal) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      if (signal.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      signal.addEventListener("abort", () => reject(signal.reason), {
+        once: true,
+      });
+    }),
+  ]);
+}
 
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeout) {
-      clearTimeout(timeout);
+async function pipeProductStream(
+  upstream: Response,
+  response: import("express").Response,
+) {
+  if (!upstream.body) {
+    response.end();
+    return;
+  }
+  const sanitizer = createAiSdkHiddenReasoningStreamSanitizer();
+  const reader = upstream.body.getReader();
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      const sanitized = sanitizer.sanitize(chunk.value);
+      if (sanitized) response.write(sanitized);
     }
-  });
+    const final = sanitizer.flush();
+    if (final) response.write(final);
+    response.end();
+  } finally {
+    reader.releaseLock();
+  }
 }

@@ -3,9 +3,11 @@
 import * as React from "react";
 import { BotIcon, HandIcon, SendIcon, XIcon } from "lucide-react";
 import { MarkdownText } from "@/components/assistant-ui/thread";
-import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import { Button } from "@/components/ui/button";
-import { stripHiddenReasoning } from "@/lib/chat/reasoning";
+import {
+  parseUiMessageSse,
+  stripHiddenReasoning,
+} from "@/lib/chat/reasoning";
 import { cn } from "@/lib/utils";
 
 type ProductMessage = {
@@ -23,6 +25,7 @@ export function ProductAssistant() {
   const [open, setOpen] = React.useState(false);
   const [input, setInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [status, setStatus] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const [messages, setMessages] = React.useState<ProductMessage[]>([
@@ -41,7 +44,12 @@ export function ProductAssistant() {
     abortRef.current = controller;
     setInput("");
     setError(null);
-    setMessages((current) => [...current, { role: "user", content: trimmed }]);
+    setStatus("Preparing your answer");
+    setMessages((current) => [
+      ...current,
+      { role: "user", content: trimmed },
+      { role: "assistant", content: "" },
+    ]);
     setLoading(true);
 
     try {
@@ -51,8 +59,8 @@ export function ProductAssistant() {
         body: JSON.stringify({ question: trimmed }),
         signal: controller.signal,
       });
-      const body = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
         if (response.status === 429) {
           throw new Error("rate-limited");
         }
@@ -63,31 +71,76 @@ export function ProductAssistant() {
         );
       }
 
-      const answer =
-        typeof body.answer === "string" && body.answer.trim().length > 0
-          ? stripHiddenReasoning(body.answer) ||
-            "The product assistant could not return an answer yet."
-          : "The product assistant could not return an answer yet.";
-      setMessages((current) => [
-        ...current,
-        { role: "assistant", content: answer },
-      ]);
+      if (!response.body) throw new Error("missing-response-stream");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let receivedText = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        const parsed = parseUiMessageSse(
+          buffer,
+          decoder.decode(value, { stream: !done }),
+        );
+        buffer = parsed.buffer;
+
+        for (const event of parsed.events) {
+          if (event.type === "status") {
+            setStatus(event.status);
+          } else if (event.type === "text") {
+            receivedText = true;
+            setMessages((current) => {
+              const next = [...current];
+              const last = next.at(-1);
+              if (last?.role === "assistant") {
+                next[next.length - 1] = {
+                  ...last,
+                  content: last.content + event.delta,
+                };
+              }
+              return next;
+            });
+          }
+        }
+
+        if (done) break;
+      }
+
+      setMessages((current) => {
+        const next = [...current];
+        const last = next.at(-1);
+        if (last?.role === "assistant") {
+          next[next.length - 1] = {
+            ...last,
+            content: receivedText
+              ? stripHiddenReasoning(last.content)
+              : "The product assistant could not return an answer yet.",
+          };
+        }
+        return next;
+      });
     } catch (requestError) {
-      if (
-        requestError instanceof DOMException &&
-        requestError.name === "AbortError"
-      ) {
+      if (controller.signal.aborted) {
         return;
       }
+      setMessages((current) =>
+        current.at(-1)?.role === "assistant" &&
+        current.at(-1)?.content.length === 0
+          ? current.slice(0, -1)
+          : current,
+      );
       setError(
         requestError instanceof Error && requestError.message === "rate-limited"
           ? "Too many questions in a short time. Please wait a moment, then ask again."
           : "Product assistant is unavailable right now. Please try again.",
       );
     } finally {
-      setLoading(false);
       if (abortRef.current === controller) {
         abortRef.current = null;
+        setLoading(false);
+        setStatus(null);
       }
     }
   }
@@ -118,14 +171,21 @@ export function ProductAssistant() {
               size="icon"
               className="size-8"
               aria-label="Close product assistant"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                abortRef.current?.abort();
+                abortRef.current = null;
+                setLoading(false);
+                setStatus(null);
+                setOpen(false);
+              }}
             >
               <XIcon className="size-4" aria-hidden="true" />
             </Button>
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((message, index) => (
+            {messages.map((message, index) =>
+              message.content ? (
               <div
                 key={index}
                 className={cn(
@@ -141,19 +201,13 @@ export function ProductAssistant() {
                   <span className="whitespace-pre-wrap">{message.content}</span>
                 )}
               </div>
-            ))}
+              ) : null,
+            )}
             {loading ? (
               <div className="mr-auto max-w-[88%] rounded-2xl border border-border bg-background px-4 py-3">
-                <AITextLoading
-                  containerClassName="justify-start p-0"
-                  className="text-xs font-normal tracking-normal text-muted-foreground"
-                  interval={1400}
-                  texts={[
-                    "Reading Shire product context...",
-                    "Checking the public knowledge base...",
-                    "Preparing a concise answer...",
-                  ]}
-                />
+                <p className="text-xs text-muted-foreground" aria-live="polite">
+                  {status ?? "Preparing your answer"}
+                </p>
               </div>
             ) : null}
             {error ? (

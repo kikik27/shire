@@ -5,6 +5,7 @@ import {
   type KnowledgeResult,
   type ProductKnowledgeRole,
 } from "./index";
+import { shouldRetrieveProductKnowledge } from "./product-intent";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -51,6 +52,26 @@ export async function enrichChatRequestWithProductKnowledge(
       role,
       resultCount: 0,
       retrievalFailed: false,
+      retrievalSkipped: true,
+    };
+  }
+
+  const hasTrustedResourceContext =
+    isRecord(body.scope) &&
+    typeof body.scope.resourceType === "string" &&
+    body.scope.resourceType !== "general";
+  const intent = shouldRetrieveProductKnowledge(
+    query,
+    hasTrustedResourceContext,
+  );
+  if (!intent.retrieve) {
+    return {
+      body,
+      role,
+      resultCount: 0,
+      retrievalFailed: false,
+      retrievalSkipped: true,
+      productIntent: intent.intent,
     };
   }
 
@@ -63,6 +84,8 @@ export async function enrichChatRequestWithProductKnowledge(
         role,
         resultCount: 0,
         retrievalFailed: false,
+        retrievalSkipped: false,
+        productIntent: intent.intent,
       };
     }
 
@@ -83,6 +106,8 @@ export async function enrichChatRequestWithProductKnowledge(
       role,
       resultCount: results.length,
       retrievalFailed: false,
+      retrievalSkipped: false,
+      productIntent: intent.intent,
     };
   } catch {
     return {
@@ -90,6 +115,8 @@ export async function enrichChatRequestWithProductKnowledge(
       role,
       resultCount: 0,
       retrievalFailed: true,
+      retrievalSkipped: false,
+      productIntent: intent.intent,
     };
   }
 }

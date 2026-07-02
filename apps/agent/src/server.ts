@@ -87,7 +87,7 @@ export async function createRuntimeHttpServer(
     serviceToken,
     rateLimiter,
     now: dependencies.now,
-    answerProductQuestion: dependencies.answerProductQuestion,
+    streamProductQuestion: dependencies.streamProductQuestion,
     timeoutMs: dependencies.productQnaTimeoutMs,
   });
 
