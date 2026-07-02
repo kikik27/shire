@@ -36,7 +36,11 @@ export default function RecruiterJobDetailPage({
     refetch,
   } = useRecruiterApiJobs();
   const job = jobs.find((j) => j.id === id);
-  const { data: applications = [] } = useJobApplications(job?.id);
+  const {
+    data: applications = [],
+    isLoading: applicationsLoading,
+    isError: applicationsError,
+  } = useJobApplications(job?.id);
   const publishJob = usePublishJob();
   const [stakeOpen, setStakeOpen] = useState(false);
 
@@ -135,7 +139,17 @@ export default function RecruiterJobDetailPage({
             </span>
           </h2>
         </div>
-        {applications.length === 0 ? (
+        {applicationsLoading ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Loading applicants...
+          </p>
+        ) : applicationsError ? (
+          <EmptyState
+            icon={Users}
+            title="Applicants unavailable"
+            description="We could not load applicants for this job."
+          />
+        ) : applications.length === 0 ? (
           <EmptyState
             icon={Users}
             title="No applicants yet"
@@ -148,12 +162,14 @@ export default function RecruiterJobDetailPage({
         ) : (
           <div className="space-y-3">
             {applications.map((app) => {
-              const displayName = `Candidate ${app.candidateId.slice(0, 8)}`;
+              const displayName =
+                app.candidate?.displayName ??
+                `Candidate ${app.candidateId.slice(0, 8)}`;
 
               return (
                 <div
                   key={app.id}
-                  className="rounded-2xl border border-border bg-card p-4 space-y-3"
+                  className="space-y-3 rounded-lg border border-border bg-card p-4"
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className="size-9">
@@ -163,9 +179,15 @@ export default function RecruiterJobDetailPage({
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{displayName}</p>
+                      {app.candidate?.headline && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {app.candidate.headline}
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Applied {timeAgo(app.appliedAt)}
-                        {app.stakeId && " - Staked"}
+                        {(app.stakeAmount !== undefined || app.stakeTx) &&
+                          " - Staked"}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <ApplicationStatusBadge status={app.status} />

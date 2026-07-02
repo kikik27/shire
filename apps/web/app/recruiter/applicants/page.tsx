@@ -1,29 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { Briefcase, RotateCw, Users } from "lucide-react";
-import { useRecruiterApiJobs } from "@/lib/hooks/use-jobs";
+import { RotateCw, Users } from "lucide-react";
+import { useRecruiterApplications } from "@/lib/hooks/use-applications";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
-import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
+import { MatchScoreBadge } from "@/components/trust/scores";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { initials, timeAgo } from "@/lib/format";
 
 export default function RecruiterApplicantsPage() {
   const {
-    data: jobs = [],
+    data: applications = [],
     isLoading,
     isError,
     isFetching,
     refetch,
-  } = useRecruiterApiJobs();
+  } = useRecruiterApplications();
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <PageHeader
         title="All applicants"
-        description="Review applicants from each API-backed job detail."
+        description="Review candidates across your jobs."
       />
 
       {isLoading ? (
@@ -49,7 +50,7 @@ export default function RecruiterApplicantsPage() {
             </Button>
           }
         />
-      ) : jobs.length === 0 ? (
+      ) : applications.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No applicants yet"
@@ -62,29 +63,40 @@ export default function RecruiterApplicantsPage() {
         />
       ) : (
         <div className="space-y-2">
-          {jobs.map((job) => (
+          {applications.map((application) => {
+            const displayName =
+              application.candidate?.displayName ??
+              `Candidate ${application.candidateId.slice(0, 8)}`;
+            return (
             <Link
-              key={job.id}
-              href={`/recruiter/jobs/${job.id}`}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-[box-shadow] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              key={application.id}
+              href={`/recruiter/jobs/${application.jobId}`}
+              className="flex flex-col items-start gap-3 rounded-lg border border-border bg-card p-4 transition-[box-shadow] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-row sm:items-center"
             >
-              <Avatar className="size-10">
+              <Avatar className="size-10 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                  {initials(job.companyName)}
+                  {initials(displayName)}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{job.title}</p>
+                <p className="truncate font-medium">{displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  Open applicant review - posted {timeAgo(job.createdAt)}
+                  {application.job?.title ?? "Owned job"} - applied{" "}
+                  {timeAgo(application.appliedAt)}
                 </p>
+                {application.candidate?.headline && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {application.candidate.headline}
+                  </p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <JobStatusBadge status={job.status} />
-                <Briefcase className="size-4 text-muted-foreground" aria-hidden="true" />
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                <MatchScoreBadge score={application.matchScore} />
+                <ApplicationStatusBadge status={application.status} />
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

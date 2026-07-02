@@ -143,6 +143,26 @@ export type CandidateJobMatch = {
   recommendedAction: string;
 };
 
+export type CandidateApplicationSummary = {
+  displayName: string;
+  headline?: string;
+  skills: string[];
+  location?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
+};
+
+export type ApplicationJobSummary = {
+  title: string;
+  companyName: string;
+};
+
+export type RecruiterApplication = Application & {
+  candidate?: CandidateApplicationSummary;
+  job?: ApplicationJobSummary;
+};
+
 export type Stake = {
   id: string;
   userId: string;

@@ -8,15 +8,12 @@ import {
   authorizationHeaders,
   type ApiJob,
 } from "@/lib/hooks/use-jobs";
+import { CANDIDATE_DASHBOARD_QUERY_KEY } from "@/lib/hooks/query-keys";
 import type { CandidateJobMatch, Job } from "@/lib/types";
 import type {
   CandidateDashboard,
 } from "@/lib/server/candidate-dashboard-repository";
 
-export const CANDIDATE_DASHBOARD_QUERY_KEY = [
-  "candidate",
-  "dashboard",
-] as const;
 export const CANDIDATE_DASHBOARD_REFETCH_INTERVAL_MS = 15 * 60 * 1000;
 
 export type CandidateJobDetail = {

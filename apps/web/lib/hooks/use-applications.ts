@@ -3,10 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { CANDIDATE_DASHBOARD_QUERY_KEY } from "@/lib/hooks/use-candidate-dashboard";
-import type { Application } from "@/lib/types";
+import { CANDIDATE_DASHBOARD_QUERY_KEY } from "@/lib/hooks/query-keys";
+import type { Application, RecruiterApplication } from "@/lib/types";
 
-type ApiApplication = Omit<Application, "candidateId" | "appliedAt"> & {
+type ApiApplication = Omit<RecruiterApplication, "candidateId" | "appliedAt"> & {
   candidateUserId: string;
   createdAt: number;
 };
@@ -19,7 +19,7 @@ function authorizationHeaders(accessToken?: string) {
   return headers;
 }
 
-function toApplication(application: ApiApplication): Application {
+function toApplication(application: ApiApplication): RecruiterApplication {
   return {
     id: application.id,
     jobId: application.jobId,
@@ -30,6 +30,8 @@ function toApplication(application: ApiApplication): Application {
     riskScore: application.riskScore,
     stakeTx: application.stakeTx,
     stakeAmount: application.stakeAmount,
+    candidate: application.candidate,
+    job: application.job,
     appliedAt: application.createdAt,
     updatedAt: application.updatedAt,
   };
@@ -79,7 +81,23 @@ export function useJobApplications(jobId: string | undefined) {
       const response = await fetch(`/api/recruiter/jobs/${jobId}/applications`, {
         headers: authorizationHeaders(accessToken),
       });
-      return (await readApplicationsResponse(response)) as Application[];
+      return (await readApplicationsResponse(response)) as RecruiterApplication[];
+    },
+  });
+}
+
+export function useRecruiterApplications() {
+  const getAccessToken = useAccessToken();
+  return useQuery({
+    queryKey: ["applications", "recruiter"],
+    queryFn: async () => {
+      const accessToken = await getAccessToken();
+      const response = await fetch("/api/recruiter/applications", {
+        headers: authorizationHeaders(accessToken),
+      });
+      return (await readApplicationsResponse(
+        response,
+      )) as RecruiterApplication[];
     },
   });
 }

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
+import { RECRUITER_DASHBOARD_QUERY_KEY } from "@/lib/hooks/query-keys";
 import type { JobDraftValues } from "@/lib/schemas";
 import { StakeStatus, type Job } from "@/lib/types";
 
@@ -106,7 +107,12 @@ export function useCreateJob() {
       return (await readJobsResponse(response)) as Job;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+        queryClient.invalidateQueries({
+          queryKey: RECRUITER_DASHBOARD_QUERY_KEY,
+        }),
+      ]);
     },
   });
 }
@@ -128,7 +134,12 @@ export function usePublishJob() {
       return (await readJobsResponse(response)) as Job;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+        queryClient.invalidateQueries({
+          queryKey: RECRUITER_DASHBOARD_QUERY_KEY,
+        }),
+      ]);
     },
   });
 }
