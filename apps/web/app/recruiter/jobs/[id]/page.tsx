@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Briefcase, RotateCw, Users, Zap } from "lucide-react";
 import { useRecruiterApiJobs, usePublishJob } from "@/lib/hooks/use-jobs";
+import { useCreatePlatformStake } from "@/lib/hooks/use-stakes";
 import { useJobApplications } from "@/lib/hooks/use-applications";
 import { PageHeader } from "@/components/shared/page-header";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
@@ -42,6 +43,7 @@ export default function RecruiterJobDetailPage({
     isError: applicationsError,
   } = useJobApplications(job?.id);
   const publishJob = usePublishJob();
+  const createStake = useCreatePlatformStake();
   const [stakeOpen, setStakeOpen] = useState(false);
 
   if (isLoading) {
@@ -214,24 +216,24 @@ export default function RecruiterJobDetailPage({
         open={stakeOpen}
         onOpenChange={setStakeOpen}
         title="Stake to publish job"
-        description={`Lock cUSD in escrow to activate "${job.title}".`}
+        description={`Lock cUSD in platform escrow to activate "${job.title}".`}
         amount={10}
         adjustable
         min={5}
         max={100}
         refundPolicy="Refunded when the role closes without dispute."
-        confirmLabel="Lock stake & activate"
-        onConfirm={(amount) => {
-          publishJob.mutate(job.id, {
-            onSuccess: () => {
-              toast.success("Job activated with simulated stake", {
-                description: `${formatToken(amount, "cUSD")} recorded for this listing.`,
-              });
-              setStakeOpen(false);
-            },
-            onError: () => {
-              toast.error("Job activation failed");
-            },
+        confirmLabel="Lock escrow and activate"
+        onConfirm={async (amount) => {
+          await createStake.mutateAsync({
+            type: "JOB_POST",
+            amount,
+            token: "cUSD",
+            idempotencyKey: `job:${job.id}:publish`,
+            jobId: job.id,
+          });
+          await publishJob.mutateAsync(job.id);
+          toast.success("Job activated with platform escrow", {
+            description: `${formatToken(amount, "cUSD")} recorded for this listing.`,
           });
         }}
       />

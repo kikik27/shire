@@ -8,7 +8,7 @@ export default function AdminStakesPage() {
     <div className="space-y-6 p-4 sm:p-6">
       <PageHeader
         title="Stake management"
-        description="Refund or slash any locked escrow stake."
+        description="Refund or slash locked platform escrow."
       />
       <AdminStakeTable />
     </div>

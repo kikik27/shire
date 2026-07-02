@@ -1,8 +1,8 @@
 "use client";
 
-import { MoreVertical } from "lucide-react";
+import { Briefcase, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
-import { useShireStore } from "@/lib/store";
+import { useAdminJobs, useModerateJob } from "@/lib/hooks/use-admin";
 import {
   Table,
   TableBody,
@@ -20,15 +20,45 @@ import {
 import { Button } from "@/components/ui/button";
 import { RiskScoreBadge } from "@/components/trust/scores";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export function AdminJobTable() {
-  const jobs = useShireStore((s) => s.jobs);
-  const moderateJob = useShireStore((s) => s.moderateJob);
+  const { data, isLoading, isError } = useAdminJobs();
+  const moderateJob = useModerateJob();
+  const jobs = data?.jobs ?? [];
 
   const sorted = [...jobs].sort((a, b) => b.riskScore - a.riskScore);
 
+  if (isLoading) {
+    return (
+      <EmptyState
+        icon={Briefcase}
+        title="Loading jobs"
+        description="Fetching moderation records."
+      />
+    );
+  }
+  if (isError) {
+    return (
+      <EmptyState
+        icon={Briefcase}
+        title="Jobs unavailable"
+        description="Admin job data could not be loaded."
+      />
+    );
+  }
+  if (sorted.length === 0) {
+    return (
+      <EmptyState
+        icon={Briefcase}
+        title="No jobs"
+        description="Job moderation records will appear here."
+      />
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -60,26 +90,44 @@ export function AdminJobTable() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
+                      disabled={moderateJob.isPending}
                       onClick={() => {
-                        moderateJob(job.id, "approve");
-                        toast.success("Job approved");
+                        moderateJob.mutate(
+                          { id: job.id, action: "approve" },
+                          {
+                            onSuccess: () => toast.success("Job approved"),
+                            onError: () => toast.error("Job update failed"),
+                          },
+                        );
                       }}
                     >
                       Approve
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      disabled={moderateJob.isPending}
                       onClick={() => {
-                        moderateJob(job.id, "flag");
-                        toast("Job flagged for review");
+                        moderateJob.mutate(
+                          { id: job.id, action: "flag" },
+                          {
+                            onSuccess: () => toast("Job flagged for review"),
+                            onError: () => toast.error("Job update failed"),
+                          },
+                        );
                       }}
                     >
                       Flag as risky
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      disabled={moderateJob.isPending}
                       className="text-destructive focus:text-destructive"
                       onClick={() => {
-                        moderateJob(job.id, "close");
-                        toast("Job closed");
+                        moderateJob.mutate(
+                          { id: job.id, action: "close" },
+                          {
+                            onSuccess: () => toast("Job closed"),
+                            onError: () => toast.error("Job update failed"),
+                          },
+                        );
                       }}
                     >
                       Close job

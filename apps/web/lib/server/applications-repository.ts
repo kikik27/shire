@@ -53,6 +53,7 @@ export interface ApplicationsRepository {
     recruiterUserId: string,
     limit?: number,
   ): Promise<PersistedApplication[]>;
+  getApplication(id: string): Promise<PersistedApplication | null>;
   updateApplicationStatus(
     id: string,
     status: ApplicationStatus,
@@ -257,6 +258,14 @@ export function createDrizzleApplicationsRepository(
         );
       }
     },
+    async getApplication(id) {
+      const [row] = await database
+        .select()
+        .from(applications)
+        .where(eq(applications.id, id))
+        .limit(1);
+      return row ? mapApplication(row) : null;
+    },
     async updateApplicationStatus(id, status) {
       try {
         const [row] = await database
@@ -376,6 +385,9 @@ export function createInMemoryApplicationsRepository(
       return Promise.all(
         rows.map((application) => withCandidate(application, true)),
       );
+    },
+    async getApplication(id) {
+      return savedApplications.get(id) ?? null;
     },
     async updateApplicationStatus(id, status) {
       const application = savedApplications.get(id);

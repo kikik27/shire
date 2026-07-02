@@ -48,6 +48,11 @@ export interface JobsRepository {
   listActiveJobs(options?: { excludeRecruiterUserId?: string }): Promise<PersistedJob[]>;
   getJob(id: string): Promise<PersistedJob | null>;
   updateJobStatus(id: string, status: JobStatus): Promise<PersistedJob>;
+  recordJobStake(
+    id: string,
+    amount: number,
+    token: TokenSymbol,
+  ): Promise<PersistedJob>;
 }
 
 export class JobsRepositoryError extends Error {
@@ -68,7 +73,7 @@ function toTimestamp(value: Date | number) {
   return value instanceof Date ? value.getTime() : value;
 }
 
-function mapJob(row: typeof jobs.$inferSelect): PersistedJob {
+export function mapJob(row: typeof jobs.$inferSelect): PersistedJob {
   return {
     id: row.id,
     recruiterUserId: row.recruiterUserId,
@@ -188,6 +193,28 @@ export function createDrizzleJobsRepository(database: Database = createDatabase(
         throw new JobsRepositoryError("Failed to update job status.", { cause: error });
       }
     },
+    async recordJobStake(id, amount, token) {
+      try {
+        const [row] = await database
+          .update(jobs)
+          .set({
+            stakeAmount: String(amount),
+            stakeToken: token,
+            updatedAt: new Date(),
+          })
+          .where(eq(jobs.id, id))
+          .returning();
+        if (!row) {
+          throw new JobsRepositoryError("Job was not found.");
+        }
+        return mapJob(row);
+      } catch (error) {
+        if (error instanceof JobsRepositoryError) throw error;
+        throw new JobsRepositoryError("Failed to record job stake.", {
+          cause: error,
+        });
+      }
+    },
   };
 }
 
@@ -248,6 +275,20 @@ export function createInMemoryJobsRepository(): JobsRepository {
         throw new JobsRepositoryError("Job was not found.");
       }
       const updated = { ...job, status, updatedAt: Date.now() };
+      savedJobs.set(id, updated);
+      return updated;
+    },
+    async recordJobStake(id, amount, token) {
+      const job = savedJobs.get(id);
+      if (!job) {
+        throw new JobsRepositoryError("Job was not found.");
+      }
+      const updated = {
+        ...job,
+        stakeAmount: amount,
+        stakeToken: token,
+        updatedAt: Date.now(),
+      };
       savedJobs.set(id, updated);
       return updated;
     },

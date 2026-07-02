@@ -16,7 +16,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 import {
+  DISPUTE_STATUSES,
   MATCHING_EVALUATION_STATUSES,
+  PLATFORM_STAKE_STATUSES,
+  PLATFORM_STAKE_TYPES,
   PROFILE_STATUSES,
   RECOMMENDATION_STATUSES,
   RECOMMENDATION_TYPES,
@@ -61,6 +64,15 @@ export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "SUCCESS",
   "FAILED",
   "PARTIAL",
+]);
+export const platformStakeStatusEnum = pgEnum("stake_status", [
+  ...PLATFORM_STAKE_STATUSES,
+]);
+export const platformStakeTypeEnum = pgEnum("stake_type", [
+  ...PLATFORM_STAKE_TYPES,
+]);
+export const disputeStatusEnum = pgEnum("dispute_status", [
+  ...DISPUTE_STATUSES,
 ]);
 
 const bytea = customType<{ data: Buffer; default: false }>({
@@ -122,6 +134,73 @@ export const applications = pgTable(
     ...timestamps,
   },
   (table) => [uniqueIndex("applications_job_candidate_unique").on(table.jobId, table.candidateUserId)],
+);
+
+export const stakes = pgTable(
+  "stakes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id").notNull(),
+    jobId: uuid("job_id"),
+    applicationId: uuid("application_id"),
+    type: platformStakeTypeEnum("type").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    token: text("token").notNull(),
+    status: platformStakeStatusEnum("status").default("LOCKED").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    reason: text("reason"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("stakes_owner_idempotency_unique").on(
+      table.ownerUserId,
+      table.idempotencyKey,
+    ),
+    index("stakes_owner_idx").on(table.ownerUserId),
+    index("stakes_status_idx").on(table.status),
+    index("stakes_job_idx").on(table.jobId),
+    index("stakes_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const disputes = pgTable(
+  "disputes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reporterUserId: uuid("reporter_user_id").notNull(),
+    jobId: uuid("job_id"),
+    stakeId: uuid("stake_id"),
+    reason: text("reason").notNull(),
+    status: disputeStatusEnum("status").default("OPEN").notNull(),
+    aiSummary: text("ai_summary"),
+    adminDecision: text("admin_decision"),
+    ...timestamps,
+  },
+  (table) => [
+    index("disputes_status_idx").on(table.status),
+    index("disputes_job_idx").on(table.jobId),
+    index("disputes_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    actorUserId: uuid("actor_user_id").notNull(),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("audit_logs_actor_idx").on(table.actorUserId),
+    index("audit_logs_entity_idx").on(table.entityType, table.entityId),
+    index("audit_logs_created_at_idx").on(table.createdAt),
+  ],
 );
 
 export const recommendations = pgTable(

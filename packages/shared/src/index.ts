@@ -20,3 +20,12 @@ export {
 } from "./recommendations";
 
 export { TRUSTED_CHAT_CONTEXT_SOURCE } from "./chat";
+
+export {
+  DISPUTE_STATUSES,
+  PLATFORM_STAKE_STATUSES,
+  PLATFORM_STAKE_TYPES,
+  type DisputeStatus,
+  type PlatformStakeStatus,
+  type PlatformStakeType,
+} from "./escrow";

@@ -1,3 +1,4 @@
+import type { PlatformStakeStatus, PlatformStakeType } from "@shire/shared";
 import { StakeStatus, StakeType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,20 @@ const statusMap: Record<number, { label: string; cls: string }> = {
   [StakeStatus.Cancelled]: { label: "Cancelled", cls: "bg-muted text-muted-foreground" },
 };
 
+const platformStatusMap: Record<
+  PlatformStakeStatus,
+  { label: string; cls: string }
+> = {
+  LOCKED: { label: "Locked", cls: "bg-primary/10 text-primary" },
+  REFUNDED: { label: "Refunded", cls: "bg-success/10 text-success" },
+  SLASHED: {
+    label: "Slashed",
+    cls: "bg-destructive/10 text-destructive",
+  },
+  RELEASED: { label: "Released", cls: "bg-success/10 text-success" },
+  CANCELLED: { label: "Cancelled", cls: "bg-muted text-muted-foreground" },
+};
+
 export const stakeTypeLabel: Record<number, string> = {
   [StakeType.JobPost]: "Job post",
   [StakeType.Application]: "Application",
@@ -17,8 +32,25 @@ export const stakeTypeLabel: Record<number, string> = {
   [StakeType.Bounty]: "Bounty",
 };
 
-export function StakeStatusBadge({ status, className }: { status: StakeStatus; className?: string }) {
-  const s = statusMap[status] ?? statusMap[StakeStatus.Cancelled];
+export const platformStakeTypeLabel: Record<PlatformStakeType, string> = {
+  JOB_POST: "Job post",
+  APPLICATION: "Application",
+  INTERVIEW: "Interview",
+  OFFER: "Offer",
+  BOUNTY: "Bounty",
+};
+
+export function StakeStatusBadge({
+  status,
+  className,
+}: {
+  status: StakeStatus | PlatformStakeStatus;
+  className?: string;
+}) {
+  const s =
+    typeof status === "string"
+      ? platformStatusMap[status]
+      : statusMap[status] ?? statusMap[StakeStatus.Cancelled];
   return (
     <span
       className={cn(

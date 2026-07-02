@@ -4,6 +4,12 @@
  * frontend can be swapped from the demo store to real wagmi/API calls without reshaping data.
  */
 
+import type {
+  DisputeStatus,
+  PlatformStakeStatus,
+  PlatformStakeType,
+} from "@shire/shared";
+
 // --- Onchain role registry (ShireRegistryUpgradeable.roleType) ---
 export const RoleType = {
   None: 0,
@@ -161,6 +167,34 @@ export type ApplicationJobSummary = {
 export type RecruiterApplication = Application & {
   candidate?: CandidateApplicationSummary;
   job?: ApplicationJobSummary;
+};
+
+export type PlatformStake = {
+  id: string;
+  ownerUserId: string;
+  jobId?: string;
+  applicationId?: string;
+  type: PlatformStakeType;
+  amount: number;
+  token: TokenSymbol;
+  status: PlatformStakeStatus;
+  idempotencyKey: string;
+  reason?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type PlatformDispute = {
+  id: string;
+  reporterUserId: string;
+  jobId?: string;
+  stakeId?: string;
+  reason: string;
+  status: DisputeStatus;
+  aiSummary?: string;
+  adminDecision?: string;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type Stake = {
