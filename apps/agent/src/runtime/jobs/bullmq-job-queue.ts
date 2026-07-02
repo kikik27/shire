@@ -16,6 +16,7 @@ import type {
   ProcessableJob,
 } from "./job-contracts";
 import { isRetryableJobError } from "./job-errors";
+import { MAX_MATCHING_EVALUATION_ATTEMPTS } from "../matching/fingerprint";
 
 export type BullJobLike = {
   id?: string;
@@ -30,7 +31,13 @@ export type BullJobLike = {
   returnvalue: JobResult | null;
   failedReason?: string;
   getState: () => Promise<string>;
-  remove?: () => Promise<void>;
+  retry?: (
+    state: "completed" | "failed",
+    options: {
+      resetAttemptsMade: boolean;
+      resetAttemptsStarted: boolean;
+    },
+  ) => Promise<void>;
 };
 
 export type BullQueueLike = {
@@ -53,6 +60,10 @@ export function bullRetryCooldownMs(input: {
     Number.MAX_SAFE_INTEGER,
     input.backoffMs * 2 ** (input.attempts - 2),
   );
+}
+
+export function matchingJobAttempts(configuredAttempts: number): number {
+  return Math.min(configuredAttempts, MAX_MATCHING_EVALUATION_ATTEMPTS);
 }
 
 export function bullJobExecutionContext(
@@ -169,9 +180,28 @@ export async function enqueueBullJob(
       if (
         request.name === "matching-pair" &&
         (state === "completed" || state === "failed") &&
-        existing.remove
+        existing.retry
       ) {
-        await existing.remove();
+        try {
+          await existing.retry(state, {
+            resetAttemptsMade: true,
+            resetAttemptsStarted: true,
+          });
+          return (await mapBullJobEnvelope(existing))!;
+        } catch (error) {
+          const winner = await queue.getJob(jobId);
+          if (
+            winner &&
+            isDeepStrictEqual(winner.data, request) &&
+            !["completed", "failed"].includes(await winner.getState())
+          ) {
+            return {
+              ...(await mapBullJobEnvelope(winner))!,
+              deduplicated: true,
+            };
+          }
+          throw error;
+        }
       } else {
         return {
           ...(await mapBullJobEnvelope(existing))!,
@@ -184,11 +214,15 @@ export async function enqueueBullJob(
   const enqueueTimestamp = jobId
     ? (options.now?.() ?? Date.now())
     : undefined;
+  const attempts =
+    request.name === "matching-pair"
+      ? matchingJobAttempts(options.attempts)
+      : options.attempts;
   const job = await queue.add(
     request.name,
     request,
     createBullJobOptions({
-      attempts: options.attempts,
+      attempts,
       backoffMs: options.backoffMs,
       jobId,
       timestamp: enqueueTimestamp,
@@ -204,7 +238,7 @@ export async function enqueueBullJob(
     if (
       persisted &&
       enqueueTimestamp !== undefined &&
-      job.timestamp !== enqueueTimestamp
+      persisted.timestamp !== enqueueTimestamp
     ) {
       return {
         ...(await mapBullJobEnvelope(persisted))!,

@@ -12,7 +12,10 @@ import {
   matchingQueueGeneration,
   shouldReconcileMatchingPair,
 } from "../src/runtime/matching/fingerprint";
-import { createInMemoryMatchingRepository } from "../src/runtime/matching/repository";
+import {
+  createInMemoryMatchingRepository,
+  UNAVAILABLE_CLEANUP_TRANSACTION_CONFIG,
+} from "../src/runtime/matching/repository";
 
 function createRepository(): RecommendationSchedulerRepository {
   const current = new Set<string>();
@@ -497,6 +500,13 @@ test("unavailable cleanup does not expire recommendations reactivated before upd
       .map((recommendation) => recommendation.status),
     ["NEW", "NEW"],
   );
+});
+
+test("unavailable cleanup rechecks eligibility with a fresh statement snapshot", () => {
+  assert.deepEqual(UNAVAILABLE_CLEANUP_TRANSACTION_CONFIG, {
+    isolationLevel: "read committed",
+    accessMode: "read write",
+  });
 });
 
 test("recommendation scheduler enqueues each canonical pair once", async () => {

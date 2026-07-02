@@ -50,6 +50,11 @@ import {
 
 export { RUNNING_EVALUATION_LEASE_MS } from "./fingerprint";
 
+export const UNAVAILABLE_CLEANUP_TRANSACTION_CONFIG = {
+  isolationLevel: "read committed",
+  accessMode: "read write",
+} as const;
+
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -631,10 +636,7 @@ export function createDrizzleMatchingRepository(
               .returning({ id: recommendations.id });
             return expired.length;
           },
-          {
-            isolationLevel: "serializable",
-            accessMode: "read write",
-          },
+          UNAVAILABLE_CLEANUP_TRANSACTION_CONFIG,
         ),
       );
     },

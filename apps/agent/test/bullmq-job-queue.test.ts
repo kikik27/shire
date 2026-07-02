@@ -62,6 +62,31 @@ test("uses each persisted Bull job's attempts for processor finality", () => {
   );
 });
 
+test("durable matching jobs clamp configured attempts to the evaluation budget", async () => {
+  const request = matchingRequest();
+  let addedAttempts: number | undefined;
+
+  await enqueueBullJob(
+    {
+      getJob: async () => undefined,
+      add: async (_name, data, options) => {
+        addedAttempts = options.attempts;
+        return {
+          ...bullJob(data),
+          attemptsMade: 0,
+          opts: { attempts: options.attempts as number },
+          timestamp: options.timestamp as number,
+          getState: async () => "waiting",
+        };
+      },
+    },
+    request,
+    { attempts: 5, backoffMs: 5_000, now: () => 2_000 },
+  );
+
+  assert.equal(addedAttempts, 3);
+});
+
 test("retains terminal jobs until reconciliation needs to reuse their id", () => {
   assert.deepEqual(createBullJobOptions({ attempts: 3, backoffMs: 5_000 }), {
     attempts: 3,
@@ -144,20 +169,54 @@ test("durable enqueue rejects retained ids whose persisted request conflicts", a
   assert.equal(addCalls, 0);
 });
 
-test("durable enqueue replaces an identical terminal matching job when work is stale again", async () => {
+test("durable enqueue atomically retries an identical terminal matching job when work is stale again", async () => {
   const request = matchingRequest();
-  let removed = false;
+  const retried: unknown[] = [];
+  let state = "completed";
+  const existing = {
+    ...bullJob(request),
+    getState: async () => state,
+    retry: async (...args: unknown[]) => {
+      retried.push(args);
+      state = "waiting";
+    },
+  };
+  let addCalls = 0;
+
+  const envelope = await enqueueBullJob(
+    {
+      getJob: async () => existing,
+      add: async () => {
+        addCalls += 1;
+        return existing;
+      },
+    },
+    request,
+    { attempts: 3, backoffMs: 5_000, now: () => 3_000 },
+  );
+
+  assert.deepEqual(retried, [
+    [
+      "completed",
+      { resetAttemptsMade: true, resetAttemptsStarted: true },
+    ],
+  ]);
+  assert.equal(addCalls, 0);
+  assert.equal(envelope.status, "queued");
+  assert.equal(envelope.deduplicated, undefined);
+});
+
+test("durable terminal retry race returns the producer winner as deduplicated", async () => {
+  const request = matchingRequest();
   const existing = {
     ...bullJob(request),
     getState: async () => "completed",
-    remove: async () => {
-      removed = true;
+    retry: async () => {
+      throw new Error("Job is not in the completed state");
     },
   };
-  const replacement = {
+  const winner = {
     ...bullJob(request),
-    timestamp: 3_000,
-    attemptsMade: 0,
     getState: async () => "waiting",
   };
   let getCalls = 0;
@@ -166,23 +225,27 @@ test("durable enqueue replaces an identical terminal matching job when work is s
     {
       getJob: async () => {
         getCalls += 1;
-        if (getCalls === 1) return existing;
-        return replacement;
+        return getCalls === 1 ? existing : winner;
       },
-      add: async () => replacement,
+      add: async () => {
+        throw new Error("add must not be called");
+      },
     },
     request,
-    { attempts: 3, backoffMs: 5_000, now: () => 3_000 },
+    { attempts: 3, backoffMs: 5_000 },
   );
 
-  assert.equal(removed, true);
-  assert.equal(envelope.createdAt, new Date(3_000).toISOString());
-  assert.equal(envelope.deduplicated, undefined);
+  assert.equal(envelope.status, "queued");
+  assert.equal(envelope.deduplicated, true);
 });
 
 test("durable enqueue detects an identical job won by a concurrent producer", async () => {
   const request = matchingRequest();
   const persisted = bullJob(request);
+  const localFacade = {
+    ...bullJob(request),
+    timestamp: 2_000,
+  };
   let getCalls = 0;
   let addedOptions: { timestamp?: number } | undefined;
 
@@ -194,7 +257,7 @@ test("durable enqueue detects an identical job won by a concurrent producer", as
       },
       add: async (_name, _data, options) => {
         addedOptions = options;
-        return persisted;
+        return localFacade;
       },
     },
     request,
