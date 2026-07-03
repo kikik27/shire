@@ -24,9 +24,12 @@ flowchart LR
     User[Candidates and Companies] --> Web[apps/web<br/>Next.js web app]
     Web --> Agent[apps/agent<br/>Mastra orchestration runtime]
     Agent --> Workflows[CV parsing<br/>Job matching<br/>Talent matching<br/>Dispute summary]
-    Agent --> Data[Local runtime fixtures now<br/>DB integrations later]
+    Web --> Postgres[(Shared Postgres)]
+    Agent --> Postgres
+    Agent --> Redis[(Redis and BullMQ)]
+    Agent --> Turso[(Turso memory and knowledge)]
     Web --> Contracts[contracts<br/>Celo stablecoin escrow]
-    Agent -. future sync .-> Contracts
+    Agent -. settlement sync .-> Contracts
 ```
 
 ## Monorepo Layout
@@ -63,7 +66,9 @@ flowchart TD
 
 - domain agents for CV profile, job matching, talent matching, and dispute summary
 - deterministic workflow boundaries for `extract -> normalize -> interpret`
-- local fixture-backed job runners so the orchestration layer can be built before the web database exists
+- Postgres-backed matching evaluation and recommendation persistence
+- BullMQ jobs with Redis-backed retries and deduplication
+- Turso-backed conversation memory and product knowledge vectors
 - guardrails for `manual`, `semi-autonomous`, and `fully-autonomous` operating modes
 - structured runtime logging with `pino` and `pino-pretty`
 
@@ -109,7 +114,7 @@ The root dev command starts:
 
 Note:
 
-- the root dev command uses a small Node orchestrator in [`scripts/dev.mjs`](E:\web3\shire\scripts\dev.mjs) instead of Turbo for persistent dev processes on this Windows environment
+- the root dev command uses a small Node orchestrator in [`scripts/dev.mjs`](scripts/dev.mjs) instead of Turbo for persistent dev processes on this Windows environment
 - the agent runtime defaults to port `3010`
 - the web app typically uses Next.js default dev behavior on port `3000`
 
@@ -119,11 +124,27 @@ Note:
 npm run build
 ```
 
+The default build covers the web and agent workspaces. Solidity remains an
+explicit Foundry command:
+
+```bash
+npm run build:contracts
+```
+
 ### Typecheck
 
 ```bash
 npm run typecheck
 ```
+
+### Verify
+
+```bash
+npm run verify
+```
+
+This runs lint, typecheck, deterministic web and agent tests, and production
+builds. It does not call live model, Redis, or Foundry tests.
 
 ## Agent Runtime
 
@@ -142,7 +163,7 @@ GET /ready
 
 Default environment template:
 
-- [apps/agent/.env.example](E:\web3\shire\apps\agent\.env.example)
+- [apps/agent/.env.example](apps/agent/.env.example)
 
 Key runtime settings:
 
@@ -159,22 +180,35 @@ The agent workspace includes runnable job entrypoints for isolated workflow test
 
 ```bash
 npm run job:cv-parse --workspace=@shire/agent
-npm run job:job-matching --workspace=@shire/agent
-npm run job:talent-matching --workspace=@shire/agent
+npm run job:job-matching --workspace=@shire/agent -- <candidate-user-id>
+npm run job:talent-matching --workspace=@shire/agent -- <job-id>
 npm run job:dispute-summary --workspace=@shire/agent
 ```
 
-Current job data comes from local runtime fixtures in:
+The HTTP runtime schedules canonical candidate/job pairs every 15 minutes.
+Completed pairs with unchanged input hashes are skipped. Redis job IDs and
+database uniqueness constraints prevent duplicate queue work and duplicate
+recommendations.
 
-- [apps/agent/src/runtime/data/runtime-data.ts](E:\web3\shire\apps\agent\src\runtime\data\runtime-data.ts)
+## Production Data Model
 
-That is deliberate. The repo is keeping orchestration and workflow contracts stable first, then swapping the data source to a real database later.
+- `apps/web` owns the shared Postgres schema and Drizzle migrations.
+- `apps/agent` reads eligible profiles and active jobs, then writes matching
+  evaluations, recommendations, and agent run records to the same database.
+- Redis is required in production for durable jobs, retries, result polling,
+  and scheduler deduplication. The in-memory queue is development-only.
+- Turso/libSQL conversation memory is independent from Postgres product data.
+- Turso/libSQL product knowledge stores vectors and the content-hash manifest.
+  Embeddings run during knowledge sync and semantic retrieval, not on every
+  request when retrieval is unnecessary.
+- Authenticated profile, job, application, stake, and recommendation data is
+  never persisted in browser local storage.
 
 ## Contract Development
 
 The Solidity workspace lives in:
 
-- [contracts](E:\web3\shire\contracts)
+- [contracts](contracts)
 
 The current contract direction is:
 
@@ -183,14 +217,25 @@ The current contract direction is:
 - Celo deployment target
 
 This repository is not positioning onchain staking as the primary product path.
+The current web flow records platform escrow state in Postgres. It does not
+prove that funds have settled on Celo. Contract settlement and chain
+reconciliation remain a separate operational step.
 
 ## Testing
 
-Agent verification currently includes:
+Default verification:
 
 ```bash
-npm run test --workspace=@shire/agent
-npm run build --workspace=@shire/agent
+npm run test
+npm run verify
+```
+
+Live integrations remain opt-in:
+
+```bash
+npm run test:live:llm --workspace=@shire/agent
+npm run test:live-queue --workspace=@shire/agent
+npm run test:contracts
 ```
 
 The agent tests cover:
@@ -207,10 +252,8 @@ The agent tests cover:
 
 Near-term priorities:
 
-- connect the web product to a real persistence layer
-- replace agent fixture data with repository and database adapters
-- wire event-driven job triggers
-- add Celo onchain sync after web and data flows are stable
+- complete Celo settlement and reconciliation for platform escrow records
+- add production observability for queue lag and provider failures
 - refine the public product UX and marketplace flows
 
 ## Contributing
@@ -226,8 +269,8 @@ This repository is still in active build mode. Until a dedicated contributor gui
 
 If you are working inside this codebase with an AI coding agent, start here:
 
-- [.agent/README.md](E:\web3\shire\.agent\README.md)
-- [.agent/context/README.md](E:\web3\shire\.agent\context\README.md)
+- [.agent/README.md](.agent/README.md)
+- [.agent/context/README.md](.agent/context/README.md)
 
 ## License
 

@@ -94,6 +94,8 @@ CV text and full evidence files are excluded from memory.
 
 The service starts the HTTP listener and BullMQ worker in the same process.
 Redis persists queued jobs, retry state, and results across service restarts.
+Production must configure `REDIS_URL`; the in-memory fallback is only suitable
+for local development and deterministic tests.
 
 Start the service:
 
@@ -154,8 +156,7 @@ fixture usage when the LLM or embedding provider is unavailable.
 The live worker test is opt-in:
 
 ```powershell
-$env:SHIRE_LIVE_LLM_TESTS="true"
-node --env-file-if-exists=.env --import tsx --test test/live-cv-worker.test.ts
+npm run test:live:llm --workspace=@shire/agent
 ```
 
 Keep `SHIRE_LIVE_LLM_TESTS=false` in normal unit-test runs. A `401` indicates a
@@ -217,6 +218,23 @@ npm run test:live-queue --workspace=@shire/agent
 
 The integration test is skipped when `REDIS_URL` is not configured.
 
+## Matching reconciliation
+
+The recommendation scheduler scans canonical candidate/job pairs every 15
+minutes. A pair is eligible only when the candidate profile is confirmed, the
+job is active, and the candidate is not the job owner. The current profile,
+job, and application state form the deterministic input fingerprint.
+
+Each pair uses a deterministic fingerprint and queue generation. Postgres
+enforces one evaluation per candidate/job and one recommendation per
+candidate/job/type. BullMQ uses the same pair identity for queue deduplication.
+An unchanged completed pair therefore produces no new work on the next scan.
+Retryable failures re-enter only after the configured BullMQ backoff cooldown.
+
+Shared Postgres is configured with `SHIRE_AGENT_DATABASE_URL`, falling back to
+`DATABASE_URL`. The web workspace owns schema migrations; the agent owns
+matching evaluation, recommendation, and agent run writes.
+
 Browsers use the web proxy instead of calling the agent directly:
 
 ```http
@@ -243,7 +261,7 @@ The role-aware chat assistant uses curated product documents:
 Synchronize the vector index after changing these files:
 
 ```bash
-npm run dev --workspace=@shire/agent -- knowledge-sync
+npm run job:knowledge-sync --workspace=@shire/agent
 ```
 
 Candidate chat retrieves `general + candidate` chunks. Recruiter chat retrieves
@@ -262,3 +280,29 @@ libSQL table, letting repeated deploys skip unchanged documents and delete
 vectors for documents removed from the approved source registry. `/health` and
 `/ready` expose storage diagnostics by scheme, persistence, and auth presence
 only; URLs and tokens are intentionally omitted.
+
+Conversation memory and product knowledge are separate stores. Memory keeps
+thread history and optional semantic recall. Knowledge keeps approved document
+chunks, vectors, and sync state. Embeddings run for enabled semantic memory,
+knowledge sync, and semantic search; deterministic social or resource-only
+requests can skip retrieval.
+
+## Verification
+
+Default tests never require live providers:
+
+```bash
+npm run test --workspace=@shire/agent
+npm run build --workspace=@shire/agent
+```
+
+Live model and Redis checks are explicit:
+
+```bash
+npm run test:live:llm --workspace=@shire/agent
+npm run test:live-queue --workspace=@shire/agent
+```
+
+The web currently records platform escrow in Postgres. Those records are
+operational state, not proof of Celo settlement. On-chain submission and
+reconciliation must complete before the product can claim settled funds.
