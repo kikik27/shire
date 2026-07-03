@@ -49,5 +49,4 @@ await Promise.all([
   import("./internal-auth.test"),
   import("./agent-worker.test"),
   import("./jobs-http.test"),
-  import("./live-cv-worker.test"),
 ]);

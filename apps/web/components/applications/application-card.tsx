@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { MoreVertical } from "lucide-react";
 import { toast } from "sonner";
-import type { Application } from "@/lib/types";
-import { useShireStore } from "@/lib/store";
+import type { Application, Job } from "@/lib/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -19,11 +18,15 @@ import { initials, timeAgo } from "@/lib/format";
 
 const terminal = ["HIRED", "REJECTED", "WITHDRAWN"];
 
-export function ApplicationCard({ application }: { application: Application }) {
-  const job = useShireStore((s) => s.jobs.find((j) => j.id === application.jobId));
-  const withdraw = useShireStore((s) => s.withdrawApplication);
-  if (!job) return null;
-
+export function ApplicationCard({
+  application,
+  job,
+  onWithdraw,
+}: {
+  application: Application;
+  job: Job;
+  onWithdraw?: (applicationId: string) => void;
+}) {
   return (
     <div className="relative flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
       <Avatar className="size-10">
@@ -60,9 +63,10 @@ export function ApplicationCard({ application }: { application: Application }) {
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onClick={() => {
-                withdraw(application.id);
+                onWithdraw?.(application.id);
                 toast("Application withdrawn");
               }}
+              disabled={!onWithdraw}
             >
               Withdraw
             </DropdownMenuItem>

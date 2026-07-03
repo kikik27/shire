@@ -265,7 +265,7 @@ test("GET validates stored profile payloads before returning them", async () => 
 test("candidate GET does not repair missing persisted defaults", async () => {
   const repository = createInMemoryProfileRepository();
   const user = await repository.resolveUser("did:privy:user-1");
-  const { languages: _languages, ...corruptProfile } = candidateProfile;
+  const corruptProfile = { ...candidateProfile, languages: undefined };
   await repository.upsertProfile(user.id, "candidate", corruptProfile);
   const handlers = createProfileRouteHandlers("candidate", {
     resolveAuthenticatedUser: authenticated(),

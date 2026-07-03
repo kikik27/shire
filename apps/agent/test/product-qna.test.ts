@@ -6,6 +6,7 @@ import {
   ProductQnaError,
 } from "../src/runtime/knowledge/product-qna";
 import { enrichChatRequestWithProductKnowledge } from "../src/runtime/knowledge/product-context";
+import { streamProductQuestion } from "../src/runtime/knowledge/product-qna-stream";
 
 function chatBody(question: string) {
   return {
@@ -158,4 +159,22 @@ test("strips model reasoning tags from product answers", async () => {
   );
 
   assert.equal(generated.answer, "Hello. I can help with Shire.");
+});
+
+test("stream masks provider errors from public clients", async () => {
+  const response = streamProductQuestion(
+    { question: "Hi" },
+    new AbortController().signal,
+    {
+      agent: {
+        stream: async () => {
+          throw new Error("secret-provider-payload");
+        },
+      },
+    },
+  );
+  const body = await response.text();
+
+  assert.doesNotMatch(body, /secret-provider-payload/);
+  assert.match(body, /Product assistant is temporarily unavailable/);
 });

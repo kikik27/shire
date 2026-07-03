@@ -9,6 +9,7 @@ import {
 } from "ai";
 
 import { productQnaAgent } from "../../mastra/agents/product-qna.agent";
+import { logger } from "../logger";
 import { getCapabilityPolicy } from "../models/policy";
 import {
   buildKnowledgeSystemMessage,
@@ -22,6 +23,10 @@ import {
   PRODUCT_ONLY_CODE_REQUEST_RESPONSE,
 } from "./product-qna";
 import { shouldRetrieveProductKnowledge } from "./product-intent";
+
+const streamLogger = logger.child({ component: "product-qna-stream" });
+const PUBLIC_STREAM_ERROR =
+  "Product assistant is temporarily unavailable. Please try again.";
 
 type StreamAgent = {
   stream(messages: unknown[], options: unknown): Promise<unknown>;
@@ -49,6 +54,10 @@ export function streamProductQuestion(
 ) {
   const question = normalizeProductQuestion(body);
   const stream = createUIMessageStream({
+    onError(error) {
+      streamLogger.error({ err: error }, "product Q&A stream failed");
+      return PUBLIC_STREAM_ERROR;
+    },
     execute: async ({ writer }) => {
       if (isProductCodeRequest(question)) {
         writeText(writer, PRODUCT_ONLY_CODE_REQUEST_RESPONSE);

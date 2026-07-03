@@ -4,8 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { getActiveRoleState, postOnboardingDestination } from "@/lib/role-client";
-import { useShireStore } from "@/lib/store";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { useAccessToken } from "@/lib/auth/use-access-token";
 
 /**
@@ -15,25 +13,13 @@ import { useAccessToken } from "@/lib/auth/use-access-token";
  *   (`/candidate` or `/recruiter`).
  * - Brand-new users with no profile yet are sent to `/onboarding`.
  *
- * Works in both Privy mode (profiles fetched via API) and demo mode (profiles
- * held in the local store). Any failure falls back to `/onboarding` so the user
- * is never stranded.
+ * Any failure falls back to `/onboarding` so the user is never stranded.
  */
 export function useLoginDestination() {
   const router = useRouter();
   const accessToken = useAccessToken();
-  const candidateProfile = useShireStore((s) => s.candidateProfile);
-  const recruiterProfile = useShireStore((s) => s.recruiterProfile);
 
   const resolveDestination = React.useCallback(async (): Promise<string> => {
-    // Demo mode: profiles live in the local store.
-    if (!PRIVY_ENABLED) {
-      if (candidateProfile) return "/candidate";
-      if (recruiterProfile) return "/recruiter";
-      return "/onboarding";
-    }
-
-    // Privy mode: check server-side profiles.
     try {
       const token = await accessToken();
       const activeRoles = await getActiveRoleState(token);
@@ -41,7 +27,7 @@ export function useLoginDestination() {
     } catch {
       return "/onboarding";
     }
-  }, [accessToken, candidateProfile, recruiterProfile]);
+  }, [accessToken]);
 
   /** Resolve the destination and navigate to it. */
   const goToLoginDestination = React.useCallback(

@@ -34,10 +34,11 @@ export default function AITextLoading({
   interval = 1500,
 }: AITextLoadingProps) {
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
+  const visibleTextIndex =
+    texts.length > 0 ? currentTextIndex % texts.length : 0;
 
   useEffect(() => {
     if (texts.length <= 1) {
-      setCurrentTextIndex(0);
       return;
     }
 
@@ -69,7 +70,7 @@ export default function AITextLoading({
             )}
             exit={{ opacity: 0, y: -20 }}
             initial={{ opacity: 0, y: 20 }}
-            key={currentTextIndex}
+            key={visibleTextIndex}
             transition={{
               opacity: { duration: 0.3 },
               y: { duration: 0.3 },
@@ -80,7 +81,7 @@ export default function AITextLoading({
               },
             }}
           >
-            {texts[currentTextIndex]}
+            {texts[visibleTextIndex] ?? ""}
           </motion.div>
         </AnimatePresence>
       </motion.div>

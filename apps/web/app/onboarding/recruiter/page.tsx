@@ -4,7 +4,6 @@ import * as React from "react";
 import { AlertCircle } from "lucide-react";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { getProfile, ProfileNotFoundError } from "@/lib/profile-client";
 import type { RecruiterProfile } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,12 +13,10 @@ import { RecruiterProfileForm } from "@/components/profile/recruiter-profile-for
 export default function OnboardingRecruiterPage() {
   const accessToken = useAccessToken();
   const [initialProfile, setInitialProfile] = React.useState<RecruiterProfile | null>(null);
-  const [loading, setLoading] = React.useState(PRIVY_ENABLED);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!PRIVY_ENABLED) return;
-
     let cancelled = false;
     async function loadProfile() {
       setLoading(true);

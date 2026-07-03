@@ -6,13 +6,8 @@ import { ThemeProvider } from "@/components/site/theme-provider";
 import { PrivyAuthProvider } from "@/components/site/privy-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { useShireStore } from "@/lib/store";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  React.useEffect(() => {
-    useShireStore.persist.rehydrate();
-  }, []);
-
   const [queryClient] = React.useState(
     () =>
       new QueryClient({

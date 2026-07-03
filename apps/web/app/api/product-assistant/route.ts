@@ -74,7 +74,7 @@ export function createProductAssistantPost(
         body: JSON.stringify({ question }),
         signal,
       });
-    } catch (error) {
+    } catch {
       if (signal.aborted) {
         console.error("[shire-web:product-assistant] agent request timed out", {
           agentUrl,

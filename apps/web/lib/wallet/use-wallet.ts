@@ -1,6 +1,6 @@
 "use client";
 
-import { useShireStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth/use-auth";
 
 /**
  * Celo chain identifiers used for wallet display.
@@ -27,20 +27,17 @@ function chainName(id: number): string {
  * site changes.
  */
 export function useWallet() {
-  const address = useShireStore((s) => s.address);
-  const chainId = useShireStore((s) => s.chainId);
-  const connecting = useShireStore((s) => s.connecting);
-  const connect = useShireStore((s) => s.connect);
-  const disconnect = useShireStore((s) => s.disconnect);
+  const auth = useAuth();
+  const chainId = DEFAULT_CHAIN.id;
 
   return {
-    address,
-    isConnected: Boolean(address),
-    connecting,
+    address: auth.address,
+    isConnected: auth.isConnected,
+    connecting: auth.connecting,
     chainId,
     chainName: chainName(chainId),
     isCorrectNetwork: chainId === DEFAULT_CHAIN.id,
-    connect,
-    disconnect,
+    connect: auth.connect,
+    disconnect: auth.disconnect,
   };
 }

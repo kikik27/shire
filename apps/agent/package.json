@@ -6,6 +6,7 @@
     "dev": "node --env-file-if-exists=.env --import tsx src/server.ts",
     "build": "tsc -p tsconfig.json",
     "test": "node --import tsx --test test/index.ts",
+    "test:live:llm": "node --env-file-if-exists=.env --import tsx --test test/live-cv-worker.test.ts",
     "test:live-queue": "node --env-file-if-exists=.env --import tsx --test test/live-bullmq.test.ts",
     "start": "node --env-file-if-exists=.env --import tsx src/server.ts",
     "typecheck": "tsc -p tsconfig.json",

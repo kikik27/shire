@@ -51,12 +51,14 @@ export function StakeDialog({
   const [value, setValue] = React.useState(amount);
   const [phase, setPhase] = React.useState<Phase>("idle");
 
-  React.useEffect(() => {
-    if (open) {
+  function changeOpen(nextOpen: boolean) {
+    if (phase === "confirming") return;
+    if (!nextOpen) {
       setValue(amount);
       setPhase("idle");
     }
-  }, [open, amount]);
+    onOpenChange(nextOpen);
+  }
 
   async function run() {
     if (!isConnected) {
@@ -70,7 +72,11 @@ export function StakeDialog({
       toast.success("Platform escrow recorded", {
         description: `${formatToken(value, token)} locked by the platform.`,
       });
-      setTimeout(() => onOpenChange(false), 900);
+      setTimeout(() => {
+        setValue(amount);
+        setPhase("idle");
+        onOpenChange(false);
+      }, 900);
     } catch (error) {
       setPhase("idle");
       toast.error("Request failed", {
@@ -81,7 +87,7 @@ export function StakeDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => phase !== "confirming" && onOpenChange(o)}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

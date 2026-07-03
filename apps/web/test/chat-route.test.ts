@@ -4,7 +4,6 @@ import test from "node:test";
 import { AuthenticatedUserError } from "../lib/server/authenticated-user";
 import {
   createInMemoryProfileRepository,
-  type ProfileRepository,
 } from "../lib/server/profile-repository";
 import {
   createInMemoryJobsRepository,

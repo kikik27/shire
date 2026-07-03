@@ -38,31 +38,53 @@ export async function submitCandidateCv(
   return payload as { jobId: string; status: "queued" };
 }
 
-export function normalizeCvJob(input: any): CvJobState {
-  if (input.status === "completed") {
+type CvJobPayload = {
+  status?: unknown;
+  attempts?: unknown;
+  maxAttempts?: unknown;
+  nextRetryAt?: unknown;
+  result?: { profile?: AgentCandidateProfile };
+  error?: { message?: unknown };
+};
+
+export function normalizeCvJob(input: unknown): CvJobState {
+  const payload =
+    input && typeof input === "object" ? (input as CvJobPayload) : {};
+  const attempts =
+    typeof payload.attempts === "number" ? payload.attempts : undefined;
+  const maxAttempts =
+    typeof payload.maxAttempts === "number" ? payload.maxAttempts : undefined;
+
+  if (payload.status === "completed") {
     return {
       status: "completed",
-      profile: input.result?.profile ?? {},
+      profile: payload.result?.profile ?? {},
     };
   }
-  if (input.status === "failed") {
+  if (payload.status === "failed") {
     return {
       status: "failed",
-      message: input.error?.message ?? "CV processing failed.",
+      message:
+        typeof payload.error?.message === "string"
+          ? payload.error.message
+          : "CV processing failed.",
     };
   }
-  if (input.status === "delayed") {
+  if (payload.status === "delayed") {
     return {
       status: "delayed",
-      attempts: input.attempts,
-      maxAttempts: input.maxAttempts,
-      nextRetryAt: input.nextRetryAt,
+      attempts,
+      maxAttempts,
+      nextRetryAt:
+        typeof payload.nextRetryAt === "string"
+          ? payload.nextRetryAt
+          : undefined,
     };
   }
   return {
-    status: input.status === "active" ? "active" : "queued",
-    attempts: input.attempts,
-    maxAttempts: input.maxAttempts,
+    status: payload.status === "active" ? "active" : "queued",
+    attempts,
+    maxAttempts,
   };
 }
 

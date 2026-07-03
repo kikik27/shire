@@ -1,50 +1,11 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef } from "react";
-import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
+import type { ReactNode } from "react";
+import { PrivyProvider } from "@privy-io/react-auth";
 import { celo, celoAlfajores } from "viem/chains";
-import { useShireStore } from "@/lib/store";
 
 const APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
-/**
- * Mirrors Privy auth state into the demo store so every existing selector and flow
- * (`useWallet`, registry, stakes) keeps working unchanged. Privy just becomes the
- * real source of the connected address.
- */
-function PrivySync() {
-  const { ready, authenticated, user } = usePrivy();
-  const address = user?.wallet?.address ?? null;
-  const userId = user?.id ?? null;
-  const lastUserId = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!ready) return;
-    const userChanged = authenticated && lastUserId.current !== userId;
-    lastUserId.current = authenticated ? userId : null;
-    useShireStore.setState({
-      address: authenticated ? address : null,
-      ...(userChanged || !authenticated
-        ? {
-            candidateProfile: null,
-            recruiterProfile: null,
-            applications: [],
-            savedJobIds: [],
-            activeRole: "candidate",
-          }
-        : {}),
-    });
-  }, [ready, authenticated, address, userId]);
-
-  return null;
-}
-
-/**
- * Env-guarded Privy provider. With `NEXT_PUBLIC_PRIVY_APP_ID` set, users sign in with
- * email / Google / passkey / wallet and Privy creates an embedded wallet for anyone who
- * doesn't have one. No seed phrases, no web3 knowledge required. Without the key, the app
- * falls back to the client-side demo store so it still builds and runs.
- */
 export function PrivyAuthProvider({ children }: { children: ReactNode }) {
   if (!APP_ID) return <>{children}</>;
 
@@ -66,7 +27,6 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
         supportedChains: [celoAlfajores, celo],
       }}
     >
-      <PrivySync />
       {children}
     </PrivyProvider>
   );

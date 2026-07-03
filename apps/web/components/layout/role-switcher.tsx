@@ -4,9 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown } from "lucide-react";
 import type { AppRole } from "@/lib/types";
-import { useShireStore } from "@/lib/store";
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import {
   getActiveRoleState,
   roleDestination,
@@ -28,34 +26,20 @@ import { cn } from "@/lib/utils";
 export function RoleSwitcher({ current }: { current: AppRole }) {
   const router = useRouter();
   const accessToken = useAccessToken();
-  const setActiveRole = useShireStore((s) => s.setActiveRole);
-  const candidateProfile = useShireStore((s) => s.candidateProfile);
-  const recruiterProfile = useShireStore((s) => s.recruiterProfile);
-  const demoActiveRoles = React.useMemo<ActiveRoleState>(() => ({
-    candidate: Boolean(candidateProfile),
-    recruiter: Boolean(recruiterProfile),
-  }), [candidateProfile, recruiterProfile]);
-  const [privyActiveRoles, setPrivyActiveRoles] =
+  const [activeRoles, setActiveRoles] =
     React.useState<ActiveRoleState | null>(null);
-  const loadingRoles = PRIVY_ENABLED && privyActiveRoles === null;
-  const activeRoles = PRIVY_ENABLED
-    ? privyActiveRoles ?? { candidate: false, recruiter: false }
-    : demoActiveRoles;
+  const loadingRoles = activeRoles === null;
 
   React.useEffect(() => {
-    if (!PRIVY_ENABLED) {
-      return;
-    }
-
     let cancelled = false;
     async function loadRoles() {
       try {
         const token = await accessToken();
         const next = await getActiveRoleState(token);
-        if (!cancelled) setPrivyActiveRoles(next);
+        if (!cancelled) setActiveRoles(next);
       } catch {
         if (!cancelled) {
-          setPrivyActiveRoles({ candidate: false, recruiter: false });
+          setActiveRoles({ candidate: false, recruiter: false });
         }
       }
     }
@@ -85,11 +69,6 @@ export function RoleSwitcher({ current }: { current: AppRole }) {
             onClick={() => {
               if (loadingRoles) {
                 return;
-              }
-              if (activeRoles[role]) {
-                if (!PRIVY_ENABLED) {
-                  setActiveRole(role);
-                }
               }
               router.push(roleDestination(role, activeRoles));
             }}

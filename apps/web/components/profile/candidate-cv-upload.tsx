@@ -11,7 +11,6 @@ import {
   submitCandidateCv,
   type CvJobState,
 } from "@/lib/cv-upload-client";
-import { useShireStore } from "@/lib/store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,11 +43,12 @@ function statusCopy(state: CvJobState | null) {
 
 export function CandidateCvUpload({
   onDraft,
+  existingProfile,
 }: {
   onDraft: (draft: CandidateProfile) => void;
+  existingProfile?: CandidateProfile | null;
 }) {
   const accessToken = useAccessToken();
-  const existing = useShireStore((state) => state.candidateProfile);
   const [file, setFile] = React.useState<File | null>(null);
   const [state, setState] = React.useState<CvJobState | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -69,7 +69,7 @@ export function CandidateCvUpload({
         if (generationRef.current !== generation) return;
         setState(next);
         if (next.status === "completed") {
-          onDraft(mapAgentProfileToForm(next.profile, existing));
+          onDraft(mapAgentProfileToForm(next.profile, existingProfile));
           return;
         }
         if (next.status === "failed") {
