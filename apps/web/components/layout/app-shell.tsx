@@ -10,7 +10,6 @@ import { Logo } from "@/components/site/logo";
 import { ThemeToggle } from "@/components/dashboard/theme-toggle";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
 import { WalletConnectButton } from "@/components/wallet/wallet-connect-button";
-import { NetworkSwitcher } from "@/components/wallet/network-switcher";
 import { navConfig, roleMeta } from "@/components/layout/app-nav";
 import { cn } from "@/lib/utils";
 
@@ -107,9 +106,6 @@ export function AppShell({ role, children }: { role: AppRole; children: React.Re
             >
               <Logo showWord={false} />
             </Link>
-          </div>
-          <div className="hidden sm:block">
-            <NetworkSwitcher />
           </div>
           <div className="ml-auto flex items-center gap-1">
             <div className="lg:hidden">
