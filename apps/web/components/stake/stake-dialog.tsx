@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { formatToken } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 type Phase = "idle" | "confirming" | "done";
 
@@ -32,7 +31,7 @@ export function StakeDialog({
   min = 1,
   max = 50,
   refundPolicy,
-  confirmLabel = "Approve & lock stake",
+  confirmLabel = "Lock platform escrow",
   onConfirm,
 }: {
   open: boolean;
@@ -46,18 +45,20 @@ export function StakeDialog({
   max?: number;
   refundPolicy?: string;
   confirmLabel?: string;
-  onConfirm: (amount: number) => void;
+  onConfirm: (amount: number) => void | Promise<void>;
 }) {
   const { isConnected, connect } = useWallet();
   const [value, setValue] = React.useState(amount);
   const [phase, setPhase] = React.useState<Phase>("idle");
 
-  React.useEffect(() => {
-    if (open) {
+  function changeOpen(nextOpen: boolean) {
+    if (phase === "confirming") return;
+    if (!nextOpen) {
       setValue(amount);
       setPhase("idle");
     }
-  }, [open, amount]);
+    onOpenChange(nextOpen);
+  }
 
   async function run() {
     if (!isConnected) {
@@ -65,24 +66,35 @@ export function StakeDialog({
       return;
     }
     setPhase("confirming");
-    await new Promise((r) => setTimeout(r, 1200));
-    onConfirm(value);
-    setPhase("done");
-    toast.success("Stake locked", {
-      description: `${formatToken(value, token)} held in escrow.`,
-    });
-    setTimeout(() => onOpenChange(false), 900);
+    try {
+      await onConfirm(value);
+      setPhase("done");
+      toast.success("Platform escrow recorded", {
+        description: `${formatToken(value, token)} locked by the platform.`,
+      });
+      setTimeout(() => {
+        setValue(amount);
+        setPhase("idle");
+        onOpenChange(false);
+      }, 900);
+    } catch (error) {
+      setPhase("idle");
+      toast.error("Request failed", {
+        description:
+          error instanceof Error ? error.message : "Try again in a moment.",
+      });
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => phase !== "confirming" && onOpenChange(o)}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-xl border border-border bg-muted/40 p-4 text-center">
+        <div className="rounded-lg border border-border bg-muted/40 p-4 text-center">
           <p className="text-xs text-muted-foreground">You will lock</p>
           <p className="mt-1 font-mono text-3xl font-semibold tabular-nums">
             {formatToken(value, token)}
@@ -106,16 +118,19 @@ export function StakeDialog({
         </div>
 
         {phase === "confirming" ? (
-          <TxTimeline />
+          <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Recording platform escrow
+          </div>
         ) : phase === "done" ? (
           <div className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-success">
-            <Check className="size-4" /> Stake confirmed onchain
+            <Check className="size-4" /> Platform escrow recorded
           </div>
         ) : (
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <Lock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-              Funds are locked in escrow, not spent.
+              Funds are recorded in platform escrow.
             </li>
             <li className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -144,26 +159,5 @@ export function StakeDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function TxTimeline() {
-  const steps = ["Submitting", "Confirming", "Locking escrow"];
-  return (
-    <ol className="space-y-2">
-      {steps.map((s, i) => (
-        <li key={s} className="flex items-center gap-2 text-sm">
-          <span
-            className={cn(
-              "grid size-5 place-items-center rounded-full",
-              i < 2 ? "bg-primary text-primary-foreground" : "bg-primary/15 text-primary",
-            )}
-          >
-            {i < 2 ? <Check className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
-          </span>
-          <span className={i < 2 ? "text-foreground" : "text-muted-foreground"}>{s}</span>
-        </li>
-      ))}
-    </ol>
   );
 }

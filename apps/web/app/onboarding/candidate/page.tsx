@@ -5,7 +5,6 @@ import { AlertCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { getProfile, ProfileNotFoundError } from "@/lib/profile-client";
 import type { CandidateProfile } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,12 +17,10 @@ function CandidateOnboardingContent() {
   const searchParams = useSearchParams();
   const [draft, setDraft] = React.useState<CandidateProfile | null>(null);
   const [initialProfile, setInitialProfile] = React.useState<CandidateProfile | null>(null);
-  const [loading, setLoading] = React.useState(PRIVY_ENABLED);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!PRIVY_ENABLED) return;
-
     let cancelled = false;
     async function loadProfile() {
       setLoading(true);
@@ -79,7 +76,10 @@ function CandidateOnboardingContent() {
             </div>
           ) : (
             <div className="space-y-6">
-              <CandidateCvUpload onDraft={setDraft} />
+              <CandidateCvUpload
+                onDraft={setDraft}
+                existingProfile={initialProfile}
+              />
               <CandidateProfileForm
                 redirectTo={redirectTo}
                 draft={draft}

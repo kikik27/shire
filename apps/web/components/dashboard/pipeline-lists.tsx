@@ -1,63 +1,82 @@
 import {
-  CheckCircle2,
   Clock,
-  FileText,
-  Layers,
-  type LucideIcon,
+  Users,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  candidatePipeline,
-  companyActions,
-  type LineItem,
-} from "@/lib/dashboard-data";
-import { cn } from "@/lib/utils";
+import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
+import { timeAgo } from "@/lib/format";
+import type { RecruiterDashboard } from "@/lib/server/recruiter-dashboard-repository";
 
-const toneStyles: Record<LineItem["tone"], { icon: LucideIcon; className: string }> = {
-  info: { icon: FileText, className: "bg-primary/10 text-primary" },
-  success: { icon: CheckCircle2, className: "bg-success/10 text-success" },
-  warning: { icon: Clock, className: "bg-warning/15 text-warning-foreground" },
-  muted: { icon: Layers, className: "bg-muted text-muted-foreground" },
-};
-
-function ListCard({ title, items }: { title: string; items: LineItem[] }) {
+export function PipelineLists({
+  recentApplicants,
+  pipeline,
+}: {
+  recentApplicants: RecruiterDashboard["recentApplicants"];
+  pipeline: RecruiterDashboard["pipeline"];
+}) {
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1">
-        {items.map((item) => {
-          const tone = toneStyles[item.tone];
-          const Icon = tone.icon;
-          return (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/60"
-            >
-              <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", tone.className)}>
-                <Icon className="size-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{item.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle className="text-base">Recent applicants</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {recentApplicants.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              New applicants will appear here.
+            </p>
+          ) : (
+            recentApplicants.slice(0, 4).map((applicant) => (
+              <div
+                key={applicant.id}
+                className="flex items-center gap-3 rounded-lg px-2 py-2.5"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Users className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {applicant.candidate?.displayName ??
+                      `Candidate ${applicant.candidateUserId.slice(0, 8)}`}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {applicant.jobTitle} - {timeAgo(applicant.createdAt)}
+                  </p>
+                </div>
+                <ApplicationStatusBadge status={applicant.status} />
               </div>
-              <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                {item.meta}
-              </span>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
+            ))
+          )}
+        </CardContent>
+      </Card>
 
-export function PipelineLists() {
-  return (
-    <div className="flex gap-4">
-      <ListCard title="Candidate pipeline" items={candidatePipeline} />
-      <ListCard title="Company actions" items={companyActions} />
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle className="text-base">Pipeline status</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {pipeline.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Pipeline counts will appear here.
+            </p>
+          ) : (
+            pipeline.map((item) => (
+              <div
+                key={item.status}
+                className="flex items-center gap-3 rounded-lg px-2 py-2.5"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                  <Clock className="size-5" aria-hidden="true" />
+                </span>
+                <ApplicationStatusBadge status={item.status} />
+                <span className="ml-auto font-mono text-sm font-semibold tabular-nums">
+                  {item.count}
+                </span>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

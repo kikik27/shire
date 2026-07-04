@@ -1,8 +1,9 @@
+import type { Express } from "express";
 import type { CvDocumentFile } from "../runtime/cv/document";
 import type { JobQueue } from "../runtime/jobs/job-queue";
 import type { DurableJobRuntime } from "../runtime/jobs/bullmq-job-queue";
 import type { RateLimiter } from "../runtime/auth/rate-limit";
-import type { answerProductQuestion } from "../runtime/knowledge/product-qna";
+import type { streamProductQuestion } from "../runtime/knowledge/product-qna-stream";
 import type { guardSecurityPrompt } from "../runtime/security/guard";
 import type { confirmSecurityRiskWithLlm } from "../runtime/security/guard-llm";
 import type { classifySecurityIndicator } from "../runtime/security/indicators";
@@ -11,6 +12,7 @@ import type { ReadinessResult } from "../routes/health.route";
 import type { ProcessJob } from "./jobs";
 
 export type RuntimeHttpServerDependencies = {
+  mountAgentChat?: (app: Express) => void | Promise<void>;
   searchProductKnowledge?: typeof searchProductKnowledge;
   rateLimiter?: RateLimiter;
   now?: () => number;
@@ -22,7 +24,7 @@ export type RuntimeHttpServerDependencies = {
   durableJobRuntime?: DurableJobRuntime;
   serviceToken?: string;
   extractCvDocument?: (file: CvDocumentFile | undefined) => Promise<string>;
-  answerProductQuestion?: typeof answerProductQuestion;
+  streamProductQuestion?: typeof streamProductQuestion;
   productQnaTimeoutMs?: number;
   checkReady?: () => Promise<ReadinessResult>;
 };

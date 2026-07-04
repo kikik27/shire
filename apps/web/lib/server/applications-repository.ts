@@ -1,12 +1,23 @@
 import { and, desc, eq } from "drizzle-orm";
 
-import type { ApplicationStatus } from "../types";
+import type {
+  ApplicationJobSummary,
+  ApplicationStatus,
+  CandidateApplicationSummary,
+} from "../types";
 import { createDatabase, type Database } from "./db";
-import { applications } from "./db/schema";
+import { persistedCandidateProfileSchema } from "../schemas";
+import {
+  applications,
+  candidateProfiles,
+  jobs,
+  matchingEvaluations,
+} from "./db/schema";
 import {
   createDrizzleJobsRepository,
   type JobsRepository,
 } from "./jobs-repository";
+import type { ProfileRepository } from "./profile-repository";
 
 export type PersistedApplication = {
   id: string;
@@ -20,6 +31,8 @@ export type PersistedApplication = {
   stakeAmount?: number;
   createdAt: number;
   updatedAt: number;
+  candidate?: CandidateApplicationSummary;
+  job?: ApplicationJobSummary;
 };
 
 export type ApplyToJobInput = {
@@ -36,6 +49,11 @@ export interface ApplicationsRepository {
   ): Promise<PersistedApplication>;
   listApplicationsByCandidate(candidateUserId: string): Promise<PersistedApplication[]>;
   listApplicationsByJob(jobId: string): Promise<PersistedApplication[]>;
+  listApplicationsByRecruiter(
+    recruiterUserId: string,
+    limit?: number,
+  ): Promise<PersistedApplication[]>;
+  getApplication(id: string): Promise<PersistedApplication | null>;
   updateApplicationStatus(
     id: string,
     status: ApplicationStatus,
@@ -73,6 +91,36 @@ function mapApplication(row: typeof applications.$inferSelect): PersistedApplica
     stakeAmount: numericValue(row.stakeAmount),
     createdAt: toTimestamp(row.createdAt),
     updatedAt: toTimestamp(row.updatedAt),
+  };
+}
+
+export function candidateApplicationSummary(
+  profile: unknown,
+): CandidateApplicationSummary | undefined {
+  const parsed = persistedCandidateProfileSchema.safeParse(profile);
+  if (!parsed.success) {
+    return undefined;
+  }
+  return {
+    displayName: parsed.data.displayName,
+    headline: parsed.data.roleTargets[0] ?? parsed.data.bio,
+    skills: parsed.data.skills,
+    location: parsed.data.location,
+    portfolioUrl: parsed.data.portfolioUrl,
+    githubUrl: parsed.data.githubUrl,
+    linkedinUrl: parsed.data.linkedinUrl,
+  };
+}
+
+function mapApplicationWithCandidate(row: {
+  application: typeof applications.$inferSelect;
+  profile: unknown | null;
+  evaluationMatchScore?: number | null;
+}): PersistedApplication {
+  return {
+    ...mapApplication(row.application),
+    matchScore: row.evaluationMatchScore ?? row.application.matchScore,
+    candidate: candidateApplicationSummary(row.profile),
   };
 }
 
@@ -141,14 +189,82 @@ export function createDrizzleApplicationsRepository(
     async listApplicationsByJob(jobId) {
       try {
         const rows = await database
-          .select()
+          .select({
+            application: applications,
+            profile: candidateProfiles.profile,
+            evaluationMatchScore: matchingEvaluations.matchScore,
+          })
           .from(applications)
+          .leftJoin(
+            candidateProfiles,
+            eq(applications.candidateUserId, candidateProfiles.userId),
+          )
+          .leftJoin(
+            matchingEvaluations,
+            and(
+              eq(matchingEvaluations.jobId, applications.jobId),
+              eq(
+                matchingEvaluations.candidateUserId,
+                applications.candidateUserId,
+              ),
+            ),
+          )
           .where(eq(applications.jobId, jobId))
           .orderBy(desc(applications.createdAt));
-        return rows.map(mapApplication);
+        return rows.map(mapApplicationWithCandidate);
       } catch (error) {
         throw new ApplicationsRepositoryError("Failed to list job applications.", { cause: error });
       }
+    },
+    async listApplicationsByRecruiter(recruiterUserId, limit = 50) {
+      try {
+        const rows = await database
+          .select({
+            application: applications,
+            profile: candidateProfiles.profile,
+            job: {
+              title: jobs.title,
+              companyName: jobs.companyName,
+            },
+            evaluationMatchScore: matchingEvaluations.matchScore,
+          })
+          .from(applications)
+          .innerJoin(jobs, eq(applications.jobId, jobs.id))
+          .leftJoin(
+            candidateProfiles,
+            eq(applications.candidateUserId, candidateProfiles.userId),
+          )
+          .leftJoin(
+            matchingEvaluations,
+            and(
+              eq(matchingEvaluations.jobId, applications.jobId),
+              eq(
+                matchingEvaluations.candidateUserId,
+                applications.candidateUserId,
+              ),
+            ),
+          )
+          .where(eq(jobs.recruiterUserId, recruiterUserId))
+          .orderBy(desc(applications.createdAt))
+          .limit(Math.min(Math.max(limit, 1), 100));
+        return rows.map((row) => ({
+          ...mapApplicationWithCandidate(row),
+          job: row.job,
+        }));
+      } catch (error) {
+        throw new ApplicationsRepositoryError(
+          "Failed to list recruiter applications.",
+          { cause: error },
+        );
+      }
+    },
+    async getApplication(id) {
+      const [row] = await database
+        .select()
+        .from(applications)
+        .where(eq(applications.id, id))
+        .limit(1);
+      return row ? mapApplication(row) : null;
     },
     async updateApplicationStatus(id, status) {
       try {
@@ -173,11 +289,36 @@ export function createDrizzleApplicationsRepository(
 
 export function createInMemoryApplicationsRepository(
   jobsRepository: JobsRepository,
+  profilesRepository?: ProfileRepository,
 ): ApplicationsRepository {
   const savedApplications = new Map<string, PersistedApplication>();
 
   function sorted(rows: PersistedApplication[]) {
     return rows.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async function withCandidate(
+    application: PersistedApplication,
+    includeJob = false,
+  ) {
+    if (!profilesRepository) {
+      return application;
+    }
+    const job = includeJob
+      ? await jobsRepository.getJob(application.jobId)
+      : undefined;
+    return {
+      ...application,
+      candidate: candidateApplicationSummary(
+        await profilesRepository.getProfile(
+          application.candidateUserId,
+          "candidate",
+        ),
+      ),
+      job: job
+        ? { title: job.title, companyName: job.companyName }
+        : undefined,
+    };
   }
 
   return {
@@ -223,11 +364,30 @@ export function createInMemoryApplicationsRepository(
       );
     },
     async listApplicationsByJob(jobId) {
-      return sorted(
+      const rows = sorted(
         [...savedApplications.values()].filter(
           (application) => application.jobId === jobId,
         ),
       );
+      return Promise.all(rows.map((application) => withCandidate(application)));
+    },
+    async listApplicationsByRecruiter(recruiterUserId, limit = 50) {
+      const ownedJobIds = new Set(
+        (await jobsRepository.listJobsByRecruiter(recruiterUserId)).map(
+          (job) => job.id,
+        ),
+      );
+      const rows = sorted(
+        [...savedApplications.values()].filter((application) =>
+          ownedJobIds.has(application.jobId),
+        ),
+      ).slice(0, Math.min(Math.max(limit, 1), 100));
+      return Promise.all(
+        rows.map((application) => withCandidate(application, true)),
+      );
+    },
+    async getApplication(id) {
+      return savedApplications.get(id) ?? null;
     },
     async updateApplicationStatus(id, status) {
       const application = savedApplications.get(id);

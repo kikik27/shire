@@ -2,9 +2,8 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import type { Stake } from "@/lib/types";
-import { StakeStatus } from "@/lib/types";
-import { getCandidateById, getRecruiterById, ME_CANDIDATE_ID, useShireStore } from "@/lib/store";
+import { useAdminStakes, useTransitionStake } from "@/lib/hooks/use-admin";
+import type { PlatformStake } from "@/lib/types";
 import {
   Table,
   TableBody,
@@ -24,28 +23,48 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { StakeStatusBadge, stakeTypeLabel } from "@/components/stake/stake-status-badge";
-import { formatToken, truncateAddress } from "@/lib/format";
-
-function partyLabel(userId: string, recruiterProfile: Parameters<typeof getRecruiterById>[0]["recruiterProfile"]) {
-  if (userId === ME_CANDIDATE_ID) return "You";
-  const rec = getRecruiterById({ recruiterProfile }, userId);
-  if (rec) return rec.companyName;
-  return getCandidateById(userId)?.displayName ?? truncateAddress(userId);
-}
+import {
+  platformStakeTypeLabel,
+  StakeStatusBadge,
+} from "@/components/stake/stake-status-badge";
+import { formatToken } from "@/lib/format";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Zap } from "lucide-react";
 
 export function AdminStakeTable() {
-  const stakes = useShireStore((s) => s.stakes);
-  const recruiterProfile = useShireStore((s) => s.recruiterProfile);
-  const refundStake = useShireStore((s) => s.refundStake);
-  const slashStake = useShireStore((s) => s.slashStake);
+  const { data, isLoading, isError } = useAdminStakes();
+  const transitionStake = useTransitionStake();
+  const stakes = data?.stakes ?? [];
 
-  const [target, setTarget] = React.useState<Stake | null>(null);
+  const [target, setTarget] = React.useState<PlatformStake | null>(null);
   const [reason, setReason] = React.useState("");
+
+  if (isLoading) {
+    return (
+      <EmptyState
+        icon={Zap}
+        title="Loading platform escrow"
+        description="Fetching persisted stake records."
+      />
+    );
+  }
+  if (isError || stakes.length === 0) {
+    return (
+      <EmptyState
+        icon={Zap}
+        title={isError ? "Platform escrow unavailable" : "No stake records"}
+        description={
+          isError
+            ? "Admin stake data could not be loaded."
+            : "Platform escrow records will appear here."
+        }
+      />
+    );
+  }
 
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -58,14 +77,14 @@ export function AdminStakeTable() {
           </TableHeader>
           <TableBody>
             {stakes.map((stake) => {
-              const locked = stake.status === StakeStatus.Locked;
+              const locked = stake.status === "LOCKED";
               return (
                 <TableRow key={stake.id}>
                   <TableCell className="pl-4 font-medium">
-                    {partyLabel(stake.userId, recruiterProfile)}
+                    User {stake.ownerUserId.slice(0, 8)}
                   </TableCell>
                   <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
-                    {stakeTypeLabel[stake.stakeType]}
+                    {platformStakeTypeLabel[stake.type]}
                   </TableCell>
                   <TableCell className="font-mono text-sm tabular-nums">
                     {formatToken(stake.amount, stake.token)}
@@ -79,9 +98,21 @@ export function AdminStakeTable() {
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={transitionStake.isPending}
                           onClick={() => {
-                            refundStake(stake.id);
-                            toast.success("Stake refunded");
+                            transitionStake.mutate(
+                              {
+                                id: stake.id,
+                                status: "REFUNDED",
+                                reason: "Admin refund",
+                              },
+                              {
+                                onSuccess: () =>
+                                  toast.success("Stake refunded"),
+                                onError: () =>
+                                  toast.error("Stake refund failed"),
+                              },
+                            );
                           }}
                         >
                           Refund
@@ -89,6 +120,7 @@ export function AdminStakeTable() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={transitionStake.isPending}
                           className="text-destructive hover:text-destructive"
                           onClick={() => {
                             setTarget(stake);
@@ -134,12 +166,25 @@ export function AdminStakeTable() {
             </Button>
             <Button
               variant="destructive"
-              disabled={!reason.trim()}
+              disabled={!reason.trim() || transitionStake.isPending}
               onClick={() => {
                 if (!target) return;
-                slashStake(target.id, target.amount, reason.trim());
-                toast("Stake slashed", { description: "Recorded on the dispute trail." });
-                setTarget(null);
+                transitionStake.mutate(
+                  {
+                    id: target.id,
+                    status: "SLASHED",
+                    reason: reason.trim(),
+                  },
+                  {
+                    onSuccess: () => {
+                      toast("Stake slashed", {
+                        description: "Recorded in the audit trail.",
+                      });
+                      setTarget(null);
+                    },
+                    onError: () => toast.error("Stake slash failed"),
+                  },
+                );
               }}
             >
               Confirm slash

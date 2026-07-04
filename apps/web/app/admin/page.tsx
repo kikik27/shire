@@ -1,54 +1,75 @@
 "use client";
 
-import { AlertTriangle, Briefcase, Scale, Zap } from "lucide-react";
-import { useShireStore } from "@/lib/store";
-import { StakeStatus } from "@/lib/types";
+import { AlertTriangle, Briefcase, RotateCw, Scale, Zap } from "lucide-react";
+import { useAdminOverview } from "@/lib/hooks/use-admin";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatTile } from "@/components/shared/stat-tile";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
 
 export default function AdminPage() {
-  const jobs = useShireStore((s) => s.jobs);
-  const stakes = useShireStore((s) => s.stakes);
-  const disputes = useShireStore((s) => s.disputes);
-
-  const activeStakes = stakes.filter((s) => s.status === StakeStatus.Locked);
-  const openDisputes = disputes.filter((d) => d.status === "OPEN" || d.status === "UNDER_REVIEW");
-  const flaggedJobs = jobs.filter((j) => j.status === "FLAGGED" || j.riskLevel === "HIGH");
+  const { data, isLoading, isError, isFetching, refetch } =
+    useAdminOverview();
 
   return (
     <div className="space-y-8 p-4 sm:p-6">
       <PageHeader
         title="Admin overview"
-        description="Platform health: jobs, stakes, and disputes."
+        description="Platform health: jobs, escrow, and disputes."
       />
 
+      {isLoading ? (
+        <EmptyState
+          icon={Scale}
+          title="Loading admin overview"
+          description="Fetching persisted platform operations."
+        />
+      ) : isError || !data ? (
+        <EmptyState
+          icon={Scale}
+          title="Admin overview unavailable"
+          description="Your account may not have admin access, or the request failed."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RotateCw className="size-4" aria-hidden="true" />
+              Retry
+            </Button>
+          }
+        />
+      ) : (
+        <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Total jobs" value={String(jobs.length)} icon={Briefcase} />
+        <StatTile label="Total jobs" value={String(data.totalJobs)} icon={Briefcase} />
         <StatTile
           label="Active stakes"
-          value={String(activeStakes.length)}
+          value={String(data.activeStakes)}
           icon={Zap}
         />
         <StatTile
           label="Open disputes"
-          value={String(openDisputes.length)}
+          value={String(data.openDisputes)}
           icon={Scale}
         />
         <StatTile
           label="Flagged / high-risk"
-          value={String(flaggedJobs.length)}
+          value={String(data.flaggedJobs)}
           icon={AlertTriangle}
         />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Job status breakdown
           </p>
           <ul className="mt-3 space-y-2">
             {(["ACTIVE", "DRAFT", "CLOSED", "FLAGGED", "EXPIRED"] as const).map((status) => {
-              const count = jobs.filter((j) => j.status === status).length;
+              const count = data.jobStatuses[status] ?? 0;
               return (
                 <li key={status} className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{status.charAt(0) + status.slice(1).toLowerCase()}</span>
@@ -59,18 +80,18 @@ export default function AdminPage() {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Stake status breakdown
           </p>
           <ul className="mt-3 space-y-2">
             {([
-              { label: "Locked", status: StakeStatus.Locked },
-              { label: "Refunded", status: StakeStatus.Refunded },
-              { label: "Slashed", status: StakeStatus.Slashed },
-              { label: "Released", status: StakeStatus.Released },
+              { label: "Locked", status: "LOCKED" },
+              { label: "Refunded", status: "REFUNDED" },
+              { label: "Slashed", status: "SLASHED" },
+              { label: "Released", status: "RELEASED" },
             ]).map(({ label, status }) => {
-              const count = stakes.filter((s) => s.status === status).length;
+              const count = data.stakeStatuses[status] ?? 0;
               return (
                 <li key={label} className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{label}</span>
@@ -81,13 +102,13 @@ export default function AdminPage() {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Dispute breakdown
           </p>
           <ul className="mt-3 space-y-2">
             {(["OPEN", "UNDER_REVIEW", "RESOLVED", "REJECTED"] as const).map((status) => {
-              const count = disputes.filter((d) => d.status === status).length;
+              const count = data.disputeStatuses[status] ?? 0;
               return (
                 <li key={status} className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">
@@ -101,6 +122,8 @@ export default function AdminPage() {
           </ul>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

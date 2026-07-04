@@ -1,3 +1,6 @@
+import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+
 import {
   Queue,
   UnrecoverableError,
@@ -13,11 +16,16 @@ import type {
   ProcessableJob,
 } from "./job-contracts";
 import { isRetryableJobError } from "./job-errors";
+import { MAX_MATCHING_EVALUATION_ATTEMPTS } from "../matching/fingerprint";
 
-type BullJobLike = {
+export type BullJobData = JobRequest & {
+  __shireEnqueueToken?: string;
+};
+
+export type BullJobLike = {
   id?: string;
   name: string;
-  data: JobRequest;
+  data: BullJobData;
   attemptsMade: number;
   delay?: number;
   opts: { attempts?: number; delay?: number };
@@ -27,18 +35,122 @@ type BullJobLike = {
   returnvalue: JobResult | null;
   failedReason?: string;
   getState: () => Promise<string>;
+  retry?: (
+    state: "completed" | "failed",
+    options: {
+      resetAttemptsMade: boolean;
+      resetAttemptsStarted: boolean;
+    },
+  ) => Promise<void>;
 };
+
+export type BullQueueLike = {
+  getJob(jobId: string): Promise<BullJobLike | undefined>;
+  add(
+    name: string,
+    data: BullJobData,
+    options: JobsOptions,
+  ): Promise<BullJobLike>;
+};
+
+export function bullRetryCooldownMs(input: {
+  attempts: number;
+  backoffMs: number;
+}): number {
+  if (input.attempts <= 1) {
+    return 0;
+  }
+  return Math.min(
+    Number.MAX_SAFE_INTEGER,
+    input.backoffMs * 2 ** (input.attempts - 2),
+  );
+}
+
+export function matchingJobAttempts(configuredAttempts: number): number {
+  return Math.min(configuredAttempts, MAX_MATCHING_EVALUATION_ATTEMPTS);
+}
+
+export function bullJobExecutionContext(
+  job: Pick<BullJobLike, "attemptsMade" | "opts" | "data">,
+  signal: AbortSignal,
+) {
+  const configuredAttempts = job.opts.attempts;
+  return {
+    attempt: job.attemptsMade + 1,
+    maxAttempts:
+      job.data.name === "matching-pair" &&
+      configuredAttempts !== undefined
+        ? matchingJobAttempts(configuredAttempts)
+        : configuredAttempts,
+    signal,
+  };
+}
+
+export function shouldRetryBullJobError(
+  error: unknown,
+  context: { attempt: number; maxAttempts?: number },
+): boolean {
+  return (
+    isRetryableJobError(error) &&
+    (context.maxAttempts === undefined ||
+      context.attempt < context.maxAttempts)
+  );
+}
 
 export function createBullJobOptions(input: {
   attempts: number;
   backoffMs: number;
+  jobId?: string;
+  timestamp?: number;
 }): JobsOptions {
   return {
     attempts: input.attempts,
     backoff: { type: "exponential", delay: input.backoffMs },
     removeOnComplete: false,
     removeOnFail: false,
+    ...(input.jobId ? { jobId: input.jobId } : {}),
+    ...(input.timestamp !== undefined
+      ? { timestamp: input.timestamp }
+      : {}),
   };
+}
+
+export function createBullDeduplicationJobId(
+  deduplicationKey: string,
+  policy?: { attempts: number; backoffMs: number },
+): string {
+  const versionedKey = policy
+    ? [
+        "v2",
+        deduplicationKey,
+        policy.attempts,
+        policy.backoffMs,
+      ].join(":")
+    : deduplicationKey;
+  const digest = createHash("sha256")
+    .update(versionedKey)
+    .digest("hex");
+  return `dedup-${digest}`;
+}
+
+function requestFromBullData(data: BullJobData): JobRequest {
+  const {
+    __shireEnqueueToken: _enqueueToken,
+    ...request
+  } = data;
+  return request as JobRequest;
+}
+
+function matchesRequest(data: BullJobData, request: JobRequest): boolean {
+  return isDeepStrictEqual(requestFromBullData(data), request);
+}
+
+function isBullJobNotInStateError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === -3
+  );
 }
 
 function mapStatus(state: string): JobEnvelope["status"] {
@@ -97,6 +209,110 @@ export async function mapBullJobEnvelope(
   } as JobEnvelope;
 }
 
+export async function enqueueBullJob(
+  queue: BullQueueLike,
+  request: JobRequest,
+  options: {
+    attempts: number;
+    backoffMs: number;
+    now?: () => number;
+    createEnqueueToken?: () => string;
+  },
+): Promise<JobEnvelope> {
+  const attempts =
+    request.name === "matching-pair"
+      ? matchingJobAttempts(options.attempts)
+      : options.attempts;
+  const jobId = request.deduplicationKey
+    ? createBullDeduplicationJobId(request.deduplicationKey, {
+        attempts,
+        backoffMs: options.backoffMs,
+      })
+    : undefined;
+  if (jobId) {
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+      if (!matchesRequest(existing.data, request)) {
+        throw new Error(
+          `Deduplication key conflict: ${request.deduplicationKey}`,
+        );
+      }
+      const state = await existing.getState();
+      if (
+        request.name === "matching-pair" &&
+        (state === "completed" || state === "failed") &&
+        existing.retry
+      ) {
+        try {
+          await existing.retry(state, {
+            resetAttemptsMade: true,
+            resetAttemptsStarted: true,
+          });
+          return (await mapBullJobEnvelope(existing))!;
+        } catch (error) {
+          if (!isBullJobNotInStateError(error)) {
+            throw error;
+          }
+          const winner = await queue.getJob(jobId);
+          if (
+            winner &&
+            matchesRequest(winner.data, request)
+          ) {
+            return {
+              ...(await mapBullJobEnvelope(winner))!,
+              deduplicated: true,
+            };
+          }
+          throw error;
+        }
+      } else {
+        return {
+          ...(await mapBullJobEnvelope(existing))!,
+          deduplicated: true,
+        };
+      }
+    }
+  }
+
+  const enqueueTimestamp = jobId
+    ? (options.now?.() ?? Date.now())
+    : undefined;
+  const enqueueToken = jobId
+    ? (options.createEnqueueToken?.() ?? randomUUID())
+    : undefined;
+  const queuedData: BullJobData = enqueueToken
+    ? { ...request, __shireEnqueueToken: enqueueToken }
+    : request;
+  const job = await queue.add(
+    request.name,
+    queuedData,
+    createBullJobOptions({
+      attempts,
+      backoffMs: options.backoffMs,
+      jobId,
+      timestamp: enqueueTimestamp,
+    }),
+  );
+  if (jobId) {
+    const persisted = await queue.getJob(jobId);
+    if (persisted && !matchesRequest(persisted.data, request)) {
+      throw new Error(
+        `Deduplication key conflict: ${request.deduplicationKey}`,
+      );
+    }
+    if (
+      persisted &&
+      persisted.data.__shireEnqueueToken !== enqueueToken
+    ) {
+      return {
+        ...(await mapBullJobEnvelope(persisted))!,
+        deduplicated: true,
+      };
+    }
+  }
+  return (await mapBullJobEnvelope(job))!;
+}
+
 export type DurableJobRuntime = {
   enqueue(request: JobRequest): Promise<JobEnvelope>;
   get(jobId: string, candidateId?: string): Promise<JobEnvelope | undefined>;
@@ -129,17 +345,25 @@ export function createBullMqJobRuntime(input: {
   backoffMs: number;
   process: (
     job: ProcessableJob,
-    context: { attempt: number; signal: AbortSignal },
+    context: {
+      attempt: number;
+      maxAttempts?: number;
+      signal: AbortSignal;
+    },
   ) => Promise<JobResult>;
 }): DurableJobRuntime {
   const connection = parseRedisConnection(input.redisUrl);
-  const queue = new Queue<JobRequest, JobResult, string>(input.queueName, {
+  const queue = new Queue<BullJobData, JobResult, string>(input.queueName, {
     connection,
   });
   const abortController = new AbortController();
-  const worker = new Worker<JobRequest, JobResult>(
+  const worker = new Worker<BullJobData, JobResult>(
     input.queueName,
     async (job) => {
+      const executionContext = bullJobExecutionContext(
+        job as unknown as BullJobLike,
+        abortController.signal,
+      );
       try {
         return await input.process(
           {
@@ -147,13 +371,10 @@ export function createBullMqJobRuntime(input: {
             name: job.data.name,
             payload: job.data.payload,
           } as ProcessableJob,
-          {
-            attempt: job.attemptsMade + 1,
-            signal: abortController.signal,
-          },
+          executionContext,
         );
       } catch (error) {
-        if (!isRetryableJobError(error)) {
+        if (!shouldRetryBullJobError(error, executionContext)) {
           throw new UnrecoverableError(
             error instanceof Error ? error.message : "Permanent job failure",
           );
@@ -169,12 +390,11 @@ export function createBullMqJobRuntime(input: {
 
   return {
     async enqueue(request) {
-      const job = await queue.add(
-        request.name,
+      return enqueueBullJob(
+        queue as unknown as BullQueueLike,
         request,
-        createBullJobOptions(input),
+        input,
       );
-      return (await mapBullJobEnvelope(job as unknown as BullJobLike))!;
     },
     async get(jobId, candidateId) {
       const job = await queue.getJob(jobId);

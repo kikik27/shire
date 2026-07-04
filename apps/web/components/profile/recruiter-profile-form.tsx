@@ -6,10 +6,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { saveProfile } from "@/lib/profile-client";
 import { recruiterProfileSchema, type RecruiterProfileValues } from "@/lib/schemas";
-import { getRecruiterById, ME_RECRUITER_ID, useShireStore } from "@/lib/store";
 import type { RecruiterProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,10 +31,8 @@ export function RecruiterProfileForm({
 }) {
   const router = useRouter();
   const accessToken = useAccessToken();
-  const recruiterProfile = useShireStore((s) => s.recruiterProfile);
-  const save = useShireStore((s) => s.saveRecruiterProfile);
   const [saving, setSaving] = React.useState(false);
-  const current = initialProfile ?? getRecruiterById({ recruiterProfile }, ME_RECRUITER_ID);
+  const current = initialProfile;
 
   const form = useForm<RecruiterProfileValues>({
     resolver: zodResolver(recruiterProfileSchema),
@@ -69,29 +65,20 @@ export function RecruiterProfileForm({
       contactEmail: values.contactEmail || undefined,
       location: values.location || undefined,
     };
-    const demoProfile = {
-      ...editableProfile,
-      verificationStatus: current?.verificationStatus ?? "UNVERIFIED",
-      trustLevel: current?.trustLevel ?? 30,
-      completedHires: current?.completedHires ?? 0,
-      disputeCount: current?.disputeCount ?? 0,
-    };
-
     setSaving(true);
     try {
-      if (PRIVY_ENABLED) {
-        const token = await accessToken();
-        const persisted = await saveProfile<RecruiterProfile, typeof editableProfile>(
-          "recruiter",
-          editableProfile,
-          token,
-        );
-        save(persisted);
-      } else {
-        save(demoProfile);
-      }
+      const token = await accessToken();
+      await saveProfile<RecruiterProfile, typeof editableProfile>(
+        "recruiter",
+        editableProfile,
+        token,
+      );
       toast.success("Company profile saved");
-      if (redirectTo) router.push(redirectTo);
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       toast.error("Company profile was not saved", {
         description:

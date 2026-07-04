@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { getProfile, ProfileNotFoundError } from "@/lib/profile-client";
 import type { CandidateProfile } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,12 +17,10 @@ export default function CandidateProfilePage() {
   const accessToken = useAccessToken();
   const [draft, setDraft] = React.useState<CandidateProfile | null>(null);
   const [initialProfile, setInitialProfile] = React.useState<CandidateProfile | null>(null);
-  const [loading, setLoading] = React.useState(PRIVY_ENABLED);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!PRIVY_ENABLED) return;
-
     let cancelled = false;
     async function loadProfile() {
       setLoading(true);
@@ -73,7 +70,10 @@ export default function CandidateProfilePage() {
         </div>
       ) : (
         <>
-          <CandidateCvUpload onDraft={setDraft} />
+          <CandidateCvUpload
+            onDraft={setDraft}
+            existingProfile={initialProfile}
+          />
           <div className="rounded-2xl border border-border bg-card p-6">
             <CandidateProfileForm draft={draft} initialProfile={initialProfile} />
           </div>

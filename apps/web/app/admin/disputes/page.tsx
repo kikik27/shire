@@ -8,7 +8,7 @@ export default function AdminDisputesPage() {
     <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
       <PageHeader
         title="Dispute review"
-        description="Resolve open disputes: slash or refund staked funds."
+        description="Resolve disputes and settle related platform escrow."
       />
       <DisputeReviewPanel />
     </div>

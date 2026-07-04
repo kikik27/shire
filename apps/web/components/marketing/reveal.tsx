@@ -10,7 +10,6 @@ import {
   useScroll,
   useTransform,
 } from "motion/react";
-import { cn } from "@/lib/utils";
 
 /**
  * Fade + rise into view, once. Respects prefers-reduced-motion (renders children

@@ -16,7 +16,6 @@ export function ChatShell({ role }: { role: AppRole }) {
   const scope = resolveChatScopeForPathname({
     role,
     pathname,
-    jobs: [],
   });
 
   return (

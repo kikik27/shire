@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import type {
   JobEnvelope,
@@ -9,10 +10,29 @@ import type { JobQueue } from "./job-queue";
 
 export class InMemoryJobQueue implements JobQueue {
   private readonly records = new Map<string, JobEnvelope>();
+  private readonly deterministicJobs = new Map<
+    string,
+    { jobId: string; request: JobRequest }
+  >();
   private readonly waitingIds: string[] = [];
   private readonly waiters = new Set<() => void>();
 
   async enqueue(request: JobRequest) {
+    if (request.deduplicationKey) {
+      const existing = this.deterministicJobs.get(request.deduplicationKey);
+      if (existing) {
+        if (!isDeepStrictEqual(existing.request, request)) {
+          throw new Error(
+            `Deduplication key conflict: ${request.deduplicationKey}`,
+          );
+        }
+        return {
+          ...structuredClone(this.requireJob(existing.jobId)),
+          deduplicated: true,
+        };
+      }
+    }
+
     const job: JobEnvelope = {
       id: randomUUID(),
       name: request.name,
@@ -23,6 +43,12 @@ export class InMemoryJobQueue implements JobQueue {
     };
 
     this.records.set(job.id, job);
+    if (request.deduplicationKey) {
+      this.deterministicJobs.set(request.deduplicationKey, {
+        jobId: job.id,
+        request: structuredClone(request),
+      });
+    }
     this.waitingIds.push(job.id);
     for (const wake of this.waiters) {
       wake();

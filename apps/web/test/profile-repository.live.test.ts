@@ -39,7 +39,7 @@ test(
 
     database.transaction = (async (operation, config) =>
       originalTransaction(async (transaction) => {
-        const result = await operation(transaction);
+        await operation(transaction);
         const [user] = await transaction
           .select({ id: appUsers.id })
           .from(appUsers)

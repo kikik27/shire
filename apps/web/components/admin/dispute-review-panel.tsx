@@ -3,8 +3,8 @@
 import * as React from "react";
 import { Scale, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import type { Dispute } from "@/lib/types";
-import { useShireStore } from "@/lib/store";
+import type { PlatformDispute } from "@/lib/types";
+import { useAdminDisputes, useResolveDispute } from "@/lib/hooks/use-admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,8 +20,9 @@ import {
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/empty-state";
 
-const statusCls: Record<Dispute["status"], string> = {
+const statusCls: Record<PlatformDispute["status"], string> = {
   OPEN: "bg-warning/15 text-warning-foreground",
   UNDER_REVIEW: "bg-primary/10 text-primary",
   RESOLVED: "bg-success/10 text-success",
@@ -29,12 +30,36 @@ const statusCls: Record<Dispute["status"], string> = {
 };
 
 export function DisputeReviewPanel() {
-  const disputes = useShireStore((s) => s.disputes);
-  const resolveDispute = useShireStore((s) => s.resolveDispute);
+  const { data, isLoading, isError } = useAdminDisputes();
+  const resolveDispute = useResolveDispute();
+  const disputes = data?.disputes ?? [];
 
-  const [target, setTarget] = React.useState<Dispute | null>(null);
+  const [target, setTarget] = React.useState<PlatformDispute | null>(null);
   const [decision, setDecision] = React.useState("");
   const [slash, setSlash] = React.useState(true);
+
+  if (isLoading) {
+    return (
+      <EmptyState
+        icon={Scale}
+        title="Loading disputes"
+        description="Fetching persisted dispute records."
+      />
+    );
+  }
+  if (isError || disputes.length === 0) {
+    return (
+      <EmptyState
+        icon={Scale}
+        title={isError ? "Disputes unavailable" : "No disputes"}
+        description={
+          isError
+            ? "Admin dispute data could not be loaded."
+            : "Open disputes will appear here."
+        }
+      />
+    );
+  }
 
   return (
     <>
@@ -45,7 +70,9 @@ export function DisputeReviewPanel() {
             <Card key={d.id}>
               <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
                 <div>
-                  <CardTitle className="text-base">{d.reportedLabel}</CardTitle>
+                  <CardTitle className="text-base">
+                    Dispute {d.id.slice(0, 8)}
+                  </CardTitle>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Reported {formatDate(d.createdAt)}
                   </p>
@@ -126,14 +153,35 @@ export function DisputeReviewPanel() {
               Cancel
             </Button>
             <Button
-              disabled={!decision.trim()}
+              disabled={!decision.trim() || resolveDispute.isPending}
               onClick={() => {
                 if (!target) return;
-                resolveDispute(target.id, decision.trim(), slash);
-                toast.success("Dispute resolved", {
-                  description: slash ? "Stake slashed." : "Stake refunded.",
-                });
-                setTarget(null);
+                resolveDispute.mutate(
+                  {
+                    id: target.id,
+                    status: "RESOLVED",
+                    decision: decision.trim(),
+                    stakeStatus: target.stakeId
+                      ? slash
+                        ? "SLASHED"
+                        : "REFUNDED"
+                      : undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Dispute resolved", {
+                        description: target.stakeId
+                          ? slash
+                            ? "Stake slashed."
+                            : "Stake refunded."
+                          : "Decision recorded.",
+                      });
+                      setTarget(null);
+                    },
+                    onError: () =>
+                      toast.error("Dispute resolution failed"),
+                  },
+                );
               }}
             >
               Confirm decision

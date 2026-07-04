@@ -1,13 +1,12 @@
 import { env } from "./env";
-import { mastra } from "./mastra";
 import { createServer, type Server } from "node:http";
 import { pathToFileURL } from "node:url";
 import express from "express";
-import { MastraServer } from "@mastra/express";
 import { logger } from "./runtime/logger";
 import { jobRegistry, resolveJobName } from "./runtime/server/job-registry";
 import { getStorageDiagnostics, probeStorageReadiness } from "./runtime/storage/diagnostics";
 import { createRuntimeJobServices } from "./runtime/server/job-services";
+import { AgentWorker } from "./runtime/jobs/agent-worker";
 import { createInMemoryRateLimiter } from "./runtime/auth/rate-limit";
 import { RUNTIME_HTTP_ROUTES } from "./constants/agent";
 import type { RuntimeHttpServerDependencies } from "./types/runtime";
@@ -59,6 +58,17 @@ export async function createRuntimeHttpServer(
     processJob: dependencies.processJob,
   });
   await jobServices.start();
+  const injectedWorker =
+    !env.workerEnabled &&
+    dependencies.jobQueue &&
+    dependencies.processJob &&
+    !dependencies.durableJobRuntime
+      ? new AgentWorker({
+          queue: dependencies.jobQueue,
+          process: dependencies.processJob,
+        })
+      : undefined;
+  injectedWorker?.start();
 
   // --- Shared dependencies ---
   const serviceToken = dependencies.serviceToken ?? env.agentServiceToken;
@@ -77,7 +87,7 @@ export async function createRuntimeHttpServer(
     serviceToken,
     rateLimiter,
     now: dependencies.now,
-    answerProductQuestion: dependencies.answerProductQuestion,
+    streamProductQuestion: dependencies.streamProductQuestion,
     timeoutMs: dependencies.productQnaTimeoutMs,
   });
 
@@ -99,9 +109,17 @@ export async function createRuntimeHttpServer(
     searchProductKnowledge: dependencies.searchProductKnowledge,
   });
 
-  // --- Mastra server owns /chat/:agentId, /api/* ---
-  const server = new MastraServer({ app, mastra });
-  await server.init();
+  // --- Agent runtime owns /chat/:agentId, /api/* ---
+  if (dependencies.mountAgentChat) {
+    await dependencies.mountAgentChat(app);
+  } else {
+    const [{ MastraServer }, { mastra }] = await Promise.all([
+      import("@mastra/express"),
+      import("./mastra"),
+    ]);
+    const server = new MastraServer({ app, mastra });
+    await server.init();
+  }
 
   runtimeLogger.info(
     {
@@ -141,12 +159,14 @@ export async function createRuntimeHttpServer(
 
   const httpServer = createServer(app);
   httpServer.on("close", () => {
+    void injectedWorker?.close();
     jobServices.close();
   });
   return httpServer;
 }
 
 export async function runServer(argv: readonly string[] = process.argv.slice(2)) {
+  const { mastra } = await import("./mastra");
   const jobName = resolveJobName(argv[0]);
 
   runtimeLogger.info(
@@ -164,7 +184,7 @@ export async function runServer(argv: readonly string[] = process.argv.slice(2))
     runtimeLogger.info({ jobName }, "dispatching job");
 
     try {
-      const result = await jobRegistry[jobName]();
+      const result = await jobRegistry[jobName](argv.slice(1));
 
       if ("agent" in result && "workflow" in result) {
         runtimeLogger.info(
@@ -220,8 +240,6 @@ export async function runServer(argv: readonly string[] = process.argv.slice(2))
 }
 
 export async function startRuntimeService() {
-  void mastra;
-
   if (!env.redisUrl) {
     runtimeLogger.warn(
       "REDIS_URL is not set. Falling back to in-memory job queue. Jobs will not persist across restarts.",

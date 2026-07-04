@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Briefcase, Sparkles, Users } from "lucide-react";
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import {
   getActiveRoleState,
   onboardingChoiceDestination,
@@ -37,11 +36,9 @@ const roles = [
 export default function OnboardingPage() {
   const router = useRouter();
   const accessToken = useAccessToken();
-  const [checkingRoles, setCheckingRoles] = React.useState(PRIVY_ENABLED);
+  const [checkingRoles, setCheckingRoles] = React.useState(true);
 
   React.useEffect(() => {
-    if (!PRIVY_ENABLED) return;
-
     let cancelled = false;
     async function redirectIfOnboarded() {
       setCheckingRoles(true);

@@ -1,7 +1,9 @@
 import { env } from "../../env";
 import { getAgentDatabase } from "../db";
 import {
+  bullRetryCooldownMs,
   createBullMqJobRuntime,
+  matchingJobAttempts,
 } from "../jobs/bullmq-job-queue";
 import { AgentWorker } from "../jobs/agent-worker";
 import { createJobProcessors } from "../jobs/job-processors";
@@ -42,6 +44,12 @@ export function createRuntimeJobServices(
     enabled:
       env.recommendationSchedulerEnabled && schedulerCanEnqueueProcessableJobs,
     intervalMs: env.recommendationSchedulerIntervalMs,
+    retryCooldownMs: durableJobRuntime
+      ? bullRetryCooldownMs({
+          attempts: matchingJobAttempts(env.jobAttempts),
+          backoffMs: env.jobBackoffMs,
+        })
+      : 0,
     getRepository: () => {
       const database = getAgentDatabase();
       return database ? createDrizzleMatchingRepository(database) : undefined;

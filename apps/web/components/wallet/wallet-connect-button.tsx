@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WalletAddressBadge } from "@/components/wallet/wallet-address-badge";
-import { NetworkSwitcher } from "@/components/wallet/network-switcher";
 
 export function WalletConnectButton({
   size = "default",
@@ -46,15 +45,16 @@ export function WalletConnectButton({
 
   async function onConnect() {
     await connect();
-    if (!PRIVY_ENABLED) {
-      toast.success("Signed in", { description: "Your account is ready." });
-      if (autoNavigateOnConnect) goToLoginDestination("push");
-    }
   }
 
   if (!isConnected) {
     return (
-      <Button size={size} onClick={onConnect} disabled={connecting} className={className}>
+      <Button
+        size={size}
+        onClick={onConnect}
+        disabled={connecting || !PRIVY_ENABLED}
+        className={className}
+      >
         {connecting ? (
           <>
             <Loader2 className="size-4 animate-spin" />
@@ -63,7 +63,7 @@ export function WalletConnectButton({
         ) : (
           <>
             <UserCircle className="size-4" />
-            Sign in
+            {PRIVY_ENABLED ? "Sign in" : "Sign-in unavailable"}
           </>
         )}
       </Button>
@@ -87,7 +87,6 @@ export function WalletConnectButton({
         </DropdownMenuLabel>
         <div className="flex flex-col gap-2 px-2 py-1.5">
           {address ? <WalletAddressBadge address={address} /> : null}
-          <NetworkSwitcher />
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem

@@ -4,10 +4,12 @@ import test from "node:test";
 import { createInMemoryJobsRepository } from "../lib/server/jobs-repository";
 import type { CreateJobInput } from "../lib/server/jobs-repository";
 import {
+  createCandidateJobRouteHandlers,
   createCandidateJobsRouteHandlers,
   createJobsRouteHandlers,
 } from "../lib/server/jobs-route";
 import { createInMemoryProfileRepository } from "../lib/server/profile-repository";
+import { createInMemoryRecommendationsRepository } from "../lib/server/recommendations-repository";
 
 function authenticated(privyUserId = "did:privy:recruiter") {
   return async () => ({ mode: "privy", privyUserId }) as const;
@@ -137,5 +139,75 @@ test("candidate jobs GET excludes jobs posted by the same user", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     jobs: JSON.parse(JSON.stringify([activeOtherJob])),
+  });
+});
+
+test("candidate job detail includes the authenticated candidate's persisted evaluation", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const jobs = createInMemoryJobsRepository();
+  const recommendations = createInMemoryRecommendationsRepository();
+  const candidate = await profiles.resolveUser("did:privy:candidate");
+  const recruiter = await profiles.resolveUser("did:privy:recruiter");
+  const draft = await jobs.createJob(recruiter.id, jobPayload);
+  const job = await jobs.updateJobStatus(draft.id, "ACTIVE");
+  recommendations.seed({
+    id: "recommendation-1",
+    type: "JOB_TO_CANDIDATE",
+    candidateUserId: candidate.id,
+    recruiterUserId: recruiter.id,
+    jobId: job.id,
+    matchScore: 83,
+    confidence: 0.82,
+    reasons: ["Required skills match"],
+    missingRequirements: [],
+    riskFlags: [],
+    recommendedAction: "SUGGEST_APPLY",
+    status: "NEW",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  const handlers = createCandidateJobRouteHandlers({
+    resolveAuthenticatedUser: authenticated("did:privy:candidate"),
+    profileRepository: profiles,
+    jobsRepository: jobs,
+    recommendationsRepository: recommendations,
+  });
+
+  const response = await handlers.GET(jsonRequest("GET"), {
+    params: Promise.resolve({ id: job.id }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.match, {
+    score: 83,
+    confidence: 0.82,
+    reasons: ["Required skills match"],
+    missingRequirements: [],
+    recommendedAction: "SUGGEST_APPLY",
+  });
+});
+
+test("candidate job detail returns no match when no persisted evaluation exists", async () => {
+  const profiles = createInMemoryProfileRepository();
+  const jobs = createInMemoryJobsRepository();
+  const recruiter = await profiles.resolveUser("did:privy:recruiter");
+  const draft = await jobs.createJob(recruiter.id, jobPayload);
+  const job = await jobs.updateJobStatus(draft.id, "ACTIVE");
+  const handlers = createCandidateJobRouteHandlers({
+    resolveAuthenticatedUser: authenticated("did:privy:candidate"),
+    profileRepository: profiles,
+    jobsRepository: jobs,
+    recommendationsRepository: createInMemoryRecommendationsRepository(),
+  });
+
+  const response = await handlers.GET(jsonRequest("GET"), {
+    params: Promise.resolve({ id: job.id }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    job: JSON.parse(JSON.stringify(job)),
+    match: null,
   });
 });

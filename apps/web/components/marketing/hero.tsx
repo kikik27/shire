@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRight, Check, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HeroPrompt } from "@/components/marketing/hero-prompt";
 import { Parallax, Reveal } from "@/components/marketing/reveal";

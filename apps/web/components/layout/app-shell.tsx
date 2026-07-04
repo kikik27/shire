@@ -5,22 +5,16 @@ import { usePathname } from "next/navigation";
 import * as React from "react";
 import type { AppRole, CandidateProfile, RecruiterProfile } from "@/lib/types";
 import { getProfile } from "@/lib/profile-client";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { useShireStore } from "@/lib/store";
 import { Logo } from "@/components/site/logo";
 import { ThemeToggle } from "@/components/dashboard/theme-toggle";
-import { NotificationsMenu } from "@/components/layout/notifications-menu";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
 import { WalletConnectButton } from "@/components/wallet/wallet-connect-button";
-import { NetworkSwitcher } from "@/components/wallet/network-switcher";
 import { navConfig, roleMeta } from "@/components/layout/app-nav";
 import { cn } from "@/lib/utils";
 
 function useAccountLabel(role: AppRole) {
   const accessToken = useAccessToken();
-  const candidateProfile = useShireStore((s) => s.candidateProfile);
-  const recruiterProfile = useShireStore((s) => s.recruiterProfile);
   const [label, setLabel] = React.useState(roleMeta[role].label);
 
   React.useEffect(() => {
@@ -29,15 +23,6 @@ function useAccountLabel(role: AppRole) {
     async function loadLabel() {
       if (role === "admin") {
         setLabel("Admin");
-        return;
-      }
-
-      if (!PRIVY_ENABLED) {
-        setLabel(
-          role === "candidate"
-            ? candidateProfile?.displayName ?? roleMeta[role].label
-            : recruiterProfile?.companyName ?? roleMeta[role].label,
-        );
         return;
       }
 
@@ -59,7 +44,7 @@ function useAccountLabel(role: AppRole) {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, candidateProfile, recruiterProfile, role]);
+  }, [accessToken, role]);
 
   return label;
 }
@@ -122,15 +107,11 @@ export function AppShell({ role, children }: { role: AppRole; children: React.Re
               <Logo showWord={false} />
             </Link>
           </div>
-          <div className="hidden sm:block">
-            <NetworkSwitcher />
-          </div>
           <div className="ml-auto flex items-center gap-1">
             <div className="lg:hidden">
               <RoleSwitcher current={role} />
             </div>
             <ThemeToggle />
-            <NotificationsMenu />
             <WalletConnectButton
               size="sm"
               accountLabel={accountLabel}

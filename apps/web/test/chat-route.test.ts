@@ -4,8 +4,12 @@ import test from "node:test";
 import { AuthenticatedUserError } from "../lib/server/authenticated-user";
 import {
   createInMemoryProfileRepository,
-  type ProfileRepository,
 } from "../lib/server/profile-repository";
+import {
+  createInMemoryJobsRepository,
+  type CreateJobInput,
+  type JobsRepository,
+} from "../lib/server/jobs-repository";
 import { createChatPostHandler } from "../app/api/chat/[scope]/route";
 
 const candidateProfile = {
@@ -32,6 +36,19 @@ const recruiterProfile = {
   completedHires: 12,
   disputeCount: 0,
 } as const;
+
+const validJobDraft = {
+  title: "Protocol Engineer",
+  description: "Build trusted protocol integrations.",
+  companyName: "Protocol Labs",
+  location: "Remote",
+  remote: true,
+  salaryRange: "$140k-$180k",
+  jobType: "FULL_TIME",
+  experienceLevel: "SENIOR",
+  skillsRequired: ["TypeScript", "Solidity"],
+  candidateStakeRequired: false,
+} satisfies CreateJobInput;
 
 async function repositoryWithProfile(
   role: "candidate" | "recruiter",
@@ -71,6 +88,190 @@ function successfulFetch(capture: {
     });
   }) as typeof fetch;
 }
+
+function authenticatedUser() {
+  return async () =>
+    ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const;
+}
+
+test("candidate can chat about a real active job", async () => {
+  const { repository, user } = await repositoryWithProfile(
+    "candidate",
+    candidateProfile,
+  );
+  const jobsRepository = createInMemoryJobsRepository();
+  const created = await jobsRepository.createJob(
+    "another-recruiter",
+    validJobDraft,
+  );
+  const job = await jobsRepository.updateJobStatus(created.id, "ACTIVE");
+  const capture: { body?: Record<string, unknown> } = {};
+  const handler = createChatPostHandler({
+    agentUrl: "http://agent.local/chat/role-aware-chat-agent",
+    fetcher: successfulFetch(capture),
+    jobsRepository,
+    repository,
+    resolveAuthenticatedUser: authenticatedUser(),
+    serviceToken: "service-secret",
+  });
+
+  const response = await handler(
+    chatRequest({
+      role: "candidate",
+      resourceType: "job",
+      resourceId: job.id,
+      resourceLabel: "Browser-controlled title",
+      trustedContextSource: "browser-spoof",
+      messages: [],
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capture.body?.memory, {
+    resource: `user:${user.id}:role:candidate`,
+    thread: `user:${user.id}:role:candidate:job:${job.id}`,
+  });
+  assert.equal(
+    (capture.body?.scope as Record<string, unknown>).resourceLabel,
+    validJobDraft.title,
+  );
+  assert.doesNotMatch(
+    String(capture.body?.system),
+    /Browser-controlled title/,
+  );
+  assert.equal(capture.body?.trustedContextSource, "shire-web-v1");
+});
+
+test("recruiter can chat about an owned job", async () => {
+  const { repository, user } = await repositoryWithProfile(
+    "recruiter",
+    recruiterProfile,
+  );
+  const jobsRepository = createInMemoryJobsRepository();
+  const job = await jobsRepository.createJob(user.id, validJobDraft);
+  const capture: { body?: Record<string, unknown> } = {};
+  const handler = createChatPostHandler({
+    agentUrl: "http://agent.local/chat/role-aware-chat-agent",
+    fetcher: successfulFetch(capture),
+    jobsRepository,
+    repository,
+    resolveAuthenticatedUser: authenticatedUser(),
+    serviceToken: "service-secret",
+  });
+
+  const response = await handler(
+    chatRequest({
+      role: "recruiter",
+      resourceType: "job",
+      resourceId: job.id,
+      resourceLabel: "Browser-controlled title",
+      messages: [],
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    (capture.body?.scope as Record<string, unknown>).resourceLabel,
+    validJobDraft.title,
+  );
+});
+
+test("recruiter receives 403 for another recruiter's job", async () => {
+  const { repository } = await repositoryWithProfile(
+    "recruiter",
+    recruiterProfile,
+  );
+  const jobsRepository = createInMemoryJobsRepository();
+  const foreignJob = await jobsRepository.createJob(
+    "another-recruiter",
+    validJobDraft,
+  );
+  const lookedUpIds: string[] = [];
+  const observingRepository: JobsRepository = {
+    ...jobsRepository,
+    async getJob(id) {
+      lookedUpIds.push(id);
+      return jobsRepository.getJob(id);
+    },
+  };
+  const handler = createChatPostHandler({
+    agentUrl: "http://agent.local/chat/role-aware-chat-agent",
+    jobsRepository: observingRepository,
+    repository,
+    resolveAuthenticatedUser: authenticatedUser(),
+    serviceToken: "service-secret",
+  });
+
+  const response = await handler(
+    chatRequest({
+      role: "recruiter",
+      resourceType: "job",
+      resourceId: foreignJob.id,
+      messages: [],
+    }),
+  );
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "resource-forbidden" });
+  assert.deepEqual(lookedUpIds, [foreignJob.id]);
+});
+
+test("missing job context returns a stable 404", async () => {
+  const { repository } = await repositoryWithProfile(
+    "candidate",
+    candidateProfile,
+  );
+  const handler = createChatPostHandler({
+    agentUrl: "http://agent.local/chat/role-aware-chat-agent",
+    jobsRepository: createInMemoryJobsRepository(),
+    repository,
+    resolveAuthenticatedUser: authenticatedUser(),
+    serviceToken: "service-secret",
+  });
+
+  const response = await handler(
+    chatRequest({
+      role: "candidate",
+      resourceType: "job",
+      resourceId: "missing-job",
+      messages: [],
+    }),
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "resource-not-found" });
+});
+
+test("candidate cannot use a non-active job context", async () => {
+  const { repository } = await repositoryWithProfile(
+    "candidate",
+    candidateProfile,
+  );
+  const jobsRepository = createInMemoryJobsRepository();
+  const draftJob = await jobsRepository.createJob(
+    "another-recruiter",
+    validJobDraft,
+  );
+  const handler = createChatPostHandler({
+    agentUrl: "http://agent.local/chat/role-aware-chat-agent",
+    jobsRepository,
+    repository,
+    resolveAuthenticatedUser: authenticatedUser(),
+    serviceToken: "service-secret",
+  });
+
+  const response = await handler(
+    chatRequest({
+      role: "candidate",
+      resourceType: "job",
+      resourceId: draftJob.id,
+      messages: [],
+    }),
+  );
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "resource-forbidden" });
+});
 
 test("chat rejects a missing Privy token when Privy is configured", async () => {
   const handler = createChatPostHandler({

@@ -7,10 +7,18 @@ import { cvParseProcessor } from "./cv-parse.processor";
 import { onchainSyncProcessor } from "./onchain-sync.processor";
 import {
   jobMatchingProcessor,
+  matchingPairProcessor,
   talentMatchingProcessor,
 } from "./matching.processor";
 
-export function createJobProcessors() {
+export type JobProcessorDependencies = {
+  processCvParse?: typeof cvParseProcessor.process;
+  processMatchingPair?: typeof matchingPairProcessor.process;
+};
+
+export function createJobProcessors(
+  dependencies: JobProcessorDependencies = {},
+) {
   return {
     async process(
       job: ProcessableJob,
@@ -34,9 +42,20 @@ export function createJobProcessors() {
             job.payload as { jobId: string },
             executionContext,
           );
+        case "matching-pair":
+          return (
+            dependencies.processMatchingPair ?? matchingPairProcessor.process
+          )(
+            job.payload as {
+              candidateId: string;
+              jobId: string;
+              inputHash: string;
+            },
+            executionContext,
+          );
         case "cv-parse":
         default:
-          return cvParseProcessor.process(
+          return (dependencies.processCvParse ?? cvParseProcessor.process)(
             job.payload as { candidateId: string; rawCv: string },
             executionContext,
           );

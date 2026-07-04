@@ -1,9 +1,14 @@
 import type {
   JobResultMap,
 } from "./job-contracts";
-import type { JobProcessor } from "./job-processor";
+import type {
+  JobExecutionContext,
+  JobProcessor,
+} from "./job-processor";
+import { isRetryableJobError } from "./job-errors";
 import { getAgentDatabase } from "../db";
 import { createDrizzleMatchingRepository } from "../matching/repository";
+import { evaluateMatchingPair } from "../matching/evaluation";
 import {
   runJobMatchingForCandidate,
   runTalentMatchingForJob,
@@ -11,6 +16,18 @@ import {
 
 type JobMatchingResult = JobResultMap["job-matching"];
 type TalentMatchingResult = JobResultMap["talent-matching"];
+type MatchingPairResult = JobResultMap["matching-pair"];
+
+export function matchingFailureRetryable(
+  context: JobExecutionContext,
+  error: unknown,
+): boolean {
+  return (
+    isRetryableJobError(error) &&
+    (context.maxAttempts === undefined ||
+      context.attempt < context.maxAttempts)
+  );
+}
 
 function summarizeSaved(count: number, strong: number): {
   status: JobMatchingResult["status"];
@@ -51,6 +68,14 @@ export const jobMatchingProcessor: JobProcessor<"job-matching"> = {
       status: result.saved.length > 0 ? "SUCCESS" : "PARTIAL",
       input: { candidateId: payload.candidateId },
       output: {
+        attempted: result.attempted,
+        claimed: result.claimed,
+        completed: result.completed,
+        unchanged: result.unchanged,
+        busy: result.busy,
+        ineligible: result.ineligible,
+        savedPairs: result.savedPairs,
+        recommendationRowsWritten: result.recommendationRowsWritten,
         evaluated: result.evaluated,
         saved: result.saved.length,
         strong: result.saved.filter((outcome) => outcome.strong).length,
@@ -96,6 +121,14 @@ export const talentMatchingProcessor: JobProcessor<"talent-matching"> = {
       status: result.saved.length > 0 ? "SUCCESS" : "PARTIAL",
       input: { jobId: payload.jobId },
       output: {
+        attempted: result.attempted,
+        claimed: result.claimed,
+        completed: result.completed,
+        unchanged: result.unchanged,
+        busy: result.busy,
+        ineligible: result.ineligible,
+        savedPairs: result.savedPairs,
+        recommendationRowsWritten: result.recommendationRowsWritten,
         evaluated: result.evaluated,
         saved: result.saved.length,
         strong: result.saved.filter((outcome) => outcome.strong).length,
@@ -113,5 +146,76 @@ export const talentMatchingProcessor: JobProcessor<"talent-matching"> = {
       llmInvoked: result.llmInvoked,
       durationMs: result.durationMs,
     };
+  },
+};
+
+export const matchingPairProcessor: JobProcessor<"matching-pair"> = {
+  name: "matching-pair",
+  llmPolicy: "required",
+  async process(payload, context): Promise<MatchingPairResult> {
+    const database = getAgentDatabase();
+    if (!database) {
+      return {
+        status: "no-database",
+        claimed: false,
+        recommended: false,
+        recommendationRowsWritten: 0,
+        llmInvoked: false,
+        durationMs: 0,
+      };
+    }
+
+    const startedAt = Date.now();
+    const repository = createDrizzleMatchingRepository(database);
+    try {
+      const result = await evaluateMatchingPair(
+        repository,
+        {
+          candidateUserId: payload.candidateId,
+          jobId: payload.jobId,
+        },
+        {
+          failureRetryable: (error) =>
+            matchingFailureRetryable(context, error),
+          queuedInputHash: payload.inputHash,
+        },
+      );
+      const summary: MatchingPairResult = {
+        status: result.status,
+        claimed: result.claimed,
+        recommended: result.recommended,
+        recommendationRowsWritten: result.recommendationRowsWritten,
+        llmInvoked: result.llmInvoked,
+        durationMs: Date.now() - startedAt,
+      };
+      await repository.recordAgentRun({
+        agentName: "matching-pair-agent",
+        workflowName: "matching-pair",
+        status: result.status === "busy" ? "PARTIAL" : "SUCCESS",
+        input: {
+          candidateId: payload.candidateId,
+          jobId: payload.jobId,
+          inputHash: payload.inputHash,
+        },
+        output: summary,
+        latencyMs: summary.durationMs,
+      });
+      return summary;
+    } catch (error) {
+      await repository.recordAgentRun({
+        agentName: "matching-pair-agent",
+        workflowName: "matching-pair",
+        status: "FAILED",
+        input: {
+          candidateId: payload.candidateId,
+          jobId: payload.jobId,
+          inputHash: payload.inputHash,
+        },
+        errorMessage:
+          error instanceof Error ? error.message : "matching pair failed",
+        latencyMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
   },
 };

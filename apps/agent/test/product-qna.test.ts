@@ -5,6 +5,43 @@ import {
   answerProductQuestion,
   ProductQnaError,
 } from "../src/runtime/knowledge/product-qna";
+import { enrichChatRequestWithProductKnowledge } from "../src/runtime/knowledge/product-context";
+import { streamProductQuestion } from "../src/runtime/knowledge/product-qna-stream";
+
+function chatBody(question: string) {
+  return {
+    scope: { role: "candidate" },
+    messages: [{ role: "user", content: question }],
+  };
+}
+
+test("social chat skips product retrieval", async () => {
+  let calls = 0;
+  const result = await enrichChatRequestWithProductKnowledge(
+    chatBody("Hi"),
+    async () => {
+      calls += 1;
+      return [];
+    },
+  );
+
+  assert.equal(calls, 0);
+  assert.equal(result.retrievalSkipped, true);
+});
+
+test("product policy questions use retrieval", async () => {
+  let calls = 0;
+  const result = await enrichChatRequestWithProductKnowledge(
+    chatBody("How does Shire staking work?"),
+    async () => {
+      calls += 1;
+      return [];
+    },
+  );
+
+  assert.equal(calls, 1);
+  assert.equal(result.retrievalSkipped, false);
+});
 
 test("rejects empty product questions before calling the model", async () => {
   await assert.rejects(
@@ -122,4 +159,22 @@ test("strips model reasoning tags from product answers", async () => {
   );
 
   assert.equal(generated.answer, "Hello. I can help with Shire.");
+});
+
+test("stream masks provider errors from public clients", async () => {
+  const response = streamProductQuestion(
+    { question: "Hi" },
+    new AbortController().signal,
+    {
+      agent: {
+        stream: async () => {
+          throw new Error("secret-provider-payload");
+        },
+      },
+    },
+  );
+  const body = await response.text();
+
+  assert.doesNotMatch(body, /secret-provider-payload/);
+  assert.match(body, /Product assistant is temporarily unavailable/);
 });

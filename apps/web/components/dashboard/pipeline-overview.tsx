@@ -8,14 +8,17 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { pipelineBars } from "@/lib/dashboard-data";
+import type { RecruiterDashboard } from "@/lib/server/recruiter-dashboard-repository";
 
 const chartConfig = {
-  total: { label: "In stage", color: "var(--chart-2)" },
-  active: { label: "Active", color: "var(--chart-1)" },
+  count: { label: "Candidates", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
-export function PipelineOverview() {
+export function PipelineOverview({
+  pipeline,
+}: {
+  pipeline: RecruiterDashboard["pipeline"];
+}) {
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-start justify-between space-y-0">
@@ -27,29 +30,31 @@ export function PipelineOverview() {
         </div>
         <div className="flex items-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-chart-2" /> In stage
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-chart-1" /> Active
+            <span className="size-2 rounded-full bg-chart-1" /> Candidates
           </span>
         </div>
       </CardHeader>
       <CardContent>
+        {pipeline.length === 0 ? (
+          <p className="grid h-[240px] place-items-center text-sm text-muted-foreground">
+            Pipeline activity will appear here.
+          </p>
+        ) : (
         <ChartContainer config={chartConfig} className="aspect-auto h-[240px] w-full">
-          <BarChart data={pipelineBars} margin={{ left: 4, right: 4, top: 8 }}>
+          <BarChart data={pipeline} margin={{ left: 4, right: 4, top: 8 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis
-              dataKey="stage"
+              dataKey="status"
               tickLine={false}
               axisLine={false}
               tickMargin={10}
               fontSize={12}
             />
             <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-            <Bar dataKey="total" fill="var(--color-total)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="active" fill="var(--color-active)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );

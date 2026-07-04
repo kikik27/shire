@@ -1,4 +1,4 @@
-process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
+import "./test-env";
 
 await Promise.all([
   import("./agent-runner.test"),
@@ -36,6 +36,7 @@ await Promise.all([
   import("./security-policy.test"),
   import("./storage-diagnostics.test"),
   import("./matching-rule-score.test"),
+  import("./matching-fingerprint.test"),
   import("./matching-pipeline.test"),
   import("./job-contracts.test"),
   import("./in-memory-job-queue.test"),
@@ -48,5 +49,4 @@ await Promise.all([
   import("./internal-auth.test"),
   import("./agent-worker.test"),
   import("./jobs-http.test"),
-  import("./live-cv-worker.test"),
 ]);

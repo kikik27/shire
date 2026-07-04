@@ -1,3 +1,10 @@
+import type {
+  MatchingEvaluationStatus,
+  MatchingOutput,
+  RecommendationStatus,
+  RecommendationType,
+} from "@shire/shared";
+
 /**
  * Domain types consumed by the matching pipeline. These are deliberately plain
  * (no Drizzle, no Mastra) so the rule-score and filter engines are pure
@@ -41,6 +48,125 @@ export type JobMatchInput = {
   riskScore: number;
 };
 
+export type MatchingEvaluation = {
+  id: string;
+  candidateUserId: string;
+  jobId: string;
+  inputHash: string;
+  scoringVersion: string;
+  status: MatchingEvaluationStatus;
+  ruleScore: number | null;
+  matchScore: number | null;
+  confidence: number | null;
+  recommendedAction: MatchingOutput["recommendedAction"] | null;
+  reasons: string[];
+  missingRequirements: string[];
+  riskFlags: string[];
+  failureCode: string | null;
+  attemptCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type MatchingPair = {
+  candidateUserId: string;
+  jobId: string;
+};
+
+export type MatchingPairJobDescriptor = {
+  candidateId: string;
+  jobId: string;
+  inputHash: string;
+  queueGeneration: number;
+};
+
+export type MatchingReconciliationCursor = {
+  candidateId: string;
+  jobId: string;
+};
+
+export type MatchingReconciliationResult = {
+  pairs: MatchingPairJobDescriptor[];
+  scannedPairs: number;
+  skippedPairs: number;
+  nextCursor?: MatchingReconciliationCursor;
+};
+
+export function matchingPairKey(pair: MatchingPair): string {
+  return `${pair.candidateUserId}:${pair.jobId}`;
+}
+
+export type MatchingEvaluationClaimInput = MatchingPair & {
+  inputHash: string;
+  scoringVersion: string;
+};
+
+export type MatchingEvaluationClaimOptions = {
+  now?: Date;
+};
+
+export type MatchingEvaluationClaim = MatchingEvaluationClaimInput & {
+  attemptCount: number;
+};
+
+export type MatchingEvaluationClaimResult =
+  | { status: "claimed"; claim: MatchingEvaluationClaim }
+  | { status: "unchanged"; evaluation: MatchingEvaluation }
+  | { status: "busy"; evaluation: MatchingEvaluation };
+
+export type PreparedMatchingEvaluation =
+  | { status: "unavailable" }
+  | {
+      status: "ready";
+      candidate: CandidateMatchInput;
+      job: JobMatchInput;
+      appliedJobIds: ReadonlySet<string>;
+      claimResult: MatchingEvaluationClaimResult;
+    };
+
+export type MatchingEvaluationCompletion = MatchingEvaluationClaim & {
+  ruleScore: number | null;
+  matchScore: number | null;
+  confidence: number | null;
+  recommendedAction: MatchingOutput["recommendedAction"] | null;
+  reasons: string[];
+  missingRequirements: string[];
+  riskFlags: string[];
+};
+
+export type MatchingEvaluationFailure = MatchingEvaluationClaim & {
+  failureCode: string;
+  retryable: boolean;
+};
+
+export type RecommendationInput = MatchingPair & {
+  type: RecommendationType;
+  recruiterUserId: string;
+  matchScore: number;
+  confidence: number;
+  reasons: string[];
+  missingRequirements: string[];
+  riskFlags: string[];
+  recommendedAction: MatchingOutput["recommendedAction"];
+};
+
+export type MatchingRecommendationPublication =
+  | readonly [RecommendationInput, RecommendationInput]
+  | null;
+
+export type MatchingEvaluationPublication = MatchingEvaluationCompletion & {
+  recommendations: MatchingRecommendationPublication;
+};
+
+export type MatchingRecommendationRepair = MatchingEvaluationClaim & {
+  recommendations: MatchingRecommendationPublication;
+};
+
+export type MatchingPublicationResult = {
+  published: boolean;
+  recommendationRowsWritten: number;
+};
+
 export type MatchingRepository = {
   /** Load a CONFIRMED candidate profile, or null when not found/not confirmed. */
   getCandidateProfile(userId: string): Promise<CandidateMatchInput | null>;
@@ -48,27 +174,40 @@ export type MatchingRepository = {
   listConfirmedCandidates(): Promise<CandidateMatchInput[]>;
   /** Active jobs, optionally excluding those owned by a recruiter. */
   listActiveJobs(options?: { excludeRecruiterUserId?: string }): Promise<JobMatchInput[]>;
+  /** Load an ACTIVE job, or null when not found/not active. */
+  getActiveJob(jobId: string): Promise<JobMatchInput | null>;
   /** Job ids a candidate has already applied to. */
   listAppliedJobIds(candidateUserId: string): Promise<Set<string>>;
-  /** Existing recommendation for a candidate/job/type pair, if any. */
-  getRecommendation(
-    candidateUserId: string,
-    jobId: string,
-    type: "JOB_TO_CANDIDATE" | "TALENT_TO_COMPANY",
-  ): Promise<{ id: string } | null>;
-  /** Upsert a recommendation keyed on (candidate, job, type). Returns the id. */
-  saveRecommendation(input: {
-    type: "JOB_TO_CANDIDATE" | "TALENT_TO_COMPANY";
-    candidateUserId: string;
-    recruiterUserId?: string;
-    jobId?: string;
-    matchScore: number;
-    confidence?: number;
-    reasons: string[];
-    missingRequirements: string[];
-    riskFlags: string[];
-    recommendedAction: string;
-  }): Promise<string>;
+  reconcileMatchingPairs(options: {
+    limit: number;
+    cursor?: MatchingReconciliationCursor;
+    now?: Date;
+    retryCooldownMs: number;
+  }): Promise<MatchingReconciliationResult>;
+  expireUnavailableRecommendations(options: {
+    limit: number;
+    updatedBefore: Date;
+  }): Promise<number>;
+  /** Reads current source data and claims its fingerprint as one atomic snapshot. */
+  prepareEvaluation(
+    pair: MatchingPair,
+    options?: MatchingEvaluationClaimOptions,
+  ): Promise<PreparedMatchingEvaluation>;
+  getEvaluation(pair: MatchingPair): Promise<MatchingEvaluation | null>;
+  claimEvaluation(
+    input: MatchingEvaluationClaimInput,
+    options?: MatchingEvaluationClaimOptions,
+  ): Promise<MatchingEvaluationClaimResult>;
+  /** Completes a RUNNING claim and publishes both audiences atomically. */
+  publishEvaluation(
+    input: MatchingEvaluationPublication,
+  ): Promise<MatchingPublicationResult>;
+  /** Repairs publication only while the exact COMPLETED evaluation still wins. */
+  repairRecommendations(
+    input: MatchingRecommendationRepair,
+  ): Promise<MatchingPublicationResult>;
+  /** Returns false when a newer claim fenced this failure out. */
+  failEvaluation(input: MatchingEvaluationFailure): Promise<boolean>;
   /** Record an agent run for observability. */
   recordAgentRun(input: {
     agentName: string;
@@ -79,4 +218,14 @@ export type MatchingRepository = {
     errorMessage?: string;
     latencyMs?: number;
   }): Promise<void>;
+};
+
+export type RecommendationSnapshot = {
+  id: string;
+  candidateUserId: string;
+  jobId: string;
+  matchScore: number;
+  recommendedAction: string;
+  status: RecommendationStatus;
+  type: RecommendationType;
 };

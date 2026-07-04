@@ -93,10 +93,6 @@ export function StakeFlow() {
   const activeFlow = flowCopy[role];
 
   React.useEffect(() => {
-    setStep(0);
-  }, [role]);
-
-  React.useEffect(() => {
     if (touched || reduce) return;
     const id = window.setInterval(() => {
       setStep((current) => (current + 1) % activeFlow.steps.length);

@@ -110,5 +110,17 @@ export function createApplicationsRouteHandlers(
     }
   }
 
-  return { GET, POST, GET_JOB };
+  async function GET_RECRUITER(request: Request) {
+    try {
+      const userId = await authenticatedUserId(request, authenticate, profiles());
+      return NextResponse.json({
+        applications:
+          await applications().listApplicationsByRecruiter(userId),
+      });
+    } catch (error) {
+      return serverErrorResponse(error);
+    }
+  }
+
+  return { GET, POST, GET_JOB, GET_RECRUITER };
 }

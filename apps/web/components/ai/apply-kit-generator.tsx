@@ -3,8 +3,7 @@
 import * as React from "react";
 import { Check, Copy, Sparkles, Wand2 } from "lucide-react";
 import { toast } from "sonner";
-import type { Job } from "@/lib/types";
-import { useShireStore } from "@/lib/store";
+import type { CandidateProfile, Job } from "@/lib/types";
 import { generateApplyKit } from "@/lib/ai";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,8 +23,13 @@ const tabs = [
   { key: "followUp", label: "Follow-up" },
 ] as const;
 
-export function ApplyKitGenerator({ job }: { job: Job }) {
-  const candidateProfile = useShireStore((s) => s.candidateProfile);
+export function ApplyKitGenerator({
+  job,
+  candidateProfile,
+}: {
+  job: Job;
+  candidateProfile?: CandidateProfile | null;
+}) {
   const [open, setOpen] = React.useState(false);
   const [copied, setCopied] = React.useState<string | null>(null);
 

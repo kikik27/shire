@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 
 import {
   createDatabase,
@@ -49,6 +49,13 @@ export type PersistedRecommendation = {
 export interface RecommendationsRepository {
   listRecommendationsForCandidate(candidateUserId: string): Promise<PersistedRecommendation[]>;
   listRecommendationsForRecruiter(recruiterUserId: string): Promise<PersistedRecommendation[]>;
+}
+
+export interface CandidateJobRecommendationRepository {
+  getCandidateJobRecommendation(
+    candidateUserId: string,
+    jobId: string,
+  ): Promise<PersistedRecommendation | null>;
 }
 
 export class RecommendationsRepositoryError extends Error {
@@ -142,7 +149,7 @@ function mapRecommendation(
 
 export function createDrizzleRecommendationsRepository(
   database: Database = createDatabase(),
-): RecommendationsRepository {
+): RecommendationsRepository & CandidateJobRecommendationRepository {
   return {
     async listRecommendationsForCandidate(candidateUserId) {
       try {
@@ -157,6 +164,7 @@ export function createDrizzleRecommendationsRepository(
             and(
               eq(recommendations.candidateUserId, candidateUserId),
               eq(recommendations.type, "JOB_TO_CANDIDATE"),
+              ne(recommendations.status, "EXPIRED"),
             ),
           )
           .orderBy(desc(recommendations.matchScore), desc(recommendations.createdAt));
@@ -217,10 +225,39 @@ export function createDrizzleRecommendationsRepository(
         );
       }
     },
+    async getCandidateJobRecommendation(candidateUserId, jobId) {
+      try {
+        const [row] = await database
+          .select({
+            recommendation: recommendations,
+            job: jobs,
+          })
+          .from(recommendations)
+          .leftJoin(jobs, eq(recommendations.jobId, jobs.id))
+          .where(
+            and(
+              eq(recommendations.candidateUserId, candidateUserId),
+              eq(recommendations.jobId, jobId),
+              eq(recommendations.type, "JOB_TO_CANDIDATE"),
+              ne(recommendations.status, "EXPIRED"),
+            ),
+          )
+          .limit(1);
+        return row
+          ? mapRecommendation(row.recommendation, { job: row.job })
+          : null;
+      } catch (error) {
+        throw new RecommendationsRepositoryError(
+          "Failed to load candidate job recommendation.",
+          { cause: error },
+        );
+      }
+    },
   };
 }
 
-export function createInMemoryRecommendationsRepository(): RecommendationsRepository & {
+export function createInMemoryRecommendationsRepository(): RecommendationsRepository &
+  CandidateJobRecommendationRepository & {
   seed(recommendation: PersistedRecommendation): void;
 } {
   const stored = new Map<string, PersistedRecommendation>();
@@ -240,7 +277,8 @@ export function createInMemoryRecommendationsRepository(): RecommendationsReposi
         [...stored.values()].filter(
           (recommendation) =>
             recommendation.candidateUserId === candidateUserId &&
-            recommendation.type === "JOB_TO_CANDIDATE",
+            recommendation.type === "JOB_TO_CANDIDATE" &&
+            recommendation.status !== "EXPIRED",
         ),
       );
     },
@@ -251,6 +289,17 @@ export function createInMemoryRecommendationsRepository(): RecommendationsReposi
             recommendation.recruiterUserId === recruiterUserId &&
             recommendation.type === "TALENT_TO_COMPANY",
         ),
+      );
+    },
+    async getCandidateJobRecommendation(candidateUserId, jobId) {
+      return (
+        [...stored.values()].find(
+          (recommendation) =>
+            recommendation.candidateUserId === candidateUserId &&
+            recommendation.jobId === jobId &&
+            recommendation.type === "JOB_TO_CANDIDATE" &&
+            recommendation.status !== "EXPIRED",
+        ) ?? null
       );
     },
   };

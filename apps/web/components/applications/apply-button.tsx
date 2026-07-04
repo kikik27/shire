@@ -6,6 +6,10 @@ import { toast } from "sonner";
 import type { Job } from "@/lib/types";
 import { useWallet } from "@/lib/wallet/use-wallet";
 import { useApplyJob, useMyApplications } from "@/lib/hooks/use-applications";
+import {
+  useCreatePlatformStake,
+  usePlatformStakes,
+} from "@/lib/hooks/use-stakes";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -24,6 +28,8 @@ import { formatToken } from "@/lib/format";
 export function ApplyButton({ job, className }: { job: Job; className?: string }) {
   const { data: applications = [] } = useMyApplications();
   const applyJob = useApplyJob();
+  const createStake = useCreatePlatformStake();
+  const { data: stakes = [] } = usePlatformStakes();
   const application = applications.find((a) => a.jobId === job.id);
   const { isConnected, connect } = useWallet();
 
@@ -31,18 +37,53 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
   const [message, setMessage] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
+  const needsStake = Boolean(
+    job.candidateStakeRequired && job.candidateStakeAmount,
+  );
+  const recordedStake = application
+    ? stakes.find(
+        (stake) =>
+          stake.type === "APPLICATION" &&
+          stake.applicationId === application.id,
+      )
+    : undefined;
+
+  async function recordApplicationStake(applicationId: string) {
+    if (!job.candidateStakeAmount) return;
+    await createStake.mutateAsync({
+      type: "APPLICATION",
+      amount: job.candidateStakeAmount,
+      token: job.stakeToken,
+      idempotencyKey: `application:${applicationId}`,
+      applicationId,
+      jobId: job.id,
+    });
+  }
+
   if (application && application.status !== "WITHDRAWN") {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
           <CheckCircle2 className="size-4" /> Applied
         </span>
         <ApplicationStatusBadge status={application.status} />
+        {needsStake && !recordedStake && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={createStake.isPending}
+            onClick={() => {
+              void recordApplicationStake(application.id)
+                .then(() => toast.success("Platform escrow recorded"))
+                .catch(() => toast.error("Platform escrow failed"));
+            }}
+          >
+            Record required escrow
+          </Button>
+        )}
       </div>
     );
   }
-
-  const needsStake = job.candidateStakeRequired && job.candidateStakeAmount;
 
   async function submit() {
     if (!isConnected) {
@@ -51,15 +92,26 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
     }
     setSubmitting(true);
     try {
-      await applyJob.mutateAsync({
+      const createdApplication = await applyJob.mutateAsync({
         jobId: job.id,
         message: message.trim() || "I'd love to be considered for this role.",
         stakeAmount: needsStake ? job.candidateStakeAmount : undefined,
       });
+      if (needsStake) {
+        try {
+          await recordApplicationStake(createdApplication.id);
+        } catch {
+          setOpen(false);
+          toast.warning("Application sent; escrow is still pending", {
+            description: "Use the application action to retry platform escrow.",
+          });
+          return;
+        }
+      }
       setOpen(false);
       toast.success("Application sent", {
         description: needsStake
-          ? `Recorded ${formatToken(job.candidateStakeAmount!, job.stakeToken)} simulated stake.`
+          ? `Recorded ${formatToken(job.candidateStakeAmount!, job.stakeToken)} in platform escrow.`
           : undefined,
       });
     } catch (error) {
@@ -106,7 +158,7 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
               This role requires a {formatToken(job.candidateStakeAmount!, job.stakeToken)} stake
             </p>
             <p className="text-muted-foreground">
-              Locked in escrow to signal you&apos;re serious. Refunded unless you ghost the process.
+              Recorded in platform escrow and refundable under the dispute policy.
             </p>
           </div>
         )}

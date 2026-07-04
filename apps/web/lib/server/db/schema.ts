@@ -1,6 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   customType,
+  index,
   integer,
   jsonb,
   numeric,
@@ -13,6 +16,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 import {
+  DISPUTE_STATUSES,
+  MATCHING_EVALUATION_STATUSES,
+  PLATFORM_STAKE_STATUSES,
+  PLATFORM_STAKE_TYPES,
   PROFILE_STATUSES,
   RECOMMENDATION_STATUSES,
   RECOMMENDATION_TYPES,
@@ -65,6 +72,19 @@ export const recommendationTypeEnum = pgEnum("recommendation_type", [
 export const recommendationStatusEnum = pgEnum("recommendation_status", [
   ...RECOMMENDATION_STATUSES,
 ]);
+export const platformStakeStatusEnum = pgEnum("stake_status", [
+  ...PLATFORM_STAKE_STATUSES,
+]);
+export const platformStakeTypeEnum = pgEnum("stake_type", [
+  ...PLATFORM_STAKE_TYPES,
+]);
+export const disputeStatusEnum = pgEnum("dispute_status", [
+  ...DISPUTE_STATUSES,
+]);
+export const matchingEvaluationStatusEnum = pgEnum(
+  "matching_evaluation_status",
+  [...MATCHING_EVALUATION_STATUSES],
+);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -167,6 +187,140 @@ export const applications = pgTable(
     ...timestamps,
   },
   (table) => [uniqueIndex("applications_job_candidate_unique").on(table.jobId, table.candidateUserId)],
+).enableRLS();
+
+export const stakes = pgTable(
+  "stakes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    type: platformStakeTypeEnum("type").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    token: text("token").notNull(),
+    status: platformStakeStatusEnum("status").default("LOCKED").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    reason: text("reason"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("stakes_owner_idempotency_unique").on(
+      table.ownerUserId,
+      table.idempotencyKey,
+    ),
+    index("stakes_owner_idx").on(table.ownerUserId),
+    index("stakes_status_idx").on(table.status),
+    index("stakes_job_idx").on(table.jobId),
+    index("stakes_created_at_idx").on(table.createdAt),
+  ],
+).enableRLS();
+
+export const disputes = pgTable(
+  "disputes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reporterUserId: uuid("reporter_user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    stakeId: uuid("stake_id").references(() => stakes.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason").notNull(),
+    status: disputeStatusEnum("status").default("OPEN").notNull(),
+    aiSummary: text("ai_summary"),
+    adminDecision: text("admin_decision"),
+    ...timestamps,
+  },
+  (table) => [
+    index("disputes_status_idx").on(table.status),
+    index("disputes_job_idx").on(table.jobId),
+    index("disputes_created_at_idx").on(table.createdAt),
+  ],
+).enableRLS();
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    actorUserId: uuid("actor_user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "restrict" }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("audit_logs_actor_idx").on(table.actorUserId),
+    index("audit_logs_entity_idx").on(table.entityType, table.entityId),
+    index("audit_logs_created_at_idx").on(table.createdAt),
+  ],
+).enableRLS();
+
+export const matchingEvaluations = pgTable(
+  "matching_evaluations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    candidateUserId: uuid("candidate_user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    inputHash: text("input_hash").notNull(),
+    scoringVersion: text("scoring_version").notNull(),
+    status: matchingEvaluationStatusEnum("status").notNull(),
+    ruleScore: integer("rule_score"),
+    matchScore: integer("match_score"),
+    confidence: numeric("confidence", {
+      precision: 3,
+      scale: 2,
+      mode: "number",
+    }),
+    recommendedAction: text("recommended_action"),
+    reasons: jsonb("reasons").$type<string[]>().default([]).notNull(),
+    missingRequirements: jsonb("missing_requirements")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+    failureCode: text("failure_code"),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("matching_evaluations_candidate_job_unique").on(
+      table.candidateUserId,
+      table.jobId,
+    ),
+    index("matching_evaluations_status_idx").on(table.status),
+    index("matching_evaluations_updated_at_idx").on(table.updatedAt),
+    check(
+      "matching_evaluations_confidence_range_check",
+      sql`${table.confidence} is null or ${table.confidence} between 0 and 1`,
+    ),
+    check(
+      "matching_evaluations_rule_score_range_check",
+      sql`${table.ruleScore} is null or ${table.ruleScore} between 0 and 100`,
+    ),
+    check(
+      "matching_evaluations_match_score_range_check",
+      sql`${table.matchScore} is null or ${table.matchScore} between 0 and 100`,
+    ),
+    check(
+      "matching_evaluations_attempt_count_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+  ],
 ).enableRLS();
 
 export const agentRuns = pgTable("agent_runs", {

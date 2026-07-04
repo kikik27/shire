@@ -1,28 +1,81 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import type { Express } from "express";
 import { env } from "../src/env";
 import {
-  createRuntimeHttpServer,
+  createRuntimeHttpServer as createProductionRuntimeHttpServer,
   getRuntimeBootstrapOutput,
   runServer,
 } from "../src/server";
+import { InMemoryJobQueue } from "../src/runtime/jobs/in-memory-job-queue";
 import { jobRegistry, resolveJobName } from "../src/runtime/server/job-registry";
 import { jobRunnerData } from "../src/runtime/data/runtime-data";
 import {
   OUT_OF_SCOPE_RESPONSE,
   PROMPT_INJECTION_RESPONSE,
 } from "../src/runtime/chat/guard";
+import type { RuntimeHttpServerDependencies } from "../src/types/runtime";
 
 const CHAT_SERVICE_TOKEN = "service-secret";
+
+function productQnaStream(text = "Shire is a hiring product.") {
+  const events = [
+    {
+      type: "data-status",
+      data: { status: "Preparing a concise answer..." },
+    },
+    { type: "text-start", id: "product-text" },
+    { type: "text-delta", id: "product-text", delta: text },
+    { type: "text-end", id: "product-text" },
+    { type: "finish" },
+  ];
+  return new Response(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") +
+      "data: [DONE]\n\n",
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
+function createTestRuntimeDependencies(
+  overrides: RuntimeHttpServerDependencies = {},
+): RuntimeHttpServerDependencies {
+  return {
+    jobQueue: new InMemoryJobQueue(),
+    serviceToken: CHAT_SERVICE_TOKEN,
+    mountAgentChat: (app: Express) => {
+      app.post("/chat/:agentId", (_request, response) => {
+        response.status(200);
+        response.setHeader("content-type", "text/event-stream");
+        response.end(
+          [
+            { type: "start", messageId: "test-message" },
+            { type: "text-start", id: "test-text" },
+            { type: "text-delta", id: "test-text", delta: "Test answer" },
+            { type: "text-end", id: "test-text" },
+            { type: "finish" },
+          ]
+            .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+            .join("") + "data: [DONE]\n\n",
+        );
+      });
+    },
+    ...overrides,
+  };
+}
+
+function createRuntimeHttpServer(
+  dependencies: RuntimeHttpServerDependencies = {},
+) {
+  return createProductionRuntimeHttpServer(
+    createTestRuntimeDependencies(dependencies),
+  );
+}
 
 async function startTestServer(
   dependencies?: Parameters<typeof createRuntimeHttpServer>[0],
 ) {
-  const server = await createRuntimeHttpServer({
-    serviceToken: CHAT_SERVICE_TOKEN,
-    ...dependencies,
-  });
+  const server = await createRuntimeHttpServer(dependencies);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, () => resolve());
@@ -76,6 +129,52 @@ function chatHeaders(token = CHAT_SERVICE_TOKEN) {
     "content-type": "application/json",
   };
 }
+
+test("server uses injected chat runtime without live providers", async () => {
+  let mounted = false;
+  const dependencies = createTestRuntimeDependencies();
+  const mountAgentChat = dependencies.mountAgentChat;
+  dependencies.mountAgentChat = async (app) => {
+    mounted = true;
+    await mountAgentChat?.(app);
+  };
+  const server = await createProductionRuntimeHttpServer(dependencies);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/chat/role-aware-chat-agent`,
+      {
+        method: "POST",
+        headers: chatHeaders(),
+        body: JSON.stringify(
+          createChatBody("candidate", "How does Shire work?"),
+        ),
+      },
+    );
+    const body = await response.text();
+
+    assert.equal(mounted, true);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /text\/event-stream/);
+    assert.deepEqual(
+      body
+        .trim()
+        .split("\n\n")
+        .map((event) => event.slice("data: ".length))
+        .map((data) => (data === "[DONE]" ? data : JSON.parse(data).type)),
+      ["start", "text-start", "text-delta", "text-end", "finish", "[DONE]"],
+    );
+    assert.match(body, /"delta":"Test answer"/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
 
 test("resolves known job names", () => {
   assert.equal(resolveJobName("cv-parse"), "cv-parse");
@@ -384,15 +483,46 @@ test("product Q&A rejects requests without the service token", async () => {
   }
 });
 
+test("product Q&A emits progress, text, finish, and done events", async () => {
+  const server = await createRuntimeHttpServer({
+    serviceToken: CHAT_SERVICE_TOKEN,
+    streamProductQuestion: () => productQnaStream("Streaming answer"),
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, () => resolve());
+  });
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/product-qna`,
+      {
+        method: "POST",
+        headers: chatHeaders(),
+        body: JSON.stringify({ question: "How does Shire work?" }),
+      },
+    );
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(body, /"type":"data-status"/);
+    assert.match(body, /"type":"text-delta"/);
+    assert.match(body, /"type":"finish"/);
+    assert.match(body, /data: \[DONE\]/);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("product Q&A rate limits repeated public questions", async () => {
   let now = 1_000;
   const server = await createRuntimeHttpServer({
     serviceToken: CHAT_SERVICE_TOKEN,
     now: () => now,
-    answerProductQuestion: async () => ({
-      answer: "Shire is a hiring product.",
-      knowledgePaths: [],
-    }),
+    streamProductQuestion: () => productQnaStream(),
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -439,12 +569,20 @@ test("product Q&A rate limits repeated public questions", async () => {
 });
 
 test("product Q&A returns a timeout instead of leaving the request pending", async () => {
+  let generationAborted = false;
   const server = await createRuntimeHttpServer({
     serviceToken: CHAT_SERVICE_TOKEN,
     productQnaTimeoutMs: 10,
-    answerProductQuestion: async () =>
-      new Promise(() => {
-        // Intentionally never resolves.
+    streamProductQuestion: (_body, signal) =>
+      new Promise<Response>((_, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            generationAborted = true;
+            reject(signal.reason);
+          },
+          { once: true },
+        );
       }),
   });
 
@@ -464,6 +602,7 @@ test("product Q&A returns a timeout instead of leaving the request pending", asy
 
     assert.equal(response.status, 504);
     assert.deepEqual(await response.json(), { status: "product-qna-timeout" });
+    assert.equal(generationAborted, true);
   } finally {
     server.close();
     await once(server, "close");

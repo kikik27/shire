@@ -6,10 +6,8 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
 import { saveProfile } from "@/lib/profile-client";
 import { candidateProfileSchema, type CandidateProfileValues } from "@/lib/schemas";
-import { useShireStore } from "@/lib/store";
 import type { CandidateProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,10 +53,8 @@ export function CandidateProfileForm({
 }) {
   const router = useRouter();
   const accessToken = useAccessToken();
-  const existing = useShireStore((s) => s.candidateProfile);
-  const save = useShireStore((s) => s.saveCandidateProfile);
   const [saving, setSaving] = React.useState(false);
-  const current = initialProfile ?? existing;
+  const current = initialProfile;
 
   const form = useForm<CandidateProfileValues>({
     // zod defaults make input != output; pin the resolver to the output type (RHF v7 + resolvers v5).
@@ -113,19 +109,14 @@ export function CandidateProfileForm({
 
     setSaving(true);
     try {
-      if (PRIVY_ENABLED) {
-        const token = await accessToken();
-        const persisted = await saveProfile<CandidateProfile>(
-          "candidate",
-          normalized,
-          token,
-        );
-        save(persisted);
-      } else {
-        save(normalized);
-      }
+      const token = await accessToken();
+      await saveProfile<CandidateProfile>("candidate", normalized, token);
       toast.success("Profile saved", { description: "AI will use this to match you to roles." });
-      if (redirectTo) router.push(redirectTo);
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       toast.error("Profile was not saved", {
         description:

@@ -23,7 +23,13 @@ import {
 } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/dashboard/theme-toggle";
 import { navFooterItems, navItems } from "@/components/dashboard/nav";
-import { notifications } from "@/lib/dashboard-data";
+
+const notifications: Array<{
+  id: string;
+  text: string;
+  time: string;
+  unread: boolean;
+}> = [];
 
 export function Topbar() {
   const unread = notifications.filter((n) => n.unread).length;
