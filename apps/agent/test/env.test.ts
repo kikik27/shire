@@ -68,7 +68,6 @@ test("defaults capability model, memory, and knowledge config", () => {
   assert.equal(env.workerEnabled, true);
   assert.equal(env.recommendationSchedulerEnabled, true);
   assert.equal(env.recommendationSchedulerIntervalMs, 15 * 60 * 1000);
-  assert.equal(env.liveLlmTestsEnabled, false);
 });
 
 test("defaults bounded chat security config", () => {
@@ -79,11 +78,9 @@ test("defaults bounded chat security config", () => {
   assert.equal(env.chatMaxMessageCharacters, 8_000);
   assert.equal(env.chatRateLimitRequests, 30);
   assert.equal(env.chatRateLimitWindowSeconds, 60);
-  assert.equal(env.securityGuardEnabled, true);
-  assert.equal(env.securityGuardMode, "suspicious-only");
-  assert.deepEqual(env.securityGuardModels, [
-    "MiniMax-M3",
-  ]);
+  assert.equal("securityGuardEnabled" in env, false);
+  assert.equal("securityGuardMode" in env, false);
+  assert.equal("securityGuardModels" in env, false);
   assert.equal(env.securityGuardThreshold, 0.85);
   assert.equal(env.outputMaxCharacters, 12_000);
 });
@@ -103,7 +100,11 @@ test("parses chat model capabilities from env", () => {
   const env = createEnv({
     SHIRE_TEXT_MODEL: "tokenrouter/default-a,tokenrouter/default-b",
     SHIRE_MODEL_PRODUCT_QNA: "openrouter/product",
+    SHIRE_MODEL_ROLE_AWARE_CHAT: "openrouter/role-aware",
     SHIRE_MODEL_DISPUTE_SUMMARY: "openrouter/dispute",
+    SHIRE_MODEL_KNOWLEDGE_SYNTHESIS: "openrouter/knowledge",
+    SHIRE_MODEL_RECOMMENDATION_EXPLANATION: "openrouter/recommendation",
+    SHIRE_MODEL_WORKFLOW_SUMMARY: "openrouter/workflow",
     SHIRE_TEXT_API_KEY: "text-key",
   });
 
@@ -113,21 +114,50 @@ test("parses chat model capabilities from env", () => {
   ]);
   assert.equal(env.textModelApiKey, "text-key");
   assert.deepEqual(env.chatModelChains.productQna, ["openrouter/product"]);
-  assert.deepEqual(env.chatModelChains.disputeSummary, [
-    "openrouter/dispute",
-  ]);
+  assert.deepEqual(
+    env.chatModelChains.roleAwareChat,
+    env.chatModelChains.default,
+  );
+  assert.deepEqual(
+    env.chatModelChains.disputeSummary,
+    env.chatModelChains.default,
+  );
+  assert.deepEqual(
+    env.chatModelChains.knowledgeSynthesis,
+    env.chatModelChains.default,
+  );
+  assert.deepEqual(
+    env.chatModelChains.recommendationExplanation,
+    env.chatModelChains.default,
+  );
+  assert.deepEqual(
+    env.chatModelChains.workflowSummary,
+    env.chatModelChains.default,
+  );
   assert.deepEqual(env.chatModelChains.cvNormalization, [
     "tokenrouter/default-a",
     "tokenrouter/default-b",
   ]);
 });
 
-test("keeps SHIRE_MODEL_DEFAULT as a legacy text model alias", () => {
+test("ignores legacy database, model, and API key aliases", () => {
   const env = createEnv({
+    DATABASE_URL: "postgres://legacy",
+    TOKENROUTER_API_KEY: "legacy-tokenrouter",
+    OPENAI_API_KEY: "legacy-openai",
+    OPENROUTER_API_KEY: "legacy-openrouter",
     SHIRE_MODEL_DEFAULT: "legacy/default",
+    SHIRE_EMBEDDING_MODEL_DEFAULT: "legacy-embedding",
+    SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://legacy-embedding.test/v1",
   });
 
-  assert.deepEqual(env.chatModelChains.default, ["legacy/default"]);
+  assert.equal(env.agentDatabaseUrl, undefined);
+  assert.equal(env.textModelApiKey, undefined);
+  assert.equal(env.embeddingApiKey, undefined);
+  assert.equal(env.embeddingEnabled, false);
+  assert.deepEqual(env.chatModelChains.default, ["MiniMax-M3"]);
+  assert.equal(env.embeddingModels.default, "text-embedding-3-small");
+  assert.equal(env.embeddingBaseUrls.default, "https://api.openai.com/v1");
 });
 
 test("parses embedding capabilities from env", () => {
@@ -154,16 +184,6 @@ test("parses embedding capabilities from env", () => {
   );
   assert.equal(env.embeddingApiKey, "embedding-key");
   assert.equal(env.embeddingEnabled, true);
-});
-
-test("does not treat a TokenRouter text key as an embedding key", () => {
-  const env = createEnv({
-    TOKENROUTER_API_KEY: "text-only-key",
-  });
-
-  assert.equal(env.textModelApiKey, "text-only-key");
-  assert.equal(env.embeddingApiKey, undefined);
-  assert.equal(env.embeddingEnabled, false);
 });
 
 test("parses persistent libsql storage config from env", () => {
@@ -222,14 +242,12 @@ test("parses custom agent config from environment variables", () => {
     NODE_ENV: "production",
     SHIRE_LOG_LEVEL: "warn",
     SHIRE_PRETTY_LOGS: "false",
-    SHIRE_MODEL_DISPUTE_SUMMARY: "openai/gpt-5.1",
     SHIRE_EMBEDDING_ENABLED: "true",
     SHIRE_WORKING_MEMORY_ENABLED: "true",
-    SHIRE_EMBEDDING_BASE_URL_DEFAULT: "https://embedding.example/v1/",
+    SHIRE_EMBEDDING_BASE_URL: "https://embedding.example/v1/",
     SHIRE_WORKER_ENABLED: "false",
     SHIRE_RECOMMENDATION_SCHEDULER_ENABLED: "false",
     SHIRE_RECOMMENDATION_SCHEDULER_INTERVAL_MS: "60000",
-    SHIRE_LIVE_LLM_TESTS: "true",
     REDIS_URL: "rediss://redis.example:6379",
     SHIRE_AGENT_SERVICE_TOKEN: "secret",
     SHIRE_JOB_QUEUE_NAME: "custom-jobs",
@@ -240,14 +258,12 @@ test("parses custom agent config from environment variables", () => {
 
   assert.equal(env.logLevel, "warn");
   assert.equal(env.prettyLogs, false);
-  assert.deepEqual(env.chatModelChains.disputeSummary, ["openai/gpt-5.1"]);
   assert.equal(env.embeddingEnabled, true);
   assert.equal(env.workingMemoryEnabled, true);
   assert.equal(env.embeddingBaseUrls.default, "https://embedding.example/v1");
   assert.equal(env.workerEnabled, false);
   assert.equal(env.recommendationSchedulerEnabled, false);
   assert.equal(env.recommendationSchedulerIntervalMs, 60_000);
-  assert.equal(env.liveLlmTestsEnabled, true);
   assert.equal(env.redisUrl, "rediss://redis.example:6379");
   assert.equal(env.agentServiceToken, "secret");
   assert.equal(env.jobQueueName, "custom-jobs");
@@ -260,8 +276,12 @@ test("rejects invalid positive integer config", () => {
   assert.throws(() => createEnv({ SHIRE_RAG_TOP_K: "0" }));
 });
 
-test("rejects invalid security threshold and guard mode config", () => {
+test("rejects invalid security threshold config", () => {
   assert.throws(() => createEnv({ SHIRE_SECURITY_GUARD_THRESHOLD: "-0.01" }));
   assert.throws(() => createEnv({ SHIRE_SECURITY_GUARD_THRESHOLD: "1.01" }));
-  assert.throws(() => createEnv({ SHIRE_SECURITY_GUARD_MODE: "wide-open" }));
+  assert.equal(
+    createEnv({ SHIRE_SECURITY_GUARD_THRESHOLD: "0.42" })
+      .securityGuardThreshold,
+    0.42,
+  );
 });
