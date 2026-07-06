@@ -50,13 +50,24 @@ Embedding-specific overrides are also optional:
 - `SHIRE_WORKING_MEMORY_ENABLED`: enable tool-based persistent working memory
 
 `SHIRE_TEXT_API_KEY` and `SHIRE_EMBEDDING_API_KEY` are the only accepted
-credential variables. Provider-specific aliases are intentionally unsupported
-so deployment order cannot silently select a different credential. TokenRouter
-is kept for text generation because its model list does not expose embedding
-channels for `qwen/qwen3-embedding-8b`. Working memory remains disabled by
-default; recent conversation history remains enabled.
+model-provider credential variables. Provider-specific aliases are intentionally
+unsupported so deployment order cannot silently select a different credential.
+TokenRouter is kept for text generation because its model list does not expose
+embedding channels for `qwen/qwen3-embedding-8b`. Working memory remains
+disabled by default; recent conversation history remains enabled.
 Semantic recall is enabled only when `SHIRE_EMBEDDING_ENABLED=true` with a
 provider/model that supports embeddings.
+
+Breaking configuration migrations:
+
+| Previous variable | Replacement |
+| --- | --- |
+| `TOKENROUTER_API_KEY` (or `OPENAI_API_KEY` when used for text) | `SHIRE_TEXT_API_KEY` |
+| `OPENAI_API_KEY` or `OPENROUTER_API_KEY` when used for embeddings | `SHIRE_EMBEDDING_API_KEY` |
+| `DATABASE_URL` | `SHIRE_AGENT_DATABASE_URL` |
+| `SHIRE_MODEL_DEFAULT` | `SHIRE_TEXT_MODEL` |
+| `SHIRE_EMBEDDING_MODEL_DEFAULT` | `SHIRE_EMBEDDING_MODEL` |
+| `SHIRE_EMBEDDING_BASE_URL_DEFAULT` | `SHIRE_EMBEDDING_BASE_URL` |
 
 Memory and repository knowledge use libSQL URLs. Local development defaults to
 `file:` databases under `.data`; production should use remote libSQL/Turso URLs
@@ -84,9 +95,9 @@ All chat capabilities default to the configured text model. Override individual
 capability env values with comma-separated fallback chains only when a
 capability needs a different model.
 
-CV extraction produces a Zod-validated draft. Embedding is a separate
-TokenRouter request resolved by Mastra over canonical profile search text. Raw
-CV text and full evidence files are excluded from memory.
+CV extraction produces a Zod-validated draft. Embedding is a separate request
+to the configured embedding provider over canonical profile search text. Raw CV
+text and full evidence files are excluded from memory.
 
 ## Background worker
 
@@ -154,15 +165,15 @@ or embedding provider is unavailable.
 The live worker test is opt-in:
 
 ```powershell
-npm run test:live:llm --workspace=@shire/agent
+$env:SHIRE_LIVE_LLM_TESTS="true"; npm.cmd run test:live:llm --workspace=@shire/agent
 ```
 
 Keep `SHIRE_LIVE_LLM_TESTS=false` (or unset) in normal unit-test runs;
-`SHIRE_LIVE_LLM_TESTS=true` is supplied explicitly when running the live test
-and is not a production runtime setting. A `401` indicates a
-missing or invalid provider key; `402` or `429` indicates provider credit or
-rate limiting; structured-output failures indicate the selected model could not
-produce the candidate schema.
+`SHIRE_LIVE_LLM_TESTS=true` is supplied explicitly in the PowerShell process or
+session running the live test and is not production runtime configuration. A
+`401` indicates a missing or invalid provider key; `402` or `429` indicates
+provider credit or rate limiting; structured-output failures indicate the
+selected model could not produce the candidate schema.
 
 ## Durable CV document processing
 
@@ -298,9 +309,9 @@ npm run build --workspace=@shire/agent
 
 Live model and Redis checks are explicit:
 
-```bash
-npm run test:live:llm --workspace=@shire/agent
-npm run test:live-queue --workspace=@shire/agent
+```powershell
+$env:SHIRE_LIVE_LLM_TESTS="true"; npm.cmd run test:live:llm --workspace=@shire/agent
+npm.cmd run test:live-queue --workspace=@shire/agent
 ```
 
 The web currently records platform escrow in Postgres. Those records are
