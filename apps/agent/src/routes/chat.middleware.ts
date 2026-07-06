@@ -9,6 +9,7 @@ import {
 import { logger } from "../runtime/logger";
 import { observeChatStream } from "./chat-stream-observer";
 import { summarizeChatRequestBody } from "../runtime/chat/request-logging";
+import { persistChatTurn } from "../runtime/chat/persist-messages";
 import {
   classifyChatRequest,
   createChatFallbackStream,
@@ -26,6 +27,52 @@ import { hasValidServiceToken } from "../runtime/auth/internal";
 import { selectChatSecurityInput } from "../runtime/chat/security-input";
 
 const chatLogger = logger.child({ component: "chat-middleware" });
+
+/**
+ * Persist the completed chat turn to the memory substore. Guards against
+ * missing memory/messages and lazy-imports the shared memory singleton so the
+ * libSQL client is only touched when there is actually something to persist.
+ * Never throws — see persistChatTurn.
+ */
+function persistCompletedTurn(body: unknown, assistantText: string): void {
+  if (!body || typeof body !== "object") return;
+  const record = body as Record<string, unknown>;
+  const memory = record.memory;
+  const messages = record.messages;
+  if (!memory || typeof memory !== "object") return;
+  if (!Array.isArray(messages)) return;
+
+  const thread = (memory as Record<string, unknown>).thread;
+  const resource = (memory as Record<string, unknown>).resource;
+  if (typeof thread !== "string" || typeof resource !== "string") return;
+  if (!thread || !resource) return;
+
+  void (async () => {
+    try {
+      const { agentMemory } = await import("../runtime/memory");
+      const memoryStore = await (
+        agentMemory as unknown as {
+          getMemoryStore: () => Promise<{
+            saveThread: (args: unknown) => Promise<unknown>;
+            saveMessages: (args: { messages: unknown[] }) => Promise<unknown>;
+          }>;
+        }
+      ).getMemoryStore();
+      await persistChatTurn({
+        memoryStore,
+        thread,
+        resource,
+        userMessages: messages,
+        assistantText,
+      });
+    } catch (error) {
+      chatLogger.warn(
+        { threadId: thread, err: String(error) },
+        "chat memory persistence skipped",
+      );
+    }
+  })();
+}
 
 export interface ChatMiddlewareDependencies {
   serviceToken?: string;
@@ -100,7 +147,14 @@ export function mountChatLogging(app: Express) {
           },
           "chat request failed",
         );
+        return;
       }
+
+      // Workaround for @mastra/core 1.49.x not persisting messages on
+      // agent.stream(): save the completed turn (user + assistant) directly
+      // to the memory substore after a successful stream. Fire-and-forget —
+      // errors are caught inside persistChatTurn and never break the response.
+      persistCompletedTurn(request.body, streamObserver.getAssistantText());
     });
     response.on("close", () => {
       streamObserver.finish("close");

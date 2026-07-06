@@ -3,7 +3,6 @@ import type { Request, Response } from "express";
 import { CHAT_STREAM_STALL_TIMEOUT_MS } from "../constants/agent";
 import {
   normalizeChunk,
-  parseAiSdkDataEventTypes,
 } from "../lib/sse";
 import { logger } from "../runtime/logger";
 import { createAiSdkHiddenReasoningStreamSanitizer } from "../runtime/chat/stream-sanitizer";
@@ -25,6 +24,7 @@ export function observeChatStream(
   let lastEventType: string | undefined;
   let completed = false;
   let stallTimer: NodeJS.Timeout | undefined;
+  let assistantText = "";
   const hiddenReasoningSanitizer = createAiSdkHiddenReasoningStreamSanitizer();
 
   const clearStallTimer = () => {
@@ -70,19 +70,41 @@ export function observeChatStream(
       );
     }
 
-    for (const eventType of parseAiSdkDataEventTypes(text)) {
-      eventCount += 1;
-      lastEventType = eventType;
-      chatLogger.info(
-        {
-          agentId,
-          eventType,
-          eventCount,
-          byteCount,
-          durationMs: Date.now() - requestStartedAt,
-        },
-        "chat stream event sent",
-      );
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice("data: ".length).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(data) as {
+          type?: unknown;
+          textDelta?: unknown;
+        };
+        const eventType =
+          typeof parsed.type === "string" ? parsed.type : "unknown-json";
+        eventCount += 1;
+        lastEventType = eventType;
+        // Accumulate assistant text so the post-stream persistence workaround
+        // can store the assistant turn (@mastra/core 1.49.x drops it otherwise).
+        if (
+          eventType === "text-delta" &&
+          typeof parsed.textDelta === "string"
+        ) {
+          assistantText += parsed.textDelta;
+        }
+        chatLogger.info(
+          {
+            agentId,
+            eventType,
+            eventCount,
+            byteCount,
+            durationMs: Date.now() - requestStartedAt,
+          },
+          "chat stream event sent",
+        );
+      } catch {
+        eventCount += 1;
+        lastEventType = "invalid-json";
+      }
     }
 
     armStallTimer();
@@ -124,6 +146,10 @@ export function observeChatStream(
   };
 
   return {
+    /** Assistant text accumulated from `text-delta` SSE events. */
+    getAssistantText() {
+      return assistantText;
+    },
     finish(reason: ChatStreamFinishReason, error?: Error) {
       if (completed) return;
       completed = true;

@@ -31,6 +31,7 @@ await Promise.all([
   import("./security-indicators.test"),
   import("./output-validation.test"),
   import("./chat-output-processor.test"),
+  import("./persist-messages.test"),
   import("./security-guard.test"),
   import("./security-guard-llm.test"),
   import("./security-policy.test"),
