@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-process.env.OPENAI_API_KEY ??= "test-openai-api-key";
-process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
+process.env.SHIRE_EMBEDDING_API_KEY ??= "test-openai-api-key";
+process.env.SHIRE_TEXT_API_KEY ??= "test-tokenrouter-api-key";
 
 const {
   chatRouteVersion,

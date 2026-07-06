@@ -62,11 +62,7 @@ export function createEmbeddingModel(
     providerId: config.providerId ?? env.embeddingProvider,
     modelId: config.modelId ?? env.embeddingModels.default,
     url: config.baseUrl ?? env.embeddingBaseUrls.default,
-    apiKey:
-      config.apiKey ??
-      env.embeddingApiKey ??
-      process.env.TOKENROUTER_API_KEY ??
-      process.env.OPENROUTER_API_KEY,
+    apiKey: config.apiKey ?? env.embeddingApiKey,
   });
 }
 

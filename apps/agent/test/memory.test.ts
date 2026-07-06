@@ -4,7 +4,7 @@ import test from "node:test";
 import { Memory } from "@mastra/memory";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 
-process.env.OPENAI_API_KEY ??= "test-openai-api-key";
+process.env.SHIRE_EMBEDDING_API_KEY ??= "test-openai-api-key";
 
 const [{ createEnv }, memoryModule] = await Promise.all([
   import("../src/env"),

@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-process.env.OPENAI_API_KEY ??= "test-openai-api-key";
+process.env.SHIRE_EMBEDDING_API_KEY ??= "test-openai-api-key";
 
 const { createEnv } = await import("../src/env");
 const {
   createEmbeddingModel,
   resolveEmbeddingConfig,
 } = await import("../src/runtime/models/embeddings");
+
+test("does not read provider-specific embedding credentials", async () => {
+  const source = await readFile(
+    new URL("../src/runtime/models/embeddings.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(
+    source,
+    /process\.env\.(?:TOKENROUTER|OPENROUTER)_API_KEY/,
+  );
+});
 
 test("disables known AI SDK compatibility warning logs", () => {
   assert.equal(

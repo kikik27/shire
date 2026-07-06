@@ -71,7 +71,7 @@ test("onchain job script prints its result when run directly", () => {
       encoding: "utf8",
       env: {
         ...process.env,
-        TOKENROUTER_API_KEY: "test-tokenrouter-api-key",
+        SHIRE_TEXT_API_KEY: "test-tokenrouter-api-key",
       },
     },
   );

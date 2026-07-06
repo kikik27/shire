@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-process.env.TOKENROUTER_API_KEY ??= "test-tokenrouter-api-key";
+process.env.SHIRE_TEXT_API_KEY ??= "test-tokenrouter-api-key";
 
 const { createAiSdkHiddenReasoningStreamSanitizer } = await import(
   "../src/runtime/chat/stream-sanitizer"

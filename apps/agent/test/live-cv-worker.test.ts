@@ -6,9 +6,7 @@ import { InMemoryJobQueue } from "../src/runtime/jobs/in-memory-job-queue";
 import { createJobProcessors } from "../src/runtime/jobs/job-processors";
 
 const liveEnabled = process.env.SHIRE_LIVE_LLM_TESTS === "true";
-const hasKey = Boolean(
-  process.env.SHIRE_TEXT_API_KEY ?? process.env.TOKENROUTER_API_KEY,
-);
+const hasKey = Boolean(process.env.SHIRE_TEXT_API_KEY);
 
 test(
   "processes a CV through the live LLM worker",
