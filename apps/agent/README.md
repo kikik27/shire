@@ -63,11 +63,14 @@ Breaking configuration migrations:
 | Previous variable | Replacement |
 | --- | --- |
 | `TOKENROUTER_API_KEY` (or `OPENAI_API_KEY` when used for text) | `SHIRE_TEXT_API_KEY` |
-| `OPENAI_API_KEY` or `OPENROUTER_API_KEY` when used for embeddings | `SHIRE_EMBEDDING_API_KEY` |
+| `TOKENROUTER_API_KEY`, `OPENAI_API_KEY`, or `OPENROUTER_API_KEY` when used for embeddings | `SHIRE_EMBEDDING_API_KEY` |
 | `DATABASE_URL` | `SHIRE_AGENT_DATABASE_URL` |
 | `SHIRE_MODEL_DEFAULT` | `SHIRE_TEXT_MODEL` |
 | `SHIRE_EMBEDDING_MODEL_DEFAULT` | `SHIRE_EMBEDDING_MODEL` |
 | `SHIRE_EMBEDDING_BASE_URL_DEFAULT` | `SHIRE_EMBEDDING_BASE_URL` |
+
+If one legacy `TOKENROUTER_API_KEY` served both text and embeddings, set both
+`SHIRE_TEXT_API_KEY` and `SHIRE_EMBEDDING_API_KEY` to that credential.
 
 Memory and repository knowledge use libSQL URLs. Local development defaults to
 `file:` databases under `.data`; production should use remote libSQL/Turso URLs
