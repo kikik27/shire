@@ -22,8 +22,18 @@ import {
   evidenceContextTool,
 } from "../src/mastra";
 import { getRuntimeBootstrapOutput } from "../src/server";
+import { createAgentDatabase } from "../src/runtime/db/client";
 import { jobRegistry } from "../src/runtime/server/job-registry";
 import { getStorageDiagnostics } from "../src/runtime/storage/diagnostics";
+
+test("database configuration error names only the canonical URL", () => {
+  assert.throws(() => createAgentDatabase(), (error) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /SHIRE_AGENT_DATABASE_URL/);
+    assert.doesNotMatch(error.message, /\bor DATABASE_URL\b/);
+    return true;
+  });
+});
 
 test("mastra registry exports the expected agents, workflows, and tools", () => {
   assert.ok(mastra);

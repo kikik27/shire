@@ -18,7 +18,7 @@ test("does not read provider-specific embedding credentials", async () => {
 
   assert.doesNotMatch(
     source,
-    /process\.env\.(?:TOKENROUTER|OPENROUTER)_API_KEY/,
+    /process\.env\.(?:TOKENROUTER|OPENROUTER|OPENAI)_API_KEY/,
   );
 });
 

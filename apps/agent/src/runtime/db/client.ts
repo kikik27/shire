@@ -6,8 +6,7 @@ import * as schema from "./schema";
 /**
  * Agent-side Postgres client. The agent reads candidate/job profiles and writes
  * recommendations + agent_runs to the same database the web app owns. The URL
- * is resolved from SHIRE_AGENT_DATABASE_URL (falling back to DATABASE_URL) in
- * env.ts.
+ * is resolved from SHIRE_AGENT_DATABASE_URL in env.ts.
  *
  * Mirrors the web client's singleton-by-URL pattern so repeated calls within a
  * process share one connection pool, and tests can construct an owned
@@ -15,9 +14,7 @@ import * as schema from "./schema";
  */
 export class AgentDatabaseConfigurationError extends Error {
   constructor() {
-    super(
-      "SHIRE_AGENT_DATABASE_URL (or DATABASE_URL) is required for matching jobs.",
-    );
+    super("SHIRE_AGENT_DATABASE_URL is required for matching jobs.");
     this.name = "AgentDatabaseConfigurationError";
   }
 }
