@@ -45,42 +45,30 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` todo
 
 ---
 
-## Next — Wire the product (not started; backend out of scope for this pass)
+## Next — Add new capability (see `.agent/context/architecture.md` §28 for full detail)
 
-### Phase 1 — Data
-- [ ] `packages/db`: Prisma schema (User, CandidateProfile, Company, CompanyMember, Job,
-      Recommendation, Application, Dispute, Evidence, AgentRun, OnchainEvent), client singleton, seed
+> The repo already has a real Drizzle/Postgres schema, Privy auth, API routes, and a working
+> Mastra agent runtime (see root `README.md`) — that's the MVP baseline. The 3 phases below
+> add new capability on top of it, they don't restate what already exists.
 
-### Phase 2 — Auth
-- [ ] Privy / SIWE login, MiniPay detection, `/api/auth/{me,sync-user,set-active-mode}`
-- [ ] Onboarding redirect when incomplete
+### Phase 1 — Complete the web2 product surface
+- [ ] Close remaining gaps in onboarding, candidate, and company flows
+- [ ] Harden the Mastra agent pipeline (CV profile, job matching, talent matching, dispute
+      summary) and the matching/recommendation loop
+- [ ] Applications can reach an "agreed" state using the existing DB-tracked (simulated) stake
 
-### Phase 3 — Onboarding & modes
-- [ ] `/onboarding` (Find jobs / Find talents / Both) + `select-mode` API + mode switcher
+### Phase 2 — Stellar/Soroban chain foundation
+- [ ] `ShireEscrow` (Soroban/Rust): create / accept+stake / complete / refund / dispute /
+      resolve + tests + Stellar testnet deploy
+- [ ] Stellar Wallets Kit wallet connector (Freighter, xBull, Albedo, Lobstr) alongside Privy
+      (Privy stays login/identity only)
+- [ ] Apply & Stake / Company Accept & Stake UI against the deployed contract, tx status UI
 
-### Phase 4 — Candidate
-- [ ] CV upload → parse workflow → editable AI draft → confirm profile
-
-### Phase 5 — Company
-- [ ] Create company (OWNER), company dashboard, create + activate job (Zod-validated)
-
-### Phase 6 — Agents (apps/agent)
-- [ ] Real CV / job-match / talent-match / dispute agents returning Zod-validated output + AgentRun logs
-
-### Phase 7 — Matching
-- [ ] Hard filters + anti self-apply + skill-overlap scoring → recommendations in dashboard
-
-### Phase 8 — Contract
-- [ ] `ShireEscrow.sol`: create / accept+stake / complete / refund / dispute / resolve + tests + Alfajores deploy
-
-### Phase 9 — Wallet & staking UI
-- [ ] wagmi/viem + Celo config, Apply&Stake / Accept&Stake, tx status UI
-
-### Phase 10 — Onchain sync
-- [ ] Event sync job, `OnchainEvent` dedupe, Application status follows chain
-
-### Phase 11 — Disputes
-- [ ] Open dispute, evidence upload + hash, dispute summary agent, admin resolver action
+### Phase 3 — Chain-dependent features
+- [ ] Onchain sync: Soroban `getEvents` polling, `OnchainEvent` dedupe, Application status
+      follows chain
+- [ ] Disputes: evidence upload + hash (hash onchain), dispute-summary agent wired to real
+      disputes, admin resolver action calling `resolve_dispute`
 
 ---
 

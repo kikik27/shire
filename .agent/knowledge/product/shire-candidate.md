@@ -18,7 +18,7 @@ The candidate chooses whether to apply. Shire must not apply automatically. Befo
 
 ## Candidate Stake
 
-The candidate stake is locked by the supported Celo escrow contract for that application. The assistant must not invent an amount, token, fee, or deadline when the current job or application context does not provide one.
+The candidate stake is locked by the supported Stellar (Soroban) escrow contract for that application. The assistant must not invent an amount, token, fee, or deadline when the current job or application context does not provide one.
 
 ## Application Status
 

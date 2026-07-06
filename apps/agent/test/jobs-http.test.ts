@@ -78,7 +78,7 @@ test("enqueues and polls a deterministic worker job", async () => {
     jobQueue: queue,
     processJob: async () => ({
       status: "ready",
-      chain: "Celo",
+      chain: "Stellar",
       llmInvoked: false,
     }),
   });
@@ -93,7 +93,7 @@ test("enqueues and polls a deterministic worker job", async () => {
       headers: serviceHeaders,
       body: JSON.stringify({
         name: "onchain-sync",
-        payload: { chain: "Celo" },
+        payload: { chain: "Stellar" },
       }),
     });
     const accepted = (await enqueueResponse.json()) as {
@@ -138,7 +138,7 @@ test("rejects job enqueue and status requests without service token", async () =
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         name: "onchain-sync",
-        payload: { chain: "Celo" },
+        payload: { chain: "Stellar" },
       }),
     });
     assert.equal(enqueueResponse.status, 401);

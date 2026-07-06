@@ -7,7 +7,7 @@ export function truncateAddress(address?: string | null, size = 4): string {
 }
 
 export function formatToken(amount: number, token: TokenSymbol = "cUSD"): string {
-  const decimals = token === "CELO" ? 2 : 2;
+  const decimals = 2;
   return `${amount.toLocaleString(undefined, {
     minimumFractionDigits: amount % 1 === 0 ? 0 : decimals,
     maximumFractionDigits: decimals,

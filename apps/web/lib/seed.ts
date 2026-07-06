@@ -22,7 +22,7 @@ export const recruiters: SeedRecruiter[] = [
     wallet: "0xA1b2C3d4E5f6A7b8C9d0E1f2A3b4C5d6E7f80001",
     companyName: "Aperture Labs",
     companyWebsite: "https://aperture.xyz",
-    companyDescription: "Onchain identity tooling for the Celo ecosystem.",
+    companyDescription: "Onchain identity tooling for the Stellar ecosystem.",
     contactEmail: "talent@aperture.xyz",
     location: "Remote · GMT+1",
     verificationStatus: "VERIFIED",
@@ -85,7 +85,7 @@ export const jobs: Job[] = [
     recruiterId: "rec_aperture",
     title: "Senior Frontend Engineer",
     description:
-      "We're hiring a senior frontend engineer to lead our Celo Mini App experience. You'll own the React + TypeScript codebase, build wallet-native flows, and partner with design on a mobile-first product used by thousands of candidates. Comfortable with viem/wagmi and design systems.",
+      "We're hiring a senior frontend engineer to lead our Stellar-native app experience. You'll own the React + TypeScript codebase, build wallet-native flows, and partner with design on a mobile-first product used by thousands of candidates. Comfortable with Stellar SDK and design systems.",
     companyName: "Aperture Labs",
     location: "Remote",
     remote: true,

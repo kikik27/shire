@@ -2,7 +2,7 @@
 
 _Status: active_
 
-Shire is an AI-powered hiring marketplace with stablecoin escrow on Celo. The brand
+Shire is an AI-powered hiring marketplace with stablecoin escrow on Stellar. The brand
 reads **trustworthy fintech**: confident blue, deep navy, clean white surfaces, generous
 whitespace. AI is the helpful copilot; the chain is the quiet guarantee underneath.
 

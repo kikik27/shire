@@ -17,7 +17,7 @@ const cvParseRequestSchema = z.object({
 const onchainSyncRequestSchema = z.object({
   name: z.literal("onchain-sync"),
   payload: z.object({
-    chain: z.literal("Celo"),
+    chain: z.literal("Stellar"),
   }).strict(),
   deduplicationKey: deduplicationKeySchema,
 }).strict();
@@ -102,7 +102,7 @@ export type JobResultMap = {
   };
   "onchain-sync": {
     status: "ready";
-    chain: "Celo";
+    chain: "Stellar";
     llmInvoked: false;
   };
   "job-matching": MatchingJobResult;

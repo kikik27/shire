@@ -4,7 +4,7 @@ Shire is an AI-assisted hiring marketplace monorepo built around three core surf
 
 - a public web product for candidates and companies
 - an autonomous-but-guardrailed agent runtime for CV parsing, matching, and dispute support
-- a smart contract layer for stablecoin-based escrow on Celo
+- a smart contract layer for stablecoin-based escrow on Stellar (Soroban)
 
 The repository is structured for product development first, with agent context and workflow contracts kept explicit so the system stays auditable and does not drift into vague behavior.
 
@@ -15,7 +15,7 @@ Shire is being designed to solve a narrow, practical problem:
 - help candidates turn raw CV data into structured profiles
 - help companies match talent with explicit scoring and traceable reasoning
 - support dispute summarization and operational review
-- settle marketplace flows with stablecoins on Celo instead of speculative token flows
+- settle marketplace flows with stablecoins on Stellar instead of speculative token flows
 
 ## Architecture
 
@@ -28,7 +28,7 @@ flowchart LR
     Agent --> Postgres
     Agent --> Redis[(Redis and BullMQ)]
     Agent --> Turso[(Turso memory and knowledge)]
-    Web --> Contracts[contracts<br/>Celo stablecoin escrow]
+    Web --> Contracts[contracts<br/>Stellar/Soroban stablecoin escrow]
     Agent -. settlement sync .-> Contracts
 ```
 
@@ -74,7 +74,7 @@ flowchart TD
 
 ### Contracts
 
-`contracts` is the Solidity workspace. The current direction is stablecoin escrow on Celo. Onchain sync from the agent is intentionally deferred until the web and data flows are more mature.
+`contracts` is the Soroban (Rust/WASM) workspace. The current direction is stablecoin escrow on Stellar. Onchain sync from the agent is intentionally deferred until the web and data flows are more mature.
 
 ### Agent Context
 
@@ -124,8 +124,8 @@ Note:
 npm run build
 ```
 
-The default build covers the web and agent workspaces. Solidity remains an
-explicit Foundry command:
+The default build covers the web and agent workspaces. Soroban remains an
+explicit Cargo command:
 
 ```bash
 npm run build:contracts
@@ -144,7 +144,7 @@ npm run verify
 ```
 
 This runs lint, typecheck, deterministic web and agent tests, and production
-builds. It does not call live model, Redis, or Foundry tests.
+builds. It does not call live model, Redis, or Soroban tests.
 
 ## Agent Runtime
 
@@ -206,7 +206,7 @@ recommendations.
 
 ## Contract Development
 
-The Solidity workspace lives in:
+The Soroban (Rust/WASM) workspace lives in:
 
 - [contracts](contracts)
 
@@ -214,11 +214,11 @@ The current contract direction is:
 
 - marketplace escrow
 - stablecoin settlement
-- Celo deployment target
+- Stellar deployment target
 
 This repository is not positioning onchain staking as the primary product path.
 The current web flow records platform escrow state in Postgres. It does not
-prove that funds have settled on Celo. Contract settlement and chain
+prove that funds have settled on Stellar. Contract settlement and chain
 reconciliation remain a separate operational step.
 
 ## Testing
@@ -252,7 +252,7 @@ The agent tests cover:
 
 Near-term priorities:
 
-- complete Celo settlement and reconciliation for platform escrow records
+- complete Stellar/Soroban settlement and reconciliation for platform escrow records
 - add production observability for queue lag and provider failures
 - refine the public product UX and marketplace flows
 

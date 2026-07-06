@@ -10,7 +10,7 @@ type Mode = "job" | "talent";
 
 const placeholders: Record<Mode, string> = {
   job: "Senior frontend role, React + TypeScript, remote…",
-  talent: "Solidity engineer, 4+ yrs, has shipped on Celo…",
+  talent: "Rust engineer, 4+ yrs, has shipped on Stellar…",
 };
 
 /**
