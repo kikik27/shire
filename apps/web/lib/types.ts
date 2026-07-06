@@ -71,7 +71,7 @@ export type JobType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "FREELANCE" | "IN
 export type ExperienceLevel = "INTERN" | "JUNIOR" | "MID" | "SENIOR" | "LEAD";
 
 // --- Entities ---
-export type TokenSymbol = "cUSD" | "USDC" | "CELO";
+export type TokenSymbol = "cUSD" | "USDC" | "XLM";
 
 export type CandidateProfile = {
   displayName: string;

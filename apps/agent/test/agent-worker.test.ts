@@ -27,18 +27,18 @@ test("processes multiple jobs without restarting", async () => {
     queue,
     process: async (job) => {
       processed.push(job.id);
-      return { status: "ready", chain: "Celo", llmInvoked: false };
+      return { status: "ready", chain: "Stellar", llmInvoked: false };
     },
   });
 
   worker.start();
   const first = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
   const second = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
 
   await waitForStatus(queue, first.id, "completed");
@@ -58,18 +58,18 @@ test("marks failures and continues processing", async () => {
       if (calls === 1) {
         throw new Error("provider unavailable");
       }
-      return { status: "ready", chain: "Celo", llmInvoked: false };
+      return { status: "ready", chain: "Stellar", llmInvoked: false };
     },
   });
 
   worker.start();
   const failed = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
   const completed = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
 
   const failedResult: JobEnvelope = await waitForStatus(

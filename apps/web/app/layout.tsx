@@ -23,11 +23,11 @@ export const metadata: Metadata = {
     template: "%s: Shire",
   },
   description:
-    "Shire is an AI-powered hiring marketplace. AI finds the jobs and the talent, you approve the important moves, and stablecoin escrow on Celo protects both sides.",
+    "Shire is an AI-powered hiring marketplace. AI finds the jobs and the talent, you approve the important moves, and stablecoin escrow on Stellar protects both sides.",
   openGraph: {
     title: "Shire: Your AI copilot for hiring",
     description:
-      "AI finds jobs and talent. You approve. Stablecoin escrow on Celo settles.",
+      "AI finds jobs and talent. You approve. Stablecoin escrow on Stellar settles.",
     type: "website",
   },
 };

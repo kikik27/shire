@@ -7,7 +7,7 @@
 
 ## 1. Product in one paragraph
 
-Shire is an AI-powered hiring marketplace with stablecoin escrow on Celo. A single
+Shire is an AI-powered hiring marketplace with stablecoin escrow on Stellar (Soroban). A single
 wallet-based identity can find work (candidate), find talent (company/agency), or both.
 AI finds and drafts; the human approves; a smart contract locks and settles stake.
 
@@ -24,12 +24,12 @@ AI finds. User approves. Stake locks. Workflow validates. Resolver decides. Cont
                 │  Server Actions · Wallet UI    │
                 └───────┬───────────────┬────────┘
                         │               │
-         Privy / SIWE   │               │  wagmi + viem
+         Privy / SIWE   │               │  Stellar Wallets Kit + stellar-sdk
          session        ▼               ▼
-                ┌───────────────┐  ┌───────────────────┐
-                │  PostgreSQL   │  │   Celo network    │
-                │  Prisma ORM   │  │  ShireEscrow.sol  │
-                └──────┬────────┘  └─────────┬─────────┘
+                ┌───────────────┐  ┌────────────────────┐
+                │  PostgreSQL   │  │  Stellar network   │
+                │  Prisma ORM   │  │ ShireEscrow(Soroban)│
+                └──────┬────────┘  └─────────┬──────────┘
                        │                     │
                        ▼                     │ events
                 ┌───────────────────────────┴────────┐
@@ -43,9 +43,9 @@ AI finds. User approves. Stake locks. Workflow validates. Resolver decides. Cont
 
 | Workspace | Stack | Responsibility |
 |---|---|---|
-| `apps/web` | Next.js 16, React 19, TS, Tailwind v4, shadcn/ui, recharts, wagmi/viem (planned) | UI, API routes, server actions, wallet + onchain status, dashboards |
+| `apps/web` | Next.js 16, React 19, TS, Tailwind v4, shadcn/ui, recharts, Stellar Wallets Kit (planned) | UI, API routes, server actions, wallet + onchain status, dashboards |
 | `apps/agent` | Mastra, Zod, tsx | Agent definitions, deterministic workflows, runnable jobs, local server |
-| `contracts` | Foundry, Solidity | `ShireEscrow.sol`, tests, deploy scripts |
+| `contracts` | Cargo, Soroban (Rust) | `ShireEscrow`, tests, deploy scripts |
 
 The deep spec also describes future `packages/{db,shared,ai-context,contracts,ui}`; those are
 **not yet created** — the repo is intentionally lean until the data layer lands.
@@ -95,8 +95,8 @@ loading/empty/error states (each list/table implements them) while the API is bu
 - **Auth:** Privy / SIWE on web, wallet session in MiniPay; normalize to one `User`.
 - **Data:** PostgreSQL + Prisma. Matching is rule-based (skill overlap) for MVP, pgvector later.
 - **Agent:** Mastra workflows for CV parse, job/talent matching, dispute summary, onchain sync.
-- **Chain:** `ShireEscrow.sol` on Celo Alfajores — create/accept/complete/refund/dispute/resolve
-  with `ReentrancyGuard` and resolver-only settlement.
+- **Chain:** `ShireEscrow` (Soroban) on Stellar testnet — create/accept/complete/refund/dispute/resolve
+  with `require_auth` checks and resolver-only settlement.
 
 ## 7. Build & tooling
 

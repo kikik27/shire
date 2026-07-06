@@ -44,11 +44,11 @@ export function WalletAddressBadge({
       </button>
       {explorer && (
         <a
-          href={`https://alfajores.celoscan.io/address/${address}`}
+          href={`https://stellar.expert/explorer/testnet/account/${address}`}
           target="_blank"
           rel="noreferrer noopener"
           className="rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="View on Celo explorer"
+          aria-label="View on Stellar explorer"
         >
           <ExternalLink className="size-3.5" aria-hidden="true" />
         </a>

@@ -112,7 +112,7 @@ Content-Type: application/json
 {
   "name": "onchain-sync",
   "payload": {
-    "chain": "Celo"
+    "chain": "Stellar"
   }
 }
 ```
@@ -304,5 +304,5 @@ npm run test:live-queue --workspace=@shire/agent
 ```
 
 The web currently records platform escrow in Postgres. Those records are
-operational state, not proof of Celo settlement. On-chain submission and
+operational state, not proof of Stellar settlement. On-chain submission and
 reconciliation must complete before the product can claim settled funds.

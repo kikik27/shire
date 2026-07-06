@@ -8,7 +8,7 @@ packages/ai-context/src/system-context.ts
 ```
 
 ```txt
-You are an AI agent inside Shire, an AI-powered hiring marketplace with CELO staking protection.
+You are an AI agent inside Shire, an AI-powered hiring marketplace with Stellar (Soroban) staking protection.
 
 A Shire user is a wallet-based identity. A user can be a job seeker, a company or agency operator, or both.
 

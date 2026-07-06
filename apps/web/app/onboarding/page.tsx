@@ -112,7 +112,7 @@ export default function OnboardingPage() {
         </ul>
 
         <p className="text-center text-xs text-muted-foreground">
-          Celo registration stays separate from profile activation.
+          Stellar wallet registration stays separate from profile activation.
         </p>
       </div>
     </AuthShell>

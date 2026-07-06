@@ -98,7 +98,7 @@ export const features: Feature[] = [
   {
     title: "AI match engine",
     body: "Skill overlap plus reasoning surfaces the matches that fit, with the reasons attached.",
-    match: { score: 94, skills: ["React", "TypeScript", "Celo"] },
+    match: { score: 94, skills: ["React", "TypeScript", "Stellar"] },
   },
   {
     title: "Smart CV parsing",

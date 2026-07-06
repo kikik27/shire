@@ -29,7 +29,7 @@ export function createJobProcessors(
       switch (job.name) {
         case "onchain-sync":
           return onchainSyncProcessor.process(
-            job.payload as { chain: "Celo" },
+            job.payload as { chain: "Stellar" },
             executionContext,
           );
         case "job-matching":

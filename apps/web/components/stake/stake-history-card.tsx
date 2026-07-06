@@ -26,7 +26,7 @@ export function StakeHistoryCard({ stake, jobTitle }: { stake: Stake; jobTitle?:
           {formatToken(stake.amount, stake.token)}
         </p>
         <a
-          href={`https://alfajores.celoscan.io/tx/${stake.txHash}`}
+          href={`https://stellar.expert/explorer/testnet/tx/${stake.txHash}`}
           target="_blank"
           rel="noreferrer noopener"
           className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
