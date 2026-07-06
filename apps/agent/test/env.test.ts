@@ -70,8 +70,13 @@ test("defaults capability model, memory, and knowledge config", () => {
   assert.equal(env.recommendationSchedulerIntervalMs, 15 * 60 * 1000);
 });
 
-test("defaults bounded chat security config", () => {
-  const env = createEnv({});
+test("ignores removed security guard config and parses the threshold", () => {
+  const env = createEnv({
+    SHIRE_SECURITY_GUARD_ENABLED: "false",
+    SHIRE_SECURITY_GUARD_MODE: "wide-open",
+    SHIRE_SECURITY_GUARD_MODELS: "legacy/security",
+    SHIRE_SECURITY_GUARD_THRESHOLD: "0.7",
+  });
 
   assert.equal(env.chatMaxBodyBytes, 65_536);
   assert.equal(env.chatMaxMessages, 50);
@@ -81,7 +86,7 @@ test("defaults bounded chat security config", () => {
   assert.equal("securityGuardEnabled" in env, false);
   assert.equal("securityGuardMode" in env, false);
   assert.equal("securityGuardModels" in env, false);
-  assert.equal(env.securityGuardThreshold, 0.85);
+  assert.equal(env.securityGuardThreshold, 0.7);
   assert.equal(env.outputMaxCharacters, 12_000);
 });
 
