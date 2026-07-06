@@ -7,7 +7,7 @@ test("enqueues and reserves jobs in FIFO order", async () => {
   const queue = new InMemoryJobQueue();
   const first = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
   const second = await queue.enqueue({
     name: "cv-parse",
@@ -22,13 +22,13 @@ test("tracks completed results", async () => {
   const queue = new InMemoryJobQueue();
   const job = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
 
   await queue.markActive(job.id);
   await queue.markCompleted(job.id, {
     status: "ready",
-    chain: "Celo",
+    chain: "Stellar",
     llmInvoked: false,
   });
 
@@ -36,7 +36,7 @@ test("tracks completed results", async () => {
   assert.equal(completed?.status, "completed");
   assert.deepEqual(completed?.result, {
     status: "ready",
-    chain: "Celo",
+    chain: "Stellar",
     llmInvoked: false,
   });
 });

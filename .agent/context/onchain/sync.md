@@ -14,6 +14,12 @@ Or for MVP:
 apps/web/app/api/onchain/sync/route.ts
 ```
 
+## Sync mechanism
+
+Poll Soroban RPC's `getEvents` by ledger range (via `@stellar/stellar-sdk`'s
+`SorobanRpc.Server`), analogous to how an EVM sync job would poll `eth_getLogs` by block range.
+Track a `lastSyncedLedger` cursor (the Soroban equivalent of "last synced block").
+
 ## Sync rules
 
 ```txt

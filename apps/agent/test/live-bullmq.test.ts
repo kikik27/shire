@@ -20,7 +20,7 @@ test(
             statusCode: 503,
           });
         }
-        return { status: "ready", chain: "Celo", llmInvoked: false };
+        return { status: "ready", chain: "Stellar", llmInvoked: false };
       },
     });
 
@@ -28,7 +28,7 @@ test(
     try {
       const accepted = await runtime.enqueue({
         name: "onchain-sync",
-        payload: { chain: "Celo" },
+        payload: { chain: "Stellar" },
       });
       let job = await runtime.get(accepted.id);
       for (let index = 0; index < 200 && job?.status !== "completed"; index += 1) {

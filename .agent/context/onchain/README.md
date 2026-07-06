@@ -1,6 +1,7 @@
 # Onchain Context
 
-This folder contains smart contract, staking, sync, and onchain security rules.
+This folder contains smart contract, staking, sync, and onchain security rules for the
+Soroban (Stellar) escrow contract.
 
 ## Read in this order
 1. `contract-design.md`

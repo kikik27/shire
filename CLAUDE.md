@@ -4,12 +4,12 @@ Guidance for Claude Code (and humans) working in this repository.
 
 ## What Shire is
 
-Shire is an **AI-powered hiring marketplace with stablecoin escrow on Celo**. One wallet =
+Shire is an **AI-powered hiring marketplace with stablecoin escrow on Stellar (Soroban)**. One wallet =
 one identity that can act as a **candidate**, a **company/agency**, or **both** at once.
 
 ```
 AI finds jobs and talent → User approves the important moves →
-Stablecoin escrow on Celo locks the stake → Resolver settles → Contract pays out
+Stablecoin escrow on Stellar locks the stake → Resolver settles → Contract pays out
 ```
 
 The AI **finds and drafts**; it never logs in, stakes, signs, applies, invites, or resolves
@@ -23,7 +23,7 @@ npm workspaces + Turborepo. Node ≥ 20.
 |---|---|
 | `apps/web` | Next.js 16 (App Router, React 19) product app + marketing site + dashboard. **Frontend is the current focus.** |
 | `apps/agent` | Mastra agent service — CV parse, job/talent matching, dispute summaries, onchain sync. Deterministic workflows + stub tools today. |
-| `contracts` | Foundry / Solidity workspace — `ShireEscrow.sol`. |
+| `contracts` | Cargo / Soroban (Rust) workspace — `ShireEscrow` on Stellar. |
 | `.agent/` | Deep product + domain context (source of truth). Start at `.agent/context/architecture.md`. |
 | `docs/` | Design specs and implementation plans. |
 
@@ -99,4 +99,4 @@ follow the phased plan in `.agent/context/architecture.md` (§28) and `tasks.md`
 ## Library docs
 
 Per the global rule, use the **Context7 MCP** for current library/framework/CLI docs
-(Next.js, Tailwind v4, shadcn, recharts, viem/wagmi, Prisma, Mastra) before relying on memory.
+(Next.js, Tailwind v4, shadcn, recharts, Stellar SDK / Stellar Wallets Kit, Prisma, Mastra) before relying on memory.

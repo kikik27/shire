@@ -2,7 +2,7 @@
 
 ## What Shire Is
 
-Shire is an AI-assisted hiring marketplace with wallet-based identity and stablecoin escrow on Celo. A user may look for jobs, recruit talent, or use both modes.
+Shire is an AI-assisted hiring marketplace with wallet-based identity and stablecoin escrow on Stellar (Soroban). A user may look for jobs, recruit talent, or use both modes.
 
 ## Core Principle
 

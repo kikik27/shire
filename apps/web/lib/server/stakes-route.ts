@@ -25,7 +25,7 @@ const createStakeSchema = z
   .strictObject({
     type: z.enum(PLATFORM_STAKE_TYPES),
     amount: z.number().positive(),
-    token: z.enum(["cUSD", "USDC", "CELO"]),
+    token: z.enum(["cUSD", "USDC", "XLM"]),
     idempotencyKey: z.string().min(1).max(200),
     jobId: z.string().uuid().optional(),
     applicationId: z.string().uuid().optional(),

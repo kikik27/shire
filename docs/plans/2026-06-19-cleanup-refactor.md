@@ -1,5 +1,11 @@
 # Shire Cleanup & Refactor Plan (Fase A)
 
+> **Status (2026-07-06):** Fase A1.1–A1.2 complete (`lib/contracts/*`, `lib/wallet/config.ts` removed).
+> Fase A1.3 (`onchain-sync.processor.ts` / `run-onchain-sync.ts`) is superseded by the
+> Celo→Stellar/Soroban migration — those stubs are being evolved for Stellar rather than
+> deleted, since the chain-sync job itself is still needed, just retargeted. A2–A5 status not
+> re-verified as part of that migration.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Membersihkan codebase dari dead code, meng-unifikasi duplikasi, dan merapikan struktur — tanpa mengubah perilaku yang dilihat user.
@@ -144,7 +150,7 @@
 - [ ] Ganti `randomTx()` dengan ID internal deterministik (mis. `sim_${crypto.randomUUID()}` atau running counter) — tandai jelas "simulated"
 - [ ] Update `Stake` type di `lib/types.ts` jika `txHash` field ada — dokumentasikan "simulated, will hold real tx hash onchain phase"
 - [ ] Hapus `randomTx()` dari `store/utils.ts` (pertahankan `demoAddress()` bila masih dipakai `connect`)
-- [ ] Update `apps/web/components/stake/stake-history-card.tsx` — ganti celoscan link jadi badge "Simulated" (disabled link), bukan `https://alfajores.celoscan.io/tx/...`
+- [ ] Update `apps/web/components/stake/stake-history-card.tsx` — ganti link jadi badge "Simulated" (disabled link), bukan `https://stellar.expert/explorer/testnet/tx/...` (link Stellar Expert sudah dipasang oleh migrasi Celo→Stellar, tapi masih menautkan tx hash simulasi yang belum onchain)
 - [ ] `npm run typecheck -w @shire/web` — lulus
 - [ ] Commit: `refactor(web): mark stake data as simulated, remove fake tx hash`
 

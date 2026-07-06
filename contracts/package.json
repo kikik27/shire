@@ -1,8 +1,8 @@
 {
-  "name": "@shire/solidity",
+  "name": "@shire/soroban",
   "private": true,
   "scripts": {
-    "build": "forge build",
-    "test": "forge test"
+    "build": "cargo build --target wasm32v1-none --release",
+    "test": "cargo test"
   }
 }

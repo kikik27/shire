@@ -17,14 +17,14 @@ test("dispatches deterministic onchain jobs without an LLM", async () => {
     {
       id: "job-1",
       name: "onchain-sync",
-      payload: { chain: "Celo" },
+      payload: { chain: "Stellar" },
     },
     { attempt: 1, signal: new AbortController().signal },
   );
 
   assert.deepEqual(result, {
     status: "ready",
-    chain: "Celo",
+    chain: "Stellar",
     llmInvoked: false,
   });
   assert.equal(llmCalls, 0);

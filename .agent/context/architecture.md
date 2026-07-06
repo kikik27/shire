@@ -1,6 +1,6 @@
 # SHIRE — Final Architecture
 
-## Fullstack Next.js Monorepo + Mastra + Privy SIWE + MiniPay + Prisma + PostgreSQL + Celo Staking
+## Fullstack Next.js Monorepo + Mastra + Privy SIWE + MiniPay + Prisma + PostgreSQL + Stellar Staking
 
 This document is the latest final architecture for the **Shire** project, based on the updated concept that a wallet-based user can be a job seeker, a talent seeker, or both at the same time.
 
@@ -43,14 +43,14 @@ This document is the latest final architecture for the **Shire** project, based 
 
 # 1. Core Product Goal
 
-Shire is an AI-powered hiring marketplace with stablecoin staking on Celo.
+Shire is an AI-powered hiring marketplace with stablecoin staking on Stellar (Soroban).
 
 Core narrative:
 
 ```txt
 AI finds jobs and talents.
 Users approve important actions.
-Stablecoin escrow on Celo protects both parties.
+Stablecoin escrow on Stellar protects both parties.
 Smart contract locks and settles funds.
 ```
 
@@ -163,10 +163,10 @@ pgvector optional
 Skill overlap + rule-based matching for MVP
 
 Blockchain:
-Celo
-Solidity
-viem
-wagmi
+Stellar
+Soroban (Rust)
+@stellar/stellar-sdk
+Stellar Wallets Kit
 
 Storage:
 Cloudflare R2 / S3
@@ -191,8 +191,8 @@ For a clear ORM and database schema.
 PostgreSQL:
 For the offchain source of truth.
 
-Celo:
-For onchain staking escrow.
+Stellar:
+For onchain staking escrow, via Soroban smart contracts.
 
 Privy:
 For wallet login and SIWE in the web app.
@@ -220,8 +220,8 @@ For the Mini App experience with a Celo wallet.
                 │            │
                 v            v
 ┌──────────────────────┐  ┌──────────────────────┐
-│ Privy Auth / SIWE     │  │ Wallet / MiniPay      │
-│ User Session          │  │ wagmi + viem          │
+│ Privy Auth / SIWE     │  │ Stellar Wallet        │
+│ User Session          │  │ Stellar Wallets Kit   │
 └──────────────────────┘  └──────────────────────┘
                 │
                 v
@@ -238,8 +238,8 @@ For the Mini App experience with a Celo wallet.
                   │
                   v
 ┌────────────────────────────────────┐
-│          Celo Smart Contract        │
-│ ShireEscrow.sol                     │
+│        Soroban Smart Contract       │
+│ ShireEscrow (Stellar)               │
 └────────────────────────────────────┘
 ```
 
@@ -583,9 +583,9 @@ shire/
 │  │
 │  ├─ contracts/
 │  │  ├─ src/
-│  │  │  ├─ abi/
+│  │  │  ├─ spec/
 │  │  │  ├─ addresses.ts
-│  │  │  ├─ celo.ts
+│  │  │  ├─ stellar.ts
 │  │  │  ├─ escrow.ts
 │  │  │  └─ index.ts
 │  │  └─ package.json
@@ -715,25 +715,25 @@ Frontend/backend contract helper.
 Tanggung jawab:
 
 ```txt
-- ABI
-- Contract addresses
-- viem helpers
-- Celo chain config
+- Contract spec / bindings
+- Contract IDs
+- @stellar/stellar-sdk helpers
+- Soroban network config
 - Read contract state
-- Prepare transaction args
+- Prepare transaction (XDR) args
 ```
 
 ## 9.7 `contracts`
 
-Solidity workspace.
+Soroban (Rust) workspace.
 
 Tanggung jawab:
 
 ```txt
-- ShireEscrow.sol
+- ShireEscrow (Soroban/Rust)
 - Contract tests
 - Deploy scripts
-- ABI generation
+- Contract spec generation
 ```
 
 ---
@@ -835,10 +835,10 @@ S3_BUCKET="shire"
 AGENT_SERVICE_URL="http://localhost:4111"
 AGENT_INTERNAL_SECRET="replace_me"
 
-# Celo
-NEXT_PUBLIC_CELO_CHAIN_ID="44787"
-NEXT_PUBLIC_SHIRE_ESCROW_ADDRESS=""
-CELO_RPC_URL="https://alfajores-forno.celo-testnet.org"
+# Stellar
+NEXT_PUBLIC_STELLAR_NETWORK="testnet"
+NEXT_PUBLIC_SHIRE_ESCROW_CONTRACT_ID=""
+STELLAR_RPC_URL="https://soroban-testnet.stellar.org"
 
 # Admin
 DISPUTE_RESOLVER_ADDRESS=""
@@ -1572,7 +1572,7 @@ export const JobCreateSchema = z.object({
 ## 22.1 Contract name
 
 ```txt
-ShireEscrow.sol
+ShireEscrow (Soroban, Rust/WASM)
 ```
 
 ## 22.2 Important principle
@@ -1586,121 +1586,75 @@ applicant
 company
 ```
 
-## 22.3 Onchain Application struct
+## 22.3 Onchain Application storage
 
-```solidity
-struct Application {
-    uint256 id;
-    uint256 jobId;
-    address applicant;
-    address company;
-    uint256 applicantStake;
-    uint256 companyStake;
-    uint256 createdAt;
-    uint256 deadline;
-    ApplicationStatus status;
-    bool applicantConfirmed;
-    bool companyConfirmed;
+```rust
+#[contracttype]
+pub struct Application {
+    pub id: u64,
+    pub job_id: u64,
+    pub applicant: Address,
+    pub company: Address,
+    pub applicant_stake: i128,
+    pub company_stake: i128,
+    pub status: ApplicationStatus,
+    pub created_at: u64,
+    pub deadline: u64,
+    pub dispute_opened: bool,
+}
+
+#[contracttype]
+pub enum DataKey {
+    Application(u64),
 }
 ```
 
+Type mapping from the earlier Solidity draft: `uint256` amounts → `i128` (matches
+`TokenClient`), `address` → `Address`, timestamps → `u64` via `env.ledger().timestamp()`,
+`mapping(uint256 => Application)` → storage keyed by `DataKey::Application(id)`.
+
 ## 22.4 Status
 
-```solidity
-enum ApplicationStatus {
-    Created,
-    ApplicantStaked,
-    CompanyStaked,
-    InReview,
-    Completed,
-    Expired,
-    Disputed,
-    Resolved,
-    Cancelled
-}
+```txt
+Pending
+ApplicantStaked
+CompanyStaked
+Completed
+Expired
+Disputed
+Resolved
 ```
 
 ## 22.5 Core functions
 
-```solidity
-function createApplication(
-    uint256 jobId,
-    address company,
-    uint256 deadline
-) external payable returns (uint256);
-
-function companyAcceptAndStake(
-    uint256 applicationId
-) external payable;
-
-function markCompleted(
-    uint256 applicationId
-) external;
-
-function confirmCompleted(
-    uint256 applicationId
-) external;
-
-function refundExpired(
-    uint256 applicationId
-) external;
-
-function openDispute(
-    uint256 applicationId,
-    string calldata evidenceURI,
-    bytes32 evidenceHash
-) external;
-
-function resolveDispute(
-    uint256 applicationId,
-    uint256 applicantPayout,
-    uint256 companyPayout
-) external onlyResolver;
+```rust
+fn create_application(env: Env, applicant: Address, job_id: u64, token: Address, applicant_stake: i128, deadline: u64) -> u64;
+fn company_accept_and_stake(env: Env, company: Address, application_id: u64, company_stake: i128);
+fn mark_completed(env: Env, application_id: u64);
+fn confirm_completed(env: Env, application_id: u64);
+fn refund_expired(env: Env, application_id: u64);
+fn open_dispute(env: Env, caller: Address, application_id: u64, evidence_uri: String, evidence_hash: BytesN<32>);
+fn resolve_dispute(env: Env, resolver: Address, application_id: u64, applicant_payout: i128, company_payout: i128);
 ```
+
+Every entrypoint calls `.require_auth()` on the relevant `Address` (applicant, company, or
+resolver) before mutating state — the Soroban equivalent of Solidity's `msg.sender` checks and
+the `onlyResolver` modifier. Stake transfers use `TokenClient` against a Stellar Asset Contract
+(SAC) wrapping the stablecoin, not native `payable` value. See
+`.agent/context/onchain/contract-design.md` for the full token-mechanics detail.
 
 ## 22.6 Events
 
-```solidity
-event ApplicationCreated(
-    uint256 indexed applicationId,
-    uint256 indexed jobId,
-    address indexed applicant,
-    address company,
-    uint256 applicantStake
-);
+Published via `env.events().publish(...)`:
 
-event CompanyStaked(
-    uint256 indexed applicationId,
-    address indexed company,
-    uint256 companyStake
-);
-
-event ApplicationCompleted(
-    uint256 indexed applicationId
-);
-
-event StakeReleased(
-    uint256 indexed applicationId,
-    uint256 applicantPayout,
-    uint256 companyPayout
-);
-
-event ApplicationExpired(
-    uint256 indexed applicationId
-);
-
-event DisputeOpened(
-    uint256 indexed applicationId,
-    address indexed openedBy,
-    string evidenceURI,
-    bytes32 evidenceHash
-);
-
-event DisputeResolved(
-    uint256 indexed applicationId,
-    uint256 applicantPayout,
-    uint256 companyPayout
-);
+```txt
+ApplicationCreated(application_id, job_id, applicant, company, applicant_stake)
+CompanyStaked(application_id, company, company_stake)
+ApplicationCompleted(application_id)
+StakeReleased(application_id, applicant_payout, company_payout)
+ApplicationExpired(application_id)
+DisputeOpened(application_id, opened_by, evidence_uri, evidence_hash)
+DisputeResolved(application_id, applicant_payout, company_payout)
 ```
 
 ---
@@ -1717,11 +1671,11 @@ event DisputeResolved(
    - Job ACTIVE
    - user bukan member company pemilik job
 3. UI menampilkan stake amount.
-4. User approve.
-5. User sign transaction via wallet.
-6. Contract createApplication().
-7. Backend sync event ApplicationCreated.
-8. DB Application status = APPLICANT_STAKED.
+4. User sign transaction via wallet (Soroban auth is per-invocation — no separate
+   ERC20-style approve step before staking).
+5. Contract create_application().
+6. Backend sync event ApplicationCreated.
+7. DB Application status = APPLICANT_STAKED.
 ```
 
 ## 23.2 Company accept and stake
@@ -1732,11 +1686,10 @@ event DisputeResolved(
    - user adalah CompanyMember
    - application valid
 3. UI menampilkan company stake amount.
-4. Company approve.
-5. Company sign transaction.
-6. Contract companyAcceptAndStake().
-7. Backend sync event CompanyStaked.
-8. DB Application status = COMPANY_STAKED.
+4. Company sign transaction (no separate approve step, same as above).
+5. Contract company_accept_and_stake().
+6. Backend sync event CompanyStaked.
+7. DB Application status = COMPANY_STAKED.
 ```
 
 ## 23.3 Normal completion
@@ -1754,7 +1707,7 @@ event DisputeResolved(
 ```txt
 1. Candidate sudah stake.
 2. Company tidak respond sampai deadline.
-3. Candidate call refundExpired().
+3. Candidate call refund_expired().
 4. Contract return applicant stake.
 5. Application status = EXPIRED.
 ```
@@ -1768,7 +1721,7 @@ event DisputeResolved(
 4. Evidence hash submitted onchain.
 5. Dispute Summary Agent creates summary.
 6. Admin reviews.
-7. Admin resolver calls resolveDispute().
+7. Admin resolver calls resolve_dispute().
 8. Contract distributes payout.
 9. Application status = RESOLVED.
 ```
@@ -1776,6 +1729,12 @@ event DisputeResolved(
 ---
 
 # 24. Onchain Sync
+
+## 24.0 Sync mechanism
+
+Poll Soroban RPC's `getEvents` by ledger range (via `@stellar/stellar-sdk`'s
+`SorobanRpc.Server`), analogous to an EVM sync job polling `eth_getLogs` by block range. Track
+a `lastSyncedLedger` cursor (the Soroban equivalent of "last synced block").
 
 ## 24.1 Event sync job
 
@@ -1990,281 +1949,99 @@ On demand:
 ## 27.4 Onchain security
 
 ```txt
-- Use ReentrancyGuard.
-- Validate msg.sender.
+- Validate Address.require_auth() on every state-changing entrypoint, and confirm the
+  authorizing address matches the expected role (applicant/company/resolver).
 - Validate status transition.
 - Validate payout does not exceed escrowed amount.
-- Resolver-only dispute settlement.
+- Resolver-only dispute settlement (explicit stored-address equality check).
+- Follow checks-effects-interactions around TokenClient calls as defensive practice — Soroban's
+  execution model makes classic reentrancy far less of a risk than Solidity, so this is good
+  practice rather than a mandatory guard like ReentrancyGuard.
 ```
 
 ---
 
 # 28. Development Execution Plan for Codex
 
-## Phase 0 — Repository setup
+> The repository, monorepo tooling, and web2 groundwork already exist (npm workspaces,
+> Turborepo, `apps/web`, `apps/agent`, `contracts`, Drizzle/Postgres schema, Privy auth, API
+> routes) — see root `README.md` for current state. The three phases below are **new
+> capability added on top of that baseline**, not a from-scratch build order.
+
+## Phase 1 — Complete the web2 product surface
+
+Close remaining gaps in the already-mostly-built web2 flows so the product works fully
+end-to-end without any chain dependency. Consolidates the former Data / Auth / Onboarding /
+Candidate / Company / Agents / Matching phases.
 
 Tasks:
 
 ```txt
-1. Create pnpm monorepo.
-2. Add Turborepo.
-3. Create apps/web.
-4. Create apps/agent.
-5. Create packages/db.
-6. Create packages/shared.
-7. Create packages/ai-context.
-8. Create packages/contracts.
-9. Create contracts Solidity workspace.
-10. Add .env.example.
+1. Close remaining gaps in onboarding, candidate, and company flows.
+2. Harden the Mastra agent pipeline (CV profile, job matching, talent matching, dispute
+   summary) and the matching/recommendation loop.
+3. Verify anti self-apply and multi-mode rules hold across all surfaces.
+4. Ensure applications can reach an "agreed" state using the existing DB-tracked
+   (simulated) stake — no chain transaction required yet.
 ```
 
 Acceptance criteria:
 
 ```txt
-pnpm install works.
-pnpm dev runs web and agent.
-Workspace imports work.
+A user can sign in, complete onboarding, build a profile (candidate) or post a job
+(company/recruiter), receive AI-generated recommendations, and reach an agreed application
+state — all without touching a wallet or blockchain.
 ```
 
-## Phase 1 — Database + Prisma
+## Phase 2 — Stellar/Soroban chain foundation
+
+Implement the real `ShireEscrow` Soroban contract and the wallet plumbing to call it,
+replacing the simulated stake. Consolidates the former Smart Contract and Wallet + Staking UI
+phases. Highest-risk, most novel phase (new language, new SDK) — isolated on purpose.
 
 Tasks:
 
 ```txt
-1. Setup Prisma in packages/db.
-2. Add updated schema with User, CandidateProfile, Company, CompanyMember.
-3. Add Job, Recommendation, Application, Dispute, Evidence.
-4. Add AgentRun and OnchainEvent.
-5. Add db client singleton.
-6. Add migration.
-7. Add seed.
+1. Build ShireEscrow (Soroban/Rust) per .agent/context/onchain/contract-design.md:
+   create_application, company_accept_and_stake, mark_completed, confirm_completed,
+   refund_expired, open_dispute, resolve_dispute.
+2. Add contract tests (soroban-sdk testutils) and deploy to Stellar testnet.
+3. Wire up a Stellar Wallets Kit connector (Freighter, xBull, Albedo, Lobstr) alongside
+   Privy (Privy stays login/identity only).
+4. Add Apply & Stake / Company Accept & Stake UI against the deployed contract.
+5. Add transaction status UI; store tx hash / ledger reference.
 ```
 
 Acceptance criteria:
 
 ```txt
-pnpm db:migrate works.
-apps/web can import @shire/db.
-apps/agent can import @shire/db.
+Candidate can stake real testnet stablecoin into the deployed contract.
+Company can accept and stake.
+Funds are verifiably locked in the contract (checkable via Stellar Expert).
+UI displays live transaction status.
 ```
 
-## Phase 2 — Auth + User Sync
+## Phase 3 — Chain-dependent product features
+
+Read chain state back into the product and close the dispute loop. Depends entirely on
+Phase 2's deployed contract. Consolidates the former Onchain Sync and Dispute MVP phases.
 
 Tasks:
 
 ```txt
-1. Setup Privy in apps/web.
-2. Add wallet login.
-3. Add /api/auth/me.
-4. Add /api/auth/sync-user.
-5. Add MiniPay detection helper.
-6. Add User creation by privyUserId/walletAddress.
-7. Add onboarding redirect.
+1. Add event sync job polling Soroban getEvents by ledger range.
+2. Save OnchainEvent (txHash + eventName dedupe key); update Application status.
+3. Add evidence upload + hash (hash submitted onchain, evidence itself stays off-chain).
+4. Wire the existing dispute-summary agent to real disputes.
+5. Build the admin resolver action calling resolve_dispute on the real contract.
 ```
 
 Acceptance criteria:
 
 ```txt
-User can login with wallet.
-User record is created.
-User can access onboarding.
-MiniPay wallet flow has helper abstraction.
-```
-
-## Phase 3 — Onboarding + Multi-mode
-
-Tasks:
-
-```txt
-1. Build /onboarding page.
-2. Add select mode API.
-3. Add activeMode field update.
-4. Add CandidateProfile draft creation.
-5. Add company creation redirect.
-6. Add mode switcher.
-```
-
-Acceptance criteria:
-
-```txt
-User can choose Find Jobs.
-User can choose Find Talents.
-User can choose Both.
-User can switch mode later.
-```
-
-## Phase 4 — Candidate Module
-
-Tasks:
-
-```txt
-1. Build candidate profile page.
-2. Build CV upload.
-3. Store CV file metadata.
-4. Trigger parse CV workflow.
-5. Show profile draft.
-6. Allow user edit.
-7. Confirm profile.
-```
-
-Acceptance criteria:
-
-```txt
-Candidate can upload CV.
-AI draft can be reviewed.
-Profile can become CONFIRMED.
-```
-
-## Phase 5 — Company Module
-
-Tasks:
-
-```txt
-1. Build company create page.
-2. Add CompanyMember OWNER relation.
-3. Build company dashboard.
-4. Build job create page.
-5. Validate job with Zod.
-6. Activate job.
-```
-
-Acceptance criteria:
-
-```txt
-User can create company.
-User becomes OWNER.
-Company can create ACTIVE job.
-```
-
-## Phase 6 — Mastra Agent Service
-
-Tasks:
-
-```txt
-1. Setup Mastra.
-2. Add ai-context package.
-3. Add CV Profile Agent.
-4. Add Job Matching Agent.
-5. Add Talent Matching Agent.
-6. Add Dispute Summary Agent.
-7. Add workflow wrappers.
-8. Add AgentRun logging.
-```
-
-Acceptance criteria:
-
-```txt
-All agents return structured output.
-All outputs pass Zod validation.
-AgentRun logs are saved.
-```
-
-## Phase 7 — Matching System
-
-Tasks:
-
-```txt
-1. Implement hard filters.
-2. Implement anti self-apply filter.
-3. Implement skill overlap scoring.
-4. Implement job matching workflow.
-5. Implement talent matching workflow.
-6. Save recommendations.
-7. Show recommendations in dashboard.
-```
-
-Acceptance criteria:
-
-```txt
-Candidate gets job recommendations.
-Company gets talent recommendations.
-Self-owned jobs are excluded.
-```
-
-## Phase 8 — Smart Contract
-
-Tasks:
-
-```txt
-1. Build ShireEscrow.sol.
-2. Add createApplication.
-3. Add companyAcceptAndStake.
-4. Add complete/release.
-5. Add refundExpired.
-6. Add openDispute.
-7. Add resolveDispute.
-8. Add tests.
-9. Deploy to Celo testnet.
-```
-
-Acceptance criteria:
-
-```txt
-Stake can be locked.
-Stake can be released.
-Expired application can refund.
-Dispute can be resolved by resolver.
-```
-
-## Phase 9 — Wallet + Staking UI
-
-Tasks:
-
-```txt
-1. Add wagmi/viem config.
-2. Add Celo Alfajores config.
-3. Add Apply & Stake button.
-4. Add Company Accept & Stake button.
-5. Add transaction status UI.
-6. Store tx hash.
-```
-
-Acceptance criteria:
-
-```txt
-Candidate can stake.
-Company can stake.
-UI displays transaction status.
-```
-
-## Phase 10 — Onchain Sync
-
-Tasks:
-
-```txt
-1. Add event sync job.
-2. Save OnchainEvent.
-3. Update Application status.
-4. Prevent duplicate processing.
-```
-
-Acceptance criteria:
-
-```txt
-DB status follows contract events.
-Duplicate events ignored.
-```
-
-## Phase 11 — Dispute MVP
-
-Tasks:
-
-```txt
-1. Add open dispute.
-2. Add evidence upload.
-3. Add evidence hash.
-4. Run dispute summary agent.
-5. Build admin dispute page.
-6. Add resolver action.
-```
-
-Acceptance criteria:
-
-```txt
-Dispute can be opened.
-Evidence can be submitted.
-AI summary appears.
-Admin can resolve onchain.
+DB application status correctly and idempotently follows real contract events.
+A full dispute can be opened, get an AI summary, and be resolved by an admin with real
+funds moving per the resolution.
 ```
 
 ---
@@ -2310,22 +2087,19 @@ Admin can resolve onchain.
 
 # 30. Final Codex Instruction
 
-Implementation must follow this order:
+Implementation must follow this order (see §28 for the 3-phase grouping):
 
 ```txt
-1. Monorepo setup
-2. Latest Prisma schema
-3. Shared Zod schemas
-4. Privy auth + user sync
-5. Onboarding multi-mode
-6. Candidate module
-7. Company module
-8. Mastra agents
-9. Matching workflow
-10. Smart contract
-11. Wallet staking UI
-12. Onchain sync
-13. Dispute MVP
+Phase 1 — Web2 product surface:
+  1. Close onboarding/candidate/company gaps
+  2. Harden Mastra agents + matching
+Phase 2 — Stellar/Soroban chain foundation:
+  3. ShireEscrow (Soroban) contract + tests + testnet deploy
+  4. Stellar Wallets Kit wallet connector
+  5. Apply & Stake / Accept & Stake UI
+Phase 3 — Chain-dependent product features:
+  6. Onchain sync (Soroban getEvents)
+  7. Dispute MVP (evidence hash, resolver action)
 ```
 
 Things that must not go wrong:
@@ -2343,13 +2117,13 @@ Final architecture:
 
 ```txt
 Next.js = product app + API
-Privy = wallet authentication / SIWE
+Privy = wallet authentication / SIWE (login + identity only)
 MiniPay = wallet environment for Mini App
 Mastra = AI agent orchestration
 Prisma = ORM
 PostgreSQL = offchain database
-Celo Smart Contract = staking escrow
-wagmi/viem = wallet + contract interaction
+Soroban Smart Contract = staking escrow (on Stellar)
+Stellar Wallets Kit + @stellar/stellar-sdk = wallet connection + contract interaction
 ```
 
 Final model:
