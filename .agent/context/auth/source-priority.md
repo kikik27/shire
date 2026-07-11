@@ -17,6 +17,5 @@ Rule:
 
 ```txt
 If `privyUserId` exists, use it as the primary identity.
-If the MiniPay flow is wallet-only, use `walletAddress` as the primary identity.
 If the user later logs in through Privy with the same wallet, merge records by `walletAddress`.
 ```

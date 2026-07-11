@@ -32,7 +32,7 @@ This plan deliberately excludes:
 - delayed or scheduled jobs
 - production authentication for job endpoints
 - all domain jobs becoming fully production-ready
-- Celo transaction execution
+- Stellar transaction execution
 
 BullMQ is the next phase after the processor contract and LLM behavior pass the acceptance tests in this plan.
 
@@ -123,7 +123,7 @@ export type JobPayloadMap = {
     rawCv: string;
   };
   "onchain-sync": {
-    chain: "Celo";
+    chain: "Stellar";
   };
 };
 
@@ -143,7 +143,7 @@ export type JobResultMap = {
   };
   "onchain-sync": {
     status: "ready";
-    chain: "Celo";
+    chain: "Stellar";
     llmInvoked: false;
   };
 };
@@ -158,6 +158,7 @@ export type JobResult = JobResultMap[JobName];
 ### Task 1: Define Typed Job Contracts
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/jobs/job-contracts.ts`
 - Create: `apps/agent/test/job-contracts.test.ts`
 - Modify: `apps/agent/test/index.ts`
@@ -168,19 +169,22 @@ Add tests that require:
 
 ```ts
 test("parses a valid cv parse payload", () => {
-  assert.deepEqual(parseJobRequest({
-    name: "cv-parse",
-    payload: {
-      candidateId: "candidate-001",
-      rawCv: "Senior TypeScript engineer",
+  assert.deepEqual(
+    parseJobRequest({
+      name: "cv-parse",
+      payload: {
+        candidateId: "candidate-001",
+        rawCv: "Senior TypeScript engineer",
+      },
+    }),
+    {
+      name: "cv-parse",
+      payload: {
+        candidateId: "candidate-001",
+        rawCv: "Senior TypeScript engineer",
+      },
     },
-  }), {
-    name: "cv-parse",
-    payload: {
-      candidateId: "candidate-001",
-      rawCv: "Senior TypeScript engineer",
-    },
-  });
+  );
 });
 
 test("rejects an empty CV", () => {
@@ -193,9 +197,7 @@ test("rejects an empty CV", () => {
 });
 
 test("rejects unknown jobs", () => {
-  assert.throws(() =>
-    parseJobRequest({ name: "unknown", payload: {} }),
-  );
+  assert.throws(() => parseJobRequest({ name: "unknown", payload: {} }));
 });
 ```
 
@@ -225,7 +227,7 @@ const cvParseRequestSchema = z.object({
 const onchainSyncRequestSchema = z.object({
   name: z.literal("onchain-sync"),
   payload: z.object({
-    chain: z.literal("Celo"),
+    chain: z.literal("Stellar"),
   }),
 });
 
@@ -261,6 +263,7 @@ git commit -m "feat(agent): define worker job contracts"
 ### Task 2: Add a Queue-Neutral In-Memory Adapter
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/jobs/job-queue.ts`
 - Create: `apps/agent/src/runtime/jobs/in-memory-job-queue.ts`
 - Create: `apps/agent/test/in-memory-job-queue.test.ts`
@@ -275,7 +278,7 @@ test("enqueues and reserves jobs in FIFO order", async () => {
   const queue = new InMemoryJobQueue();
   const first = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
   const second = await queue.enqueue({
     name: "cv-parse",
@@ -290,13 +293,13 @@ test("tracks completed results", async () => {
   const queue = new InMemoryJobQueue();
   const job = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
 
   await queue.markActive(job.id);
   await queue.markCompleted(job.id, {
     status: "ready",
-    chain: "Celo",
+    chain: "Stellar",
     llmInvoked: false,
   });
 
@@ -355,6 +358,7 @@ git commit -m "feat(agent): add in-memory worker queue"
 ### Task 3: Define Processor Boundaries and LLM Policy
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/jobs/job-processor.ts`
 - Create: `apps/agent/src/runtime/jobs/job-processors.ts`
 - Create: `apps/agent/src/runtime/jobs/onchain-sync.processor.ts`
@@ -378,7 +382,7 @@ test("dispatches the deterministic onchain job without an LLM", async () => {
   const result = await processors.process({
     id: "job-1",
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
 
   assert.equal(result.llmInvoked, false);
@@ -424,7 +428,7 @@ The registry must select by `job.name`, pass the abort signal, and return the ty
 ```ts
 {
   status: "ready",
-  chain: "Celo",
+  chain: "Stellar",
   llmInvoked: false
 }
 ```
@@ -449,6 +453,7 @@ git commit -m "feat(agent): define job processor boundaries"
 ### Task 4: Adapt the CV Agent to Structured LLM Generation
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/cv-agent-generator.ts`
 - Create: `apps/agent/test/cv-agent-generator.test.ts`
 - Modify: `apps/agent/src/runtime/cv-normalizer.ts`
@@ -523,9 +528,7 @@ Parse the returned structured value with `candidateProfileSchema`. Return:
 
 ```ts
 {
-  profile,
-  model,
-  usage
+  (profile, model, usage);
 }
 ```
 
@@ -551,6 +554,7 @@ git commit -m "feat(agent): add structured CV agent generation"
 ### Task 5: Build the Real CV Parse Processor
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/jobs/cv-parse.processor.ts`
 - Modify: `apps/agent/src/runtime/jobs/job-processors.ts`
 - Modify: `apps/agent/src/jobs/run-cv-parse.ts`
@@ -592,11 +596,13 @@ Expected: FAIL because the processor does not exist.
 Compose the existing `runParseCvPipeline()` with real defaults:
 
 ```ts
-export function createCvParseProcessor(dependencies = {
-  generate: generateCandidateProfile,
-  embed: embedCandidateProfile,
-  store: candidateProfileStore,
-}): JobProcessor<"cv-parse"> {
+export function createCvParseProcessor(
+  dependencies = {
+    generate: generateCandidateProfile,
+    embed: embedCandidateProfile,
+    store: candidateProfileStore,
+  },
+): JobProcessor<"cv-parse"> {
   return {
     name: "cv-parse",
     llmPolicy: "required",
@@ -649,6 +655,7 @@ git commit -m "feat(agent): execute CV jobs through the real pipeline"
 ### Task 6: Implement the Persistent Worker Loop
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/jobs/agent-worker.ts`
 - Create: `apps/agent/test/agent-worker.test.ts`
 - Modify: `apps/agent/test/index.ts`
@@ -664,7 +671,7 @@ test("processes an enqueued job to completion", async () => {
     queue,
     process: async () => ({
       status: "ready",
-      chain: "Celo",
+      chain: "Stellar",
       llmInvoked: false,
     }),
   });
@@ -672,7 +679,7 @@ test("processes an enqueued job to completion", async () => {
   worker.start();
   const job = await queue.enqueue({
     name: "onchain-sync",
-    payload: { chain: "Celo" },
+    payload: { chain: "Stellar" },
   });
 
   const completed = await waitForJobStatus(queue, job.id, "completed");
@@ -741,6 +748,7 @@ git commit -m "feat(agent): add persistent worker loop"
 ### Task 7: Expose Enqueue and Status Endpoints
 
 **Files:**
+
 - Modify: `apps/agent/src/server.ts`
 - Create: `apps/agent/test/jobs-http.test.ts`
 - Modify: `apps/agent/test/index.ts`
@@ -755,7 +763,7 @@ Content-Type: application/json
 
 {
   "name": "onchain-sync",
-  "payload": { "chain": "Celo" }
+  "payload": { "chain": "Stellar" }
 }
 ```
 
@@ -783,7 +791,7 @@ must eventually return:
   "status": "completed",
   "result": {
     "status": "ready",
-    "chain": "Celo",
+    "chain": "Stellar",
     "llmInvoked": false
   }
 }
@@ -846,6 +854,7 @@ git commit -m "feat(agent): expose worker job endpoints"
 ### Task 8: Add Worker Configuration and Operational Logging
 
 **Files:**
+
 - Modify: `apps/agent/src/env.ts`
 - Modify: `apps/agent/src/runtime/jobs/agent-worker.ts`
 - Modify: `apps/agent/test/env.test.ts`
@@ -859,10 +868,7 @@ Require:
 ```ts
 assert.equal(createEnv({}).workerEnabled, true);
 assert.equal(createEnv({}).liveLlmTestsEnabled, false);
-assert.equal(
-  createEnv({ SHIRE_WORKER_ENABLED: "false" }).workerEnabled,
-  false,
-);
+assert.equal(createEnv({ SHIRE_WORKER_ENABLED: "false" }).workerEnabled, false);
 ```
 
 - [ ] **Step 2: Run tests and verify RED**
@@ -915,6 +921,7 @@ git commit -m "feat(agent): configure worker runtime"
 ### Task 9: Add an Opt-In Live LLM Worker Test
 
 **Files:**
+
 - Create: `apps/agent/test/live-cv-worker.test.ts`
 - Modify: `apps/agent/test/index.ts`
 - Modify: `apps/agent/README.md`
@@ -991,6 +998,7 @@ git commit -m "test(agent): verify live LLM worker execution"
 ### Task 10: Final Verification and BullMQ Readiness Gate
 
 **Files:**
+
 - Review: `apps/agent/src/runtime/jobs/`
 - Review: `apps/agent/src/runtime/cv-agent-generator.ts`
 - Review: `apps/agent/src/server.ts`
