@@ -1,6 +1,6 @@
 # SHIRE — Final Architecture
 
-## Fullstack Next.js Monorepo + Mastra + Privy SIWE + MiniPay + Prisma + PostgreSQL + Stellar Staking
+## Fullstack Next.js Monorepo + Mastra + Privy SIWE + Prisma + PostgreSQL + Stellar Staking
 
 This document is the latest final architecture for the **Shire** project, based on the updated concept that a wallet-based user can be a job seeker, a talent seeker, or both at the same time.
 
@@ -146,9 +146,6 @@ Auth:
 Privy
 SIWE / wallet authentication
 
-Mini App:
-MiniPay compatible wallet flow
-
 Agent:
 Mastra
 
@@ -196,9 +193,6 @@ For onchain staking escrow, via Soroban smart contracts.
 
 Privy:
 For wallet login and SIWE in the web app.
-
-MiniPay:
-For the Mini App experience with a Celo wallet.
 ```
 
 ---
@@ -208,7 +202,7 @@ For the Mini App experience with a Celo wallet.
 ```txt
 ┌────────────────────────────────────┐
 │             User                    │
-│ Web Browser / MiniPay Mini App      │
+│ Web Browser                         │
 └─────────────────┬──────────────────┘
                   │
                   v
@@ -313,29 +307,7 @@ If onboarding is incomplete → redirect to `/onboarding`
 If onboarding is complete → redirect to `/dashboard`
 ```
 
-## 6.2 MiniPay Mini App Auth Flow
-
-Flow:
-
-```txt
-User opens Shire in MiniPay
-   ↓
-App detects the MiniPay environment
-   ↓
-Wallet provider tersedia
-   ↓
-Connect the wallet via wagmi
-   ↓
-Create or verify app session
-   ↓
-Find or create User by walletAddress
-   ↓
-If onboarding is incomplete → redirect to `/onboarding`
-   ↓
-If onboarding is complete → redirect to `/dashboard`
-```
-
-## 6.3 Auth source priority
+## 6.2 Auth source priority
 
 Saat user login, sistem harus mapping identity seperti ini:
 
@@ -354,7 +326,6 @@ Rule:
 
 ```txt
 If `privyUserId` exists, use `privyUserId` as the primary identity.
-If the flow is wallet-only in MiniPay, use `walletAddress` as the primary identity.
 If the user later logs in through Privy with the same wallet, merge by `walletAddress`.
 ```
 
@@ -511,7 +482,6 @@ shire/
 │  │  ├─ lib/
 │  │  │  ├─ auth.ts
 │  │  │  ├─ privy.ts
-│  │  │  ├─ minipay.ts
 │  │  │  ├─ permissions.ts
 │  │  │  ├─ server-user.ts
 │  │  │  └─ utils.ts
@@ -623,7 +593,6 @@ Tanggung jawab:
 ```txt
 - Public landing page
 - Log in with Privy
-- MiniPay wallet detection
 - User onboarding
 - Candidate dashboard
 - Company dashboard
@@ -1921,7 +1890,6 @@ On demand:
 ```txt
 - Semua protected route wajib punya session.
 - Web login memakai Privy session.
-- MiniPay login memakai wallet session.
 - User identity harus di-normalize ke User table.
 - Do not trust the wallet address from the client without a session or signature.
 ```
@@ -2052,7 +2020,6 @@ funds moving per the resolution.
 
 ```txt
 - Privy wallet login
-- MiniPay wallet compatibility abstraction
 - User sync by wallet
 - Multi-mode onboarding
 - Candidate profile
@@ -2118,7 +2085,6 @@ Final architecture:
 ```txt
 Next.js = product app + API
 Privy = wallet authentication / SIWE (login + identity only)
-MiniPay = wallet environment for Mini App
 Mastra = AI agent orchestration
 Prisma = ORM
 PostgreSQL = offchain database

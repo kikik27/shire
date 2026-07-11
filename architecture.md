@@ -20,7 +20,7 @@ AI finds. User approves. Stake locks. Workflow validates. Resolver decides. Cont
 ```
                 ┌───────────────────────────────┐
    Browser /    │          apps/web             │   Next.js 16 (App Router, RSC)
-   MiniPay  ───▶│  Marketing · Dashboard · API  │   Tailwind v4 + shadcn/ui
+                │  Marketing · Dashboard · API  │   Tailwind v4 + shadcn/ui
                 │  Server Actions · Wallet UI    │
                 └───────┬───────────────┬────────┘
                         │               │
@@ -92,7 +92,7 @@ loading/empty/error states (each list/table implements them) while the API is bu
 
 ## 6. Backend & chain (planned — see `.agent/context`)
 
-- **Auth:** Privy / SIWE on web, wallet session in MiniPay; normalize to one `User`.
+- **Auth:** Privy / SIWE on web, normalize to one `User`.
 - **Data:** PostgreSQL + Prisma. Matching is rule-based (skill overlap) for MVP, pgvector later.
 - **Agent:** Mastra workflows for CV parse, job/talent matching, dispute summary, onchain sync.
 - **Chain:** `ShireEscrow` (Soroban) on Stellar testnet — create/accept/complete/refund/dispute/resolve

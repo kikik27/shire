@@ -1,4 +1,5 @@
 import { PrivyClient } from "@privy-io/node";
+import { readSessionFromRequest } from "./session-token";
 
 export class AuthenticatedUserError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -16,7 +17,8 @@ export class AuthenticatedUserConfigurationError extends Error {
 
 export type AuthenticatedUser =
   | { mode: "demo"; privyUserId: "demo-user" }
-  | { mode: "privy"; privyUserId: string; walletAddress?: string };
+  | { mode: "privy"; privyUserId: string; walletAddress?: string }
+  | { mode: "stellar"; privyUserId: string; walletAddress: string };
 
 export type AuthenticatedUserDependencies = {
   appId?: string;
@@ -61,6 +63,14 @@ export async function resolveAuthenticatedUser(
   request: Request,
   dependencies?: AuthenticatedUserDependencies,
 ): Promise<AuthenticatedUser> {
+  // Stellar wallet session (cookie) takes priority — a signed-in wallet user is
+  // fully authenticated without Privy. This runs before the demo-mode check so
+  // wallet users keep their real identity even when Privy is unconfigured.
+  const session = await readSessionFromRequest(request);
+  if (session) {
+    return { mode: "stellar", privyUserId: session.privyUserId, walletAddress: session.address };
+  }
+
   const appId = (
     dependencies
       ? dependencies.appId

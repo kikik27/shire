@@ -41,7 +41,7 @@ It covers:
 - AI assistance and human approval boundaries
 - Matching concepts and recommendation explanations
 - Application lifecycle
-- Celo escrow and staking concepts
+- Stellar escrow and staking concepts
 - Completion, expiration, refunds, disputes, and settlement
 - Onchain versus offchain responsibilities
 - Security and privacy expectations

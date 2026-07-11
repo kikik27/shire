@@ -7,7 +7,6 @@ This folder contains authentication, identity, and onboarding rules.
 2. `source-priority.md`
 3. `mode-and-onboarding.md`
 4. `privy.md`
-5. `minipay.md`
 6. `api.md`
 
 ## Rules

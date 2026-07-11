@@ -55,6 +55,7 @@ filter: {
 ### Task 1: Send Structured Chat Scope to the Agent
 
 **Files:**
+
 - Modify: `apps/web/lib/chat/context.ts`
 - Modify: `apps/web/test/chat-thread.test.ts`
 
@@ -106,10 +107,7 @@ Expected: FAIL because `buildChatProxyBody()` does not return `scope`.
 Change `buildChatProxyBody()` in `apps/web/lib/chat/context.ts` to:
 
 ```ts
-export function buildChatProxyBody(
-  scope: ChatScope,
-  messages: unknown[],
-) {
+export function buildChatProxyBody(scope: ChatScope, messages: unknown[]) {
   const system = buildChatSystemMessage(scope);
 
   return {
@@ -149,6 +147,7 @@ git commit -m "feat(web): send structured assistant scope"
 ### Task 2: Add Curated Product Knowledge Documents
 
 **Files:**
+
 - Create: `.agent/knowledge/product/shire-general.md`
 - Create: `.agent/knowledge/product/shire-candidate.md`
 - Create: `.agent/knowledge/product/shire-recruiter.md`
@@ -213,10 +212,7 @@ Replace `apps/agent/src/runtime/knowledge-sources.ts` with:
 
 ```ts
 export type KnowledgeCorpus = "repository" | "product";
-export type ProductKnowledgeAudience =
-  | "general"
-  | "candidate"
-  | "recruiter";
+export type ProductKnowledgeAudience = "general" | "candidate" | "recruiter";
 
 export type KnowledgeSource = {
   path: string;
@@ -297,46 +293,61 @@ Create `.agent/knowledge/product/shire-general.md` with these exact top-level se
 # Shire Product Guide
 
 ## What Shire Is
-Shire is an AI-assisted hiring marketplace with wallet-based identity and stablecoin escrow on Celo. A user may look for jobs, recruit talent, or use both modes.
+
+Shire is an AI-assisted hiring marketplace with wallet-based identity and stablecoin escrow on Stellar. A user may look for jobs, recruit talent, or use both modes.
 
 ## Core Principle
+
 AI finds and explains opportunities. Users approve important actions. The smart contract locks escrowed stakes. Workflows track application state. Human reviewers resolve disputes. The contract settles funds.
 
 ## Identity and Modes
+
 One wallet represents one Shire user identity. The same user may have a candidate profile and may own or manage one or more companies or agencies. Switching mode changes the active product context, not permanent permissions.
 
 ## AI Responsibilities
+
 AI may draft candidate profiles, explain matches, recommend jobs or talent, and summarize dispute evidence. AI cannot sign wallet transactions, apply or invite without approval, make final hiring decisions, resolve disputes, or move escrowed funds.
 
 ## Matching
+
 Shire combines deterministic eligibility checks with skill and requirement matching. Match explanations may include aligned skills, missing requirements, confidence, and risk flags. A recommendation is guidance, not a hiring decision.
 
 ## Application and Escrow Lifecycle
+
 A candidate chooses a job and approves an applicant stake transaction. A company may accept and approve its company stake. The contract records application state and locks funds until completion, expiration, cancellation, or dispute settlement.
 
 ## Completion, Expiration, and Refunds
+
 Normal completion requires the supported confirmation flow before escrow is released. If a company does not respond before the configured deadline, an eligible applicant may request the supported expired-application refund flow.
 
 ## Disputes
+
 Candidates or companies may open a dispute and submit evidence. AI can summarize evidence and timelines but cannot choose a winner. An authorized human resolver reviews the case and submits the settlement decision.
 
 ## Onchain and Offchain Data
+
 Escrow state and settlement events are onchain. Profiles, CV content, job descriptions, recommendations, and private evidence remain offchain. Sensitive profile or CV data must not be written onchain.
 
 ## Security and Privacy
+
 Users approve wallet transactions themselves. Shire does not treat AI output as authorization. Product access is determined by authenticated identity, company membership, and resource ownership.
 
 ## Frequently Asked Questions
+
 ### Can Shire apply or stake automatically?
+
 No. The user must approve important actions and sign wallet transactions.
 
 ### Does a user have one permanent role?
+
 No. A user can use candidate mode, recruiter mode, or both.
 
 ### Does AI decide disputes?
+
 No. AI only summarizes evidence for human review.
 
 ### Are CVs stored onchain?
+
 No. Sensitive candidate and application data remains offchain.
 ```
 
@@ -348,30 +359,39 @@ Create `.agent/knowledge/product/shire-candidate.md`:
 # Shire Candidate Guide
 
 ## Candidate Onboarding
+
 Candidate mode is for finding work. A user creates or opens a candidate profile and may upload a CV to produce an AI-assisted profile draft.
 
 ## CV and Profile Review
+
 The CV draft is not final. The candidate reviews, edits, and confirms the profile before it becomes eligible for matching. Missing or unsupported facts must not be invented.
 
 ## Job Recommendations
+
 Shire compares a confirmed candidate profile with active jobs. Recommendations explain matching skills, requirements, gaps, confidence, and relevant risks. Jobs owned by a company the user manages must be excluded.
 
 ## Applying
+
 The candidate chooses whether to apply. Shire must not apply automatically. Before an escrowed application is created, the UI shows the required transaction and the candidate approves it in their wallet.
 
 ## Candidate Stake
-The candidate stake is locked by the supported Celo escrow contract for that application. The assistant must not invent an amount, token, fee, or deadline when the current job or application context does not provide one.
+
+The candidate stake is locked by the supported Stellar escrow contract for that application. The assistant must not invent an amount, token, fee, or deadline when the current job or application context does not provide one.
 
 ## Application Status
+
 The candidate can review application state, company acceptance, stake state, completion state, expiration, and dispute status for applications they are authorized to access.
 
 ## Completion and Refund
+
 The supported completion flow releases escrow after the required confirmations. If the company does not respond before an applicable deadline, the candidate may use the supported expired refund flow.
 
 ## Candidate Disputes
+
 The candidate may open a dispute and submit evidence. AI summarizes the evidence but does not decide fault or payout. An authorized resolver makes the final decision.
 
 ## Candidate AI Boundaries
+
 AI cannot submit an application, sign a transaction, confirm completion, open a dispute, or accept a settlement for the candidate.
 ```
 
@@ -383,27 +403,35 @@ Create `.agent/knowledge/product/shire-recruiter.md`:
 # Shire Recruiter Guide
 
 ## Company and Agency Setup
+
 Recruiter mode is for finding talent. A user may create or manage one or more companies or agencies. Company membership determines which resources and actions the user may access.
 
 ## Job Creation
+
 Authorized company members create and edit job posts. Active jobs may participate in talent matching. Job requirements should describe required skills, optional skills, work arrangement, location, experience, compensation when available, and supported stake settings.
 
 ## Talent Recommendations
+
 Shire compares active jobs with confirmed candidate profiles. Recommendations explain aligned skills, missing requirements, confidence, and risk flags. Company owners or members must not be recommended for their own job.
 
 ## Invitations and Applications
+
 AI may recommend candidates, but an authorized recruiter decides whether to invite or proceed. AI cannot invite, accept, reject, or hire automatically.
 
 ## Company Stake
+
 When the supported application flow requires company escrow, an authorized company user reviews the amount and approves the wallet transaction. The assistant must not invent amounts, fees, tokens, or deadlines.
 
 ## Completion and Disputes
+
 Authorized company users may perform supported completion and dispute actions. Evidence remains offchain while supported evidence hashes and escrow state may be recorded onchain. AI only summarizes evidence.
 
 ## Multiple Companies
+
 The active company context determines which jobs, candidates, and applications are available. Product knowledge does not grant access to another company.
 
 ## Recruiter AI Boundaries
+
 AI cannot sign transactions, invite candidates without approval, make final hiring decisions, resolve disputes, or move escrowed funds.
 ```
 
@@ -429,6 +457,7 @@ git commit -m "feat(agent): add role-aware product corpus"
 ### Task 3: Store and Query Corpus/Audience Metadata
 
 **Files:**
+
 - Modify: `apps/agent/src/runtime/knowledge.ts`
 - Modify: `apps/agent/test/knowledge.test.ts`
 
@@ -466,22 +495,26 @@ test("builds repository and role-aware product filters", () => {
 test("product retrieval passes the role filter before ranking", async () => {
   let receivedFilter: unknown;
 
-  const results = await searchProductKnowledge("How does staking work?", "candidate", {
-    indexes: ["shire-context"],
-    embed: async () => ({ embedding: [0.1, 0.2] }),
-    query: async (input) => {
-      receivedFilter = input.filter;
-      return [
-        {
-          score: 0.9,
-          metadata: {
-            path: ".agent/knowledge/product/shire-candidate.md",
-            text: "Candidate staking requires wallet approval.",
+  const results = await searchProductKnowledge(
+    "How does staking work?",
+    "candidate",
+    {
+      indexes: ["shire-context"],
+      embed: async () => ({ embedding: [0.1, 0.2] }),
+      query: async (input) => {
+        receivedFilter = input.filter;
+        return [
+          {
+            score: 0.9,
+            metadata: {
+              path: ".agent/knowledge/product/shire-candidate.md",
+              text: "Candidate staking requires wallet approval.",
+            },
           },
-        },
-      ];
+        ];
+      },
     },
-  });
+  );
 
   assert.deepEqual(receivedFilter, {
     corpus: "product",
@@ -546,14 +579,12 @@ import type {
   ProductKnowledgeAudience,
 } from "./knowledge-sources";
 
-export type ProductKnowledgeRole = Exclude<
-  ProductKnowledgeAudience,
-  "general"
->;
+export type ProductKnowledgeRole = Exclude<ProductKnowledgeAudience, "general">;
 
-export function buildKnowledgeFilter(input:
-  | { corpus: "repository" }
-  | { corpus: "product"; role: ProductKnowledgeRole }
+export function buildKnowledgeFilter(
+  input:
+    | { corpus: "repository" }
+    | { corpus: "product"; role: ProductKnowledgeRole },
 ) {
   if (input.corpus === "repository") {
     return { corpus: "repository" } as const;
@@ -598,8 +629,9 @@ async function searchKnowledgeWithFilter(
   }
 
   const { embedding } = await (dependencies?.embed ?? embedText)(query);
-  const results = await (dependencies?.query ??
-    ((input) => vector!.query(input)))({
+  const results = await (
+    dependencies?.query ?? ((input) => vector!.query(input))
+  )({
     indexName: env.agentKnowledgeIndex,
     queryVector: embedding,
     topK: env.ragTopK,
@@ -677,6 +709,7 @@ git commit -m "feat(agent): filter knowledge by corpus and role"
 ### Task 4: Build Trusted Product Context
 
 **Files:**
+
 - Create: `apps/agent/src/runtime/product-knowledge.ts`
 - Create: `apps/agent/test/product-knowledge.test.ts`
 - Modify: `apps/agent/test/index.ts`
@@ -736,19 +769,19 @@ test("enriches an allowed candidate request with product context", async () => {
     context: [{ role: "system", content: "Viewer: candidate-001" }],
   };
 
-  const result = await enrichChatRequestWithProductKnowledge(body, async (
-    query,
-    role,
-  ) => {
-    assert.equal(query, "How does candidate staking work?");
-    assert.equal(role, "candidate");
-    return [
-      {
-        path: ".agent/knowledge/product/shire-candidate.md",
-        text: "The candidate approves the stake in their wallet.",
-      },
-    ];
-  });
+  const result = await enrichChatRequestWithProductKnowledge(
+    body,
+    async (query, role) => {
+      assert.equal(query, "How does candidate staking work?");
+      assert.equal(role, "candidate");
+      return [
+        {
+          path: ".agent/knowledge/product/shire-candidate.md",
+          text: "The candidate approves the stake in their wallet.",
+        },
+      ];
+    },
+  );
 
   assert.equal(result.role, "candidate");
   assert.equal(result.resultCount, 1);
@@ -920,6 +953,7 @@ git commit -m "feat(agent): compose role-aware product context"
 ### Task 5: Enrich Allowed HTTP Chat Requests Before Mastra
 
 **Files:**
+
 - Modify: `apps/agent/src/server.ts`
 - Modify: `apps/agent/test/server.test.ts`
 
@@ -946,16 +980,15 @@ async function startTestServer(
   };
 }
 
-async function stopTestServer(server: Awaited<
-  ReturnType<typeof createRuntimeHttpServer>
->) {
+async function stopTestServer(
+  server: Awaited<ReturnType<typeof createRuntimeHttpServer>>,
+) {
   server.close();
   await once(server, "close");
 }
 
 function createChatBody(role: "candidate" | "recruiter", text: string) {
-  const viewerId =
-    role === "candidate" ? "candidate-001" : "recruiter-001";
+  const viewerId = role === "candidate" ? "candidate-001" : "recruiter-001";
 
   return {
     scope: {
@@ -1192,6 +1225,7 @@ git commit -m "feat(agent): ground chat with product knowledge"
 ### Task 6: Strengthen Product-Grounded Agent Instructions
 
 **Files:**
+
 - Modify: `apps/agent/src/mastra/agents/role-aware-chat.agent.ts`
 - Modify: `apps/agent/test/chat-agent.test.ts`
 
@@ -1253,13 +1287,14 @@ git commit -m "feat(agent): require product-grounded chat answers"
 ### Task 7: Document Synchronization and Run Full Verification
 
 **Files:**
+
 - Modify: `apps/agent/README.md`
 
 - [ ] **Step 1: Add product knowledge operations documentation**
 
 Add this section to `apps/agent/README.md`:
 
-```markdown
+````markdown
 ## Product knowledge
 
 The role-aware chat assistant uses curated product documents:
@@ -1273,6 +1308,7 @@ Synchronize the vector index after changing these files:
 ```bash
 npm run dev --workspace=@shire/agent -- knowledge-sync
 ```
+````
 
 Candidate chat retrieves `general + candidate` chunks. Recruiter chat retrieves
 `general + recruiter` chunks. The prompt-injection and out-of-scope guard runs
@@ -1281,7 +1317,8 @@ before retrieval.
 Product retrieval requires the configured embedding provider. If the index is
 missing or retrieval fails, chat continues without product chunks and the agent
 must not invent unavailable product behavior.
-```
+
+````
 
 - [ ] **Step 2: Run product knowledge synchronization**
 
@@ -1289,7 +1326,7 @@ Run:
 
 ```powershell
 npm.cmd run dev --workspace=@shire/agent -- knowledge-sync
-```
+````
 
 Expected:
 

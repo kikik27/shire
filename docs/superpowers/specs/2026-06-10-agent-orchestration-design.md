@@ -12,7 +12,7 @@ Build `apps/agent` as the orchestration layer for Shire. The workspace should co
 
 ## Non-Goals
 - Implement production database access.
-- Implement real Celo transaction signing or escrow settlement logic yet.
+- Implement real Stellar transaction signing or escrow settlement logic yet.
 - Add UI code or web app behavior here.
 - Add extra agent domains beyond the five current workflow families.
 - Introduce shared packages back into the repo.

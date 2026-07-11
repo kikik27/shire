@@ -1,106 +1,86 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, LogOut, UserCircle } from "lucide-react";
-import { toast } from "sonner";
-import { PRIVY_ENABLED, useAuth } from "@/lib/auth/use-auth";
-import { useLoginDestination } from "@/lib/auth/use-login-destination";
+import * as React from "react";
+import { ChevronDown, Loader2, Wallet } from "lucide-react";
+import { useStellarWallet } from "@/components/site/stellar-wallet-provider";
+import { truncateAddress } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { WalletAddressBadge } from "@/components/wallet/wallet-address-badge";
+import { WalletMenuDialog } from "@/components/wallet/wallet-menu-dialog";
 
+/**
+ * Header wallet button. When disconnected it connects a Stellar wallet; when
+ * connected it opens a popup (WalletMenuDialog) with faucet, signing, and
+ * disconnect — like a profile menu.
+ */
 export function WalletConnectButton({
   size = "default",
-  autoNavigateOnConnect = false,
-  accountLabel = "Account",
-  accountDescription = "Signed in",
+  accountLabel = "Stellar wallet",
+  accountDescription = "Testnet",
   className,
 }: {
   size?: "sm" | "default" | "lg";
-  /** Navigate to the resolved login destination (dashboard or onboarding) once connected. */
-  autoNavigateOnConnect?: boolean;
+  /** Label shown on the connected account chip. */
   accountLabel?: string;
   accountDescription?: string;
   className?: string;
 }) {
-  const router = useRouter();
-  const { address, isConnected, connecting, connect, disconnect } = useAuth();
-  const { goToLoginDestination } = useLoginDestination();
-
-  // When Privy connects, land the user on their role dashboard (or onboarding
-  // if they have no profile yet) instead of always forcing onboarding.
-  useEffect(() => {
-    if (!PRIVY_ENABLED || !autoNavigateOnConnect || !isConnected) return;
-    const cancel = goToLoginDestination("push");
-    return cancel;
-  }, [isConnected, autoNavigateOnConnect, goToLoginDestination]);
+  const { address, isConnected, connecting, connect, ready } = useStellarWallet();
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   async function onConnect() {
-    await connect();
+    try {
+      await connect();
+    } catch {
+      /* surfaced inside the kit modal; open the popup for retries */
+      setMenuOpen(true);
+    }
   }
 
   if (!isConnected) {
     return (
-      <Button
-        size={size}
-        onClick={onConnect}
-        disabled={connecting || !PRIVY_ENABLED}
-        className={className}
-      >
-        {connecting ? (
-          <>
-            <Loader2 className="size-4 animate-spin" />
-            Signing in...
-          </>
-        ) : (
-          <>
-            <UserCircle className="size-4" />
-            {PRIVY_ENABLED ? "Sign in" : "Sign-in unavailable"}
-          </>
-        )}
-      </Button>
+      <>
+        <Button
+          size={size}
+          onClick={onConnect}
+          disabled={connecting || !ready}
+          className={className}
+        >
+          {connecting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" /> Connecting…
+            </>
+          ) : (
+            <>
+              <Wallet className="size-4" /> Connect Stellar Wallet
+            </>
+          )}
+        </Button>
+        <WalletMenuDialog
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          accountDescription={accountDescription}
+        />
+      </>
     );
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size={size} className="max-w-[220px] justify-start gap-2">
-          <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
-          <span className="truncate">{accountLabel}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>
-          <span className="block truncate">{accountLabel}</span>
-          <span className="block truncate text-xs font-normal text-muted-foreground">
-            {accountDescription}
-          </span>
-        </DropdownMenuLabel>
-        <div className="flex flex-col gap-2 px-2 py-1.5">
-          {address ? <WalletAddressBadge address={address} /> : null}
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => {
-            disconnect();
-            toast("Signed out");
-            router.push("/");
-          }}
-          className="text-destructive focus:text-destructive"
-        >
-          <LogOut className="size-4" />
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <Button
+        variant="outline"
+        size={size}
+        onClick={() => setMenuOpen(true)}
+        className={`max-w-[220px] justify-start gap-2 ${className ?? ""}`}
+      >
+        <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
+        <span className="truncate">{address ? truncateAddress(address, 4) : accountLabel}</span>
+        <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+      </Button>
+      <WalletMenuDialog
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        accountDescription={accountDescription}
+      />
+    </>
   );
 }
