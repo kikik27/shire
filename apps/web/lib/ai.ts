@@ -137,7 +137,7 @@ export function recommendStake(
 
   if (job.riskLevel === "HIGH") {
     return {
-      recommendedRecruiterStake: "20 cUSD",
+      recommendedRecruiterStake: "20 XLM",
       candidateStakeRequired: false,
       stakeReason: "High-risk signals detected. A higher stake and admin review are advised.",
       refundPolicy: "Held until admin review clears the listing.",
@@ -145,14 +145,14 @@ export function recommendStake(
   }
   if (verified && !newRecruiter) {
     return {
-      recommendedRecruiterStake: "3–5 cUSD",
+      recommendedRecruiterStake: "3–5 XLM",
       candidateStakeRequired: false,
       stakeReason: "Verified company with hiring history. A light stake signals good faith.",
       refundPolicy: "Refundable when the job closes without a valid dispute.",
     };
   }
   return {
-    recommendedRecruiterStake: "10–20 cUSD",
+    recommendedRecruiterStake: "10–20 XLM",
     candidateStakeRequired: false,
     stakeReason: "New recruiter or unverified company. A higher stake builds candidate trust.",
     refundPolicy: "Refundable when the job closes without a valid dispute.",

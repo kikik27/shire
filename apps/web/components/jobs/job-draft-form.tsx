@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/form";
 import { SkillInput } from "@/components/profile/skill-input";
 
-const SKILLS = ["React", "TypeScript", "Solidity", "Figma", "Node.js", "SQL", "Tailwind", "viem"];
+const SKILLS = ["React", "TypeScript", "Rust", "Figma", "Node.js", "SQL", "Tailwind", "Stellar"];
 
 export function JobDraftForm({
   isSubmitting = false,
@@ -61,7 +61,7 @@ export function JobDraftForm({
             <FormItem>
               <FormLabel>Job title</FormLabel>
               <FormControl>
-                <Input placeholder="Senior Solidity Engineer" {...field} />
+                <Input placeholder="Senior Soroban Engineer" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -208,7 +208,7 @@ export function JobDraftForm({
               <div className="space-y-0.5">
                 <FormLabel>Require candidate stake</FormLabel>
                 <FormDescription>
-                  Candidates must lock cUSD to apply. This reduces low-effort applications.
+                  Candidates must lock XLM to apply. This reduces low-effort applications.
                 </FormDescription>
               </div>
               <FormControl>

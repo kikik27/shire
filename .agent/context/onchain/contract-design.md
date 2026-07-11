@@ -116,5 +116,5 @@ DisputeResolved(application_id, applicant_payout, company_payout)
 ```
 
 Sync implication: reading these back is a ledger-range `getEvents` RPC poll
-(`@stellar/stellar-sdk`'s `SorobanRpc.Server`), not a Solidity/viem `getLogs`-style block-range
-listener. See `sync.md`.
+(`@stellar/stellar-sdk`'s `SorobanRpc.Server`), not an EVM `eth_getLogs`-style
+block-range listener. See `sync.md`.

@@ -1,5 +1,12 @@
 # Shire Cleanup & Refactor Plan (Fase A)
 
+> **Historical note (2026-07):** This plan predates the finalized Stellar
+> stack. References to `wagmi`, `ShireEscrow.sol` (Solidity), and a "Celo→Stellar
+> migration" are obsolete — the project now uses **Stellar/Soroban** (Rust) with
+> `@stellar/freighter-api` for wallet connectivity and `@stellar/stellar-sdk`
+> for signing. The cleanup goals (remove dead web3 plumbing) were still executed;
+> only the EVM-specific tooling names are outdated.
+
 > **Status (2026-07-06):** Fase A1.1–A1.2 complete (`lib/contracts/*`, `lib/wallet/config.ts` removed).
 > Fase A1.3 (`onchain-sync.processor.ts` / `run-onchain-sync.ts`) is superseded by the
 > Celo→Stellar/Soroban migration — those stubs are being evolved for Stellar rather than

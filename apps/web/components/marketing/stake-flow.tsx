@@ -31,9 +31,9 @@ const flowCopy: Record<FlowRole, { label: string; description: string; steps: Fl
     steps: [
       {
         label: "Apply + stake",
-        detail: "Candidate applies to a role and commits 250 cUSD.",
+        detail: "Candidate applies to a role and commits 250 XLM.",
         icon: UsersIcon,
-        badge: "250 cUSD",
+        badge: "250 XLM",
       },
       {
         label: "Escrow",
@@ -60,9 +60,9 @@ const flowCopy: Record<FlowRole, { label: string; description: string; steps: Fl
     steps: [
       {
         label: "Open + stake",
-        detail: "Recruiter opens a role and commits 250 cUSD.",
+        detail: "Recruiter opens a role and commits 250 XLM.",
         icon: BriefcaseIcon,
-        badge: "250 cUSD",
+        badge: "250 XLM",
       },
       {
         label: "Escrow",

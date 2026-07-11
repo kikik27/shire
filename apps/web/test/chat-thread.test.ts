@@ -144,10 +144,10 @@ test("builds recruiter hiring assistant copy from active page scope", () => {
   const copy = buildThreadCopy({
     role: "recruiter",
     resourceType: "job",
-    resourceLabel: "Solidity Engineer",
+    resourceLabel: "Soroban Engineer",
   });
 
-  assert.equal(copy.emptyTitle, "Ask Shire about Solidity Engineer");
+  assert.equal(copy.emptyTitle, "Ask Shire about Soroban Engineer");
   assert.equal(copy.placeholder, "Ask about this hiring role...");
   assert.equal(copy.contextLabel, "Recruiter + role context");
   assert.deepEqual(copy.suggestions, [

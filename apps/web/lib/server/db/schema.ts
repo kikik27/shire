@@ -154,7 +154,7 @@ export const jobs = pgTable("jobs", {
   stakeAmount: numeric("stake_amount", { precision: 12, scale: 2 })
     .default("0")
     .notNull(),
-  stakeToken: text("stake_token").default("cUSD").notNull(),
+  stakeToken: text("stake_token").default("XLM").notNull(),
   candidateStakeRequired: boolean("candidate_stake_required")
     .default(false)
     .notNull(),

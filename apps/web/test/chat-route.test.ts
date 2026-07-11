@@ -46,7 +46,7 @@ const validJobDraft = {
   salaryRange: "$140k-$180k",
   jobType: "FULL_TIME",
   experienceLevel: "SENIOR",
-  skillsRequired: ["TypeScript", "Solidity"],
+  skillsRequired: ["TypeScript", "Soroban"],
   candidateStakeRequired: false,
 } satisfies CreateJobInput;
 

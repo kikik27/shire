@@ -44,7 +44,7 @@ test("admin stake transitions are persisted with an audit record", async () => {
     ownerUserId: "user-1",
     type: "JOB_POST",
     amount: 25,
-    token: "cUSD",
+    token: "XLM",
     idempotencyKey: "job:job-1",
     jobId: "job-1",
   });
@@ -134,7 +134,7 @@ test("admin dispute resolution settles the linked stake and audits both", async 
     ownerUserId: "user-1",
     type: "APPLICATION",
     amount: 10,
-    token: "cUSD",
+    token: "XLM",
     idempotencyKey: "application:1",
   });
   const disputes = createInMemoryDisputesRepository();

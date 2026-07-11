@@ -32,7 +32,7 @@ const jobPayload = {
   salaryRange: "$120k-$160k",
   jobType: "FULL_TIME",
   experienceLevel: "SENIOR",
-  skillsRequired: ["TypeScript", "Solidity"],
+  skillsRequired: ["TypeScript", "Soroban"],
   candidateStakeRequired: false,
 } satisfies CreateJobInput;
 

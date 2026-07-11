@@ -59,7 +59,7 @@ export function StakeModel() {
             <p className="text-sm text-foreground/90">
               <span className="font-medium">New to crypto? You don&apos;t need to be.</span>{" "}
               Sign in with email or Google and Shire sets up your account. Stakes show in
-              USD-pegged cUSD and never leave escrow until you both confirm.
+              USD-pegged XLM and never leave escrow until you both confirm.
             </p>
           </div>
           <Button asChild size="sm" variant="outline" className="shrink-0">

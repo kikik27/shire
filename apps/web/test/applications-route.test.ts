@@ -27,14 +27,14 @@ const jobPayload = {
   salaryRange: "$120k-$160k",
   jobType: "FULL_TIME" as const,
   experienceLevel: "SENIOR" as const,
-  skillsRequired: ["TypeScript", "Solidity"],
+  skillsRequired: ["TypeScript", "Soroban"],
   candidateStakeRequired: false,
 };
 
 const candidateProfile = {
   displayName: "Alex Candidate",
   bio: "Experienced protocol engineer building production systems.",
-  skills: ["TypeScript", "Solidity"],
+  skills: ["TypeScript", "Soroban"],
   roleTargets: ["Protocol Engineer"],
   experienceLevel: "SENIOR" as const,
   githubUrl: "https://github.com/alex",
@@ -144,7 +144,7 @@ test("recruiter job applications GET requires job ownership", async () => {
           candidate: {
             displayName: "Alex Candidate",
             headline: "Protocol Engineer",
-            skills: ["TypeScript", "Solidity"],
+            skills: ["TypeScript", "Soroban"],
             location: "Jakarta",
             githubUrl: "https://github.com/alex",
           },
@@ -193,7 +193,7 @@ test("recruiter applications GET returns candidate summaries only for owned jobs
   assert.deepEqual(body.applications[0].candidate, {
     displayName: "Alex Candidate",
     headline: "Protocol Engineer",
-    skills: ["TypeScript", "Solidity"],
+    skills: ["TypeScript", "Soroban"],
     location: "Jakarta",
     githubUrl: "https://github.com/alex",
   });

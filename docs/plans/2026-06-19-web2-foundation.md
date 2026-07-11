@@ -1,5 +1,11 @@
 # Shire Web2 Foundation Plan (Fase B)
 
+> **Historical note (2026-07):** The "out of scope / future" references to
+> `ShireEscrow.sol` and a `wagmi provider` are obsolete. The on-chain layer is
+> **Stellar/Soroban** (Rust) with `@stellar/freighter-api` (wallet) and
+> `@stellar/stellar-sdk` (signing). The web2 foundation goals here were executed
+> as written; only the future-tooling names are outdated.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **Prerequisite:** Fase A (cleanup-refactor) selesai.
 
 **Goal:** Membangun fondasi fitur web2 end-to-end: auth session enforced, data layer lengkap, API routes, dan halaman terhubung ke DB. Lingkup MVP saja (auth, profile, jobs, applications). Tanpa onchain.

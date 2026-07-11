@@ -14,7 +14,7 @@ import {
 const candidateProfile = {
   displayName: "Candidate One",
   bio: "Experienced protocol engineer building secure web3 products.",
-  skills: ["TypeScript", "Solidity"],
+  skills: ["TypeScript", "Soroban"],
   roleTargets: ["Protocol Engineer"],
   experienceLevel: "SENIOR",
   languages: ["English", "Indonesian"],

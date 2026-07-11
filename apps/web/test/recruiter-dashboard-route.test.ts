@@ -23,7 +23,7 @@ test("recruiter dashboard aggregates only owned jobs", async () => {
         experienceLevel: "SENIOR" as const,
         status: "ACTIVE" as const,
         stakeAmount: 100,
-        stakeToken: "cUSD" as const,
+        stakeToken: "XLM" as const,
         createdAt: 1_750_000_000_000,
         applicantCount: 2,
       },

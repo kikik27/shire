@@ -31,11 +31,11 @@ import {
 } from "@/components/ui/form";
 import { SkillInput } from "@/components/profile/skill-input";
 
-const SKILLS = ["React", "TypeScript", "Solidity", "Figma", "Node.js", "SQL", "Tailwind", "viem"];
+const SKILLS = ["React", "TypeScript", "Rust", "Figma", "Node.js", "SQL", "Tailwind", "Stellar"];
 const ROLES = [
   "Frontend Engineer",
   "Product Designer",
-  "Solidity Engineer",
+  "Soroban Engineer",
   "Data Analyst",
   "Community Manager",
 ];
