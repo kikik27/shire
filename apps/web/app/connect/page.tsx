@@ -12,23 +12,41 @@ import { Button } from "@/components/ui/button";
 /**
  * Sign-in page. The primary flow is "Connect Stellar Wallet" — connecting a
  * wallet also signs in (signs a challenge → server sets a session cookie).
- * Email/social login via Privy is offered as a secondary option for users who
- * prefer it.
+ * Email/social login via Privy is offered as a secondary option.
+ *
+ * A user is considered signed in once EITHER path completes: the Stellar
+ * wallet is connected, OR Privy reports an authenticated session. Either way we
+ * resolve the landing destination and navigate there.
  */
 export default function ConnectPage() {
-  const { isConnected, connecting, connect, address } = useStellarWallet();
-  const { connecting: emailConnecting, connect: privyLogin } = useAuth();
+  const { isConnected: walletConnected, connecting: walletConnecting, connect: connectWallet, address } =
+    useStellarWallet();
+  const {
+    isConnected: identityConnected,
+    connecting: identityConnecting,
+    connect: privyLogin,
+  } = useAuth();
   const { goToLoginDestination } = useLoginDestination();
+
+  // "Signed in" = wallet session OR Privy session. This drives the Continue CTA.
+  const signedIn = walletConnected || identityConnected;
 
   async function onConnectWallet() {
     try {
-      await connect();
+      await connectWallet();
     } catch (error) {
       toast.error("Couldn't connect wallet", {
         description: error instanceof Error ? error.message : "Try again in a moment.",
       });
     }
   }
+
+  // As soon as either identity path resolves to connected, land the user on
+  // their dashboard (or onboarding if they have no profile yet).
+  React.useEffect(() => {
+    if (!signedIn) return;
+    return goToLoginDestination("push");
+  }, [signedIn, goToLoginDestination]);
 
   return (
     <AuthShell back={{ href: "/", label: "Back home" }}>
@@ -42,10 +60,12 @@ export default function ConnectPage() {
         </p>
 
         <div className="mt-7 space-y-3">
-          {isConnected ? (
+          {signedIn ? (
             <>
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
-                <span className="text-muted-foreground">Connected</span>
+                <span className="text-muted-foreground">
+                  {walletConnected ? "Wallet connected" : "Signed in"}
+                </span>
                 <span className="font-mono text-xs">
                   {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : ""}
                 </span>
@@ -56,8 +76,13 @@ export default function ConnectPage() {
               </Button>
             </>
           ) : (
-            <Button size="lg" className="w-full" onClick={onConnectWallet} disabled={connecting}>
-              {connecting ? (
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={onConnectWallet}
+              disabled={walletConnecting}
+            >
+              {walletConnecting ? (
                 <>
                   <Loader2 className="size-4 animate-spin" /> Connecting…
                 </>
@@ -81,9 +106,9 @@ export default function ConnectPage() {
               size="sm"
               className="w-full"
               onClick={() => void privyLogin()}
-              disabled={emailConnecting}
+              disabled={identityConnecting}
             >
-              {emailConnecting ? (
+              {identityConnecting ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Mail className="size-4" />
