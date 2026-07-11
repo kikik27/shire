@@ -11,7 +11,11 @@
         "SHIRE_AGENT_INTERNAL_URL",
         "SHIRE_AGENT_SERVICE_TOKEN",
         "DATABASE_URL",
-        "DIRECT_DATABASE_URL"
+        "DIRECT_DATABASE_URL",
+        "NEXT_PUBLIC_STELLAR_NETWORK",
+        "NEXT_PUBLIC_STELLAR_HORIZON_URL",
+        "NEXT_PUBLIC_STELLAR_FRIENDBOT_URL",
+        "SESSION_SECRET"
       ]
     },
     "dev": { "cache": false, "persistent": true },
