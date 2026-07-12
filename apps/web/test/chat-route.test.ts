@@ -91,7 +91,7 @@ function successfulFetch(capture: {
 
 function authenticatedUser() {
   return async () =>
-    ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const;
+    ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const;
 }
 
 test("candidate can chat about a real active job", async () => {
@@ -273,7 +273,7 @@ test("candidate cannot use a non-active job context", async () => {
   assert.deepEqual(await response.json(), { error: "resource-forbidden" });
 });
 
-test("chat rejects a missing Privy token when Privy is configured", async () => {
+test("chat rejects a request without a Stellar session", async () => {
   const handler = createChatPostHandler({
     agentUrl: "http://agent.local/chat/role-aware-chat-agent",
     repository: createInMemoryProfileRepository(),
@@ -302,7 +302,7 @@ test("chat ignores spoofed viewer and memory identifiers", async () => {
     fetcher: successfulFetch(capture),
     repository,
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 
@@ -334,7 +334,7 @@ test("chat rejects a role without a saved profile", async () => {
     agentUrl: "http://agent.local/chat/role-aware-chat-agent",
     repository,
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 
@@ -357,7 +357,7 @@ test("chat forwards a server-generated role-specific memory key", async () => {
     fetcher: successfulFetch(capture),
     repository,
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 
@@ -383,7 +383,7 @@ test("chat forwards trusted candidate name context", async () => {
     fetcher: successfulFetch(capture),
     repository,
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 
@@ -407,7 +407,7 @@ test("chat sends the internal service token to the agent", async () => {
     fetcher: successfulFetch(capture),
     repository,
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 
@@ -435,7 +435,7 @@ test("returns a 502 when the agent endpoint is unreachable", async () => {
     }) as typeof fetch,
     repository,
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 
@@ -455,7 +455,7 @@ test("returns an error when the agent chat url is missing", async () => {
     agentUrl: "",
     repository: createInMemoryProfileRepository(),
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:user-1" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:user-1", walletAddress: "GTESTAUTH" }) as const,
     serviceToken: "service-secret",
   });
 

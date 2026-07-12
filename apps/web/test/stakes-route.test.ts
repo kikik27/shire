@@ -73,7 +73,7 @@ test("stake route accepts owned jobs and rejects foreign jobs", async () => {
   const handlers = createStakesRouteHandlers({
     authorization: {
       authenticate: async () =>
-        ({ mode: "privy", privyUserId: "did:privy:recruiter" }) as const,
+        ({ mode: "stellar", privyUserId: "did:privy:recruiter", walletAddress: "GTESTAUTH" }) as const,
       users,
     },
     stakesRepository: createInMemoryStakesRepository(),

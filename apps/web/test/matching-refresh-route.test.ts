@@ -7,7 +7,7 @@ import { createInMemoryProfileRepository } from "../lib/server/profile-repositor
 import { createInMemoryJobsRepository } from "../lib/server/jobs-repository";
 
 function mockAuthenticated(privyUserId: string) {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 test("candidate matching refresh enqueues job-matching with the resolved user id", async () => {

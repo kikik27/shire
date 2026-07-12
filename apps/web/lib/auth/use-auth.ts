@@ -1,10 +1,14 @@
 "use client";
 
-import { usePrivy } from "@privy-io/react-auth";
-
-/** True when a Privy app id is configured. Read once at module load, stable per build. */
-export const PRIVY_ENABLED = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
-
+/**
+ * Auth state hook.
+ *
+ * Auth is now "Sign in with Stellar" only (see lib/server/session.ts and the
+ * StellarWalletProvider). There is no email/social identity layer anymore.
+ * This hook returns a disconnected stub: callers that still destructure it
+ * (e.g. the connect page's fallback) simply never report an identity
+ * connection, because the wallet layer (useStellarWallet) is the real signal.
+ */
 export type AuthState = {
   address: string | null;
   isConnected: boolean;
@@ -13,7 +17,7 @@ export type AuthState = {
   disconnect: () => void;
 };
 
-function useUnavailableAuth(): AuthState {
+export function useAuth(): AuthState {
   return {
     address: null,
     isConnected: false,
@@ -21,26 +25,4 @@ function useUnavailableAuth(): AuthState {
     connect: () => undefined,
     disconnect: () => undefined,
   };
-}
-
-function usePrivyAuth(): AuthState {
-  const { ready, authenticated, user, login, logout } = usePrivy();
-  const address = user?.wallet?.address ?? null;
-
-  return {
-    address: authenticated ? address : null,
-    isConnected: authenticated && Boolean(address),
-    connecting: !ready,
-    connect: () => login(),
-    disconnect: () => logout(),
-  };
-}
-
-/**
- * Single auth entry point for the app. `PRIVY_ENABLED` is a build-time constant, so the
- * branch never changes between renders and the conditional hook is safe.
- */
-export function useAuth(): AuthState {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- PRIVY_ENABLED is constant per build.
-  return PRIVY_ENABLED ? usePrivyAuth() : useUnavailableAuth();
 }

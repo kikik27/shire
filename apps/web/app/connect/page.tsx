@@ -1,43 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Loader2, Mail, Wallet } from "lucide-react";
+import { ArrowRight, Loader2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useStellarWallet } from "@/components/site/stellar-wallet-provider";
-import { useAuth } from "@/lib/auth/use-auth";
 import { useLoginDestination } from "@/lib/auth/use-login-destination";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { Button } from "@/components/ui/button";
 
 /**
- * Toggle the secondary email/social (Privy) login button on the connect page.
- * Hidden by default: Stellar is the only on-chain identity this app supports,
- * and Privy cannot generate a Stellar wallet. Flip to `true` to re-expose the
- * email path (the Privy provider/useAuth code stays intact regardless).
- */
-const EMAIL_LOGIN_ENABLED = false;
-
-/**
- * Sign-in page. The primary flow is "Connect Stellar Wallet" — connecting a
- * wallet also signs in (signs a challenge → server sets a session cookie).
- * Email/social login via Privy is offered as a secondary option.
- *
- * A user is considered signed in once EITHER path completes: the Stellar
- * wallet is connected, OR Privy reports an authenticated session. Either way we
- * resolve the landing destination and navigate there.
+ * Sign-in page. The only login method is "Connect Stellar Wallet" — connecting
+ * a Freighter wallet also signs in (signs a challenge → server sets a session
+ * cookie). Email/social login was removed because Privy cannot generate a
+ * Stellar wallet.
  */
 export default function ConnectPage() {
   const { isConnected: walletConnected, connecting: walletConnecting, connect: connectWallet, address } =
     useStellarWallet();
-  const {
-    isConnected: identityConnected,
-    connecting: identityConnecting,
-    connect: privyLogin,
-  } = useAuth();
   const { goToLoginDestination } = useLoginDestination();
-
-  // "Signed in" = wallet session OR Privy session. This drives the Continue CTA.
-  const signedIn = walletConnected || identityConnected;
 
   async function onConnectWallet() {
     try {
@@ -49,12 +29,12 @@ export default function ConnectPage() {
     }
   }
 
-  // As soon as either identity path resolves to connected, land the user on
-  // their dashboard (or onboarding if they have no profile yet).
+  // As soon as the wallet connects (sign-in completes), land the user on their
+  // dashboard (or onboarding if they have no profile yet).
   React.useEffect(() => {
-    if (!signedIn) return;
+    if (!walletConnected) return;
     return goToLoginDestination("push");
-  }, [signedIn, goToLoginDestination]);
+  }, [walletConnected, goToLoginDestination]);
 
   return (
     <AuthShell back={{ href: "/", label: "Back home" }}>
@@ -68,12 +48,10 @@ export default function ConnectPage() {
         </p>
 
         <div className="mt-7 space-y-3">
-          {signedIn ? (
+          {walletConnected ? (
             <>
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
-                <span className="text-muted-foreground">
-                  {walletConnected ? "Wallet connected" : "Signed in"}
-                </span>
+                <span className="text-muted-foreground">Wallet connected</span>
                 <span className="font-mono text-xs">
                   {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : ""}
                 </span>
@@ -102,34 +80,18 @@ export default function ConnectPage() {
             </Button>
           )}
 
-          {/* Email/social login (Privy) is hidden for now: Stellar is the only
-              on-chain identity this app supports, and Privy cannot generate a
-              Stellar wallet. The Privy code (provider, useAuth) is kept intact
-              and can be re-exposed by removing this flag. */}
-          {EMAIL_LOGIN_ENABLED ? (
-            <>
-              <div className="flex items-center gap-3 py-1">
-                <span className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <span className="h-px flex-1 bg-border" />
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                onClick={() => void privyLogin()}
-                disabled={identityConnecting}
-              >
-                {identityConnecting ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Mail className="size-4" />
-                )}
-                Continue with email
-              </Button>
-            </>
-          ) : null}
+          <p className="pt-2 text-center text-xs text-muted-foreground">
+            Don&apos;t have a wallet? Install the{" "}
+            <a
+              href="https://freighter.app"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Freighter
+            </a>{" "}
+            extension and set it to Testnet.
+          </p>
         </div>
       </div>
     </AuthShell>

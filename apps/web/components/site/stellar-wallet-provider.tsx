@@ -19,8 +19,9 @@ import {
  * `getAddress()` reads the authorized address; signMessage/signTransaction do
  * the signing.
  *
- * Privy (see privy-provider.tsx) still owns email/social login and identity;
- * this provider is responsible for the on-chain Stellar wallet only.
+ * This provider IS the app's identity layer: connecting a wallet signs in
+ * (challenge → server-verified session cookie). There is no separate
+ * email/social login.
  */
 
 const STORAGE_KEY = "shire.stellar.address";

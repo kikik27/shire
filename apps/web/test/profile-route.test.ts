@@ -40,10 +40,10 @@ const recruiterProfile = {
 
 function authenticated(
   privyUserId = "did:privy:user-1",
-  walletAddress?: string,
+  walletAddress = "GTESTAUTH",
 ) {
   return async () =>
-    ({ mode: "privy", privyUserId, walletAddress }) as const;
+    ({ mode: "stellar", privyUserId, walletAddress }) as const;
 }
 
 function jsonRequest(method: string, body?: unknown) {

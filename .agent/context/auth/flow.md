@@ -1,11 +1,10 @@
 # Authentication Flow
 
-The web app has two parallel sign-in paths. The **primary** path is "Sign in
-with Stellar" (connect a Stellar wallet); the **secondary** path is Privy
-(email/social). Both resolve to the same internal identity keyed on
-`privyUserId`.
+The web app has a single sign-in path: "Sign in with Stellar" (connect a
+Stellar wallet). Privy (email/social) was removed because it cannot generate a
+Stellar wallet.
 
-## Primary: Sign in with Stellar (wallet)
+## Sign in with Stellar (wallet)
 
 ```txt
 User opens Shire web
@@ -31,29 +30,15 @@ If onboarding is complete → redirect to the role dashboard
 
 See `stellar-wallet.md` for the wallet/session details.
 
-## Secondary: Privy (email/social)
+## Resolver
 
-```txt
-User clicks "Continue with email"
-   ↓
-Privy login (email / Google / passkey)
-   ↓
-Client gets a Privy access token (JWT), sent as Authorization: Bearer
-   ↓
-resolveAuthenticatedUser falls back to Privy verification (@privy-io/node)
-   ↓
-Find or create User by `privyUserId` (+ optional `walletAddress`)
-   ↓
-Redirect by onboarding state (same as above)
-```
+`resolveAuthenticatedUser` reads the `shire_session` cookie. If present and
+valid, it returns the wallet identity. If absent, it throws
+`AuthenticatedUserError` (401). This is the single chokepoint every protected
+API route uses.
 
-## Resolver priority
+## Route protection
 
-`resolveAuthenticatedUser` checks, in order:
-1. `shire_session` cookie (Stellar wallet sign-in) — wins if present and valid.
-2. Privy `Authorization: Bearer` token — used when the Privy path was taken.
-3. Demo mode (`privyUserId = "demo-user"`) — only when Privy is unconfigured
-   and no wallet session exists, and never in production.
-
-This single chokepoint means every protected API route works for both paths
-without per-route changes.
+`middleware.ts` gates `/candidate`, `/recruiter`, `/admin`, `/dashboard` on the
+presence of the `shire_session` cookie — redirecting to `/connect` when absent.
+The cookie's validity is re-checked server-side in each API route.

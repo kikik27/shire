@@ -20,9 +20,10 @@ Shire is being designed to solve a narrow, practical problem:
 ## Stellar Wallet Integration
 
 The web app integrates a Stellar wallet layer (`@stellar/freighter-api`) that
-also acts as a sign-in method. Connecting a Freighter wallet signs a timestamped
+also acts as the sign-in method. Connecting a Freighter wallet signs a timestamped
 challenge, the server verifies the ed25519 signature (`@stellar/stellar-sdk`),
-and a session cookie is issued — so "connect wallet" **is** the login.
+and a session cookie is issued — so "connect wallet" **is** the login. There is
+no separate email/social login; the Stellar wallet is the sole identity layer.
 
 What the wallet layer provides:
 
@@ -31,11 +32,9 @@ What the wallet layer provides:
 - **Balance** — native XLM balance is read from Horizon and shown in the wallet menu.
 - **Testnet faucet** — one-click `Claim test XLM` via Friendbot, funded to the connected address.
 - **Signing** — `signMessage` (proof-of-ownership) and `signTransaction` (XDR) demos.
-- **Hybrid sign-in** — email/social via Privy remains as a secondary path.
 
-Privy is kept for email/social identity; the Stellar wallet is the on-chain
-identity and escrow layer. Both resolve through a single server-side chokepoint
-(`resolveAuthenticatedUser`) so every API route works for either path.
+All API routes resolve the signed-in user from the `shire_session` cookie via a
+single server-side chokepoint (`resolveAuthenticatedUser`).
 
 ### Screenshots
 
@@ -154,10 +153,6 @@ NEXT_PUBLIC_STELLAR_FRIENDBOT_URL=https://horizon-testnet.stellar.org/friendbot
 # HMAC secret for the "Sign in with Stellar" session cookie
 SESSION_SECRET=node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-
-Privy (`NEXT_PUBLIC_PRIVY_APP_ID` / `PRIVY_APP_SECRET`) is optional — when unset,
-the email/social login button is hidden and only the Stellar wallet flow is
-available.
 
 ### Run the Monorepo
 

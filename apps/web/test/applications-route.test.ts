@@ -7,7 +7,7 @@ import { createInMemoryJobsRepository } from "../lib/server/jobs-repository";
 import { createInMemoryProfileRepository } from "../lib/server/profile-repository";
 
 function authenticated(privyUserId = "did:privy:candidate") {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 function jsonRequest(method: string, url: string, body?: unknown) {

@@ -12,7 +12,7 @@ import { createInMemoryJobsRepository } from "../lib/server/jobs-repository";
 import { createInMemoryStakesRepository } from "../lib/server/stakes-repository";
 
 function authenticated(privyUserId: string) {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 test("admin routes reject non-admin users", async () => {

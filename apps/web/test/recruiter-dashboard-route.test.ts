@@ -37,7 +37,7 @@ test("recruiter dashboard aggregates only owned jobs", async () => {
   let requestedRecruiterUserId: string | undefined;
   const handlers = createRecruiterDashboardRouteHandlers({
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:recruiter" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:recruiter", walletAddress: "GTESTAUTH" }) as const,
     profileRepository: profiles,
     recruiterDashboardRepository: {
       async getRecruiterDashboard(recruiterUserId) {

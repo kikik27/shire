@@ -1,35 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { usePrivy } from "@privy-io/react-auth";
 
-import { PRIVY_ENABLED } from "@/lib/auth/use-auth";
-
-export function useDemoAccessToken(): () => Promise<string | undefined> {
-  return React.useCallback(async () => undefined, []);
-}
-
-export function usePrivyAccessToken(): () => Promise<string | undefined> {
-  const { ready, authenticated, getAccessToken } = usePrivy();
-
-  return React.useCallback(async () => {
-    if (!ready) {
-      throw new Error("Authentication is still loading. Try again in a moment.");
-    }
-    if (!authenticated) {
-      throw new Error("Sign in before continuing.");
-    }
-
-    const token = await getAccessToken();
-    if (!token?.trim()) {
-      throw new Error("Your session is unavailable. Sign in again.");
-    }
-
-    return token;
-  }, [authenticated, getAccessToken, ready]);
-}
-
+/**
+ * Returns a function that resolves the current auth token, if any.
+ *
+ * Auth is now cookie-based ("Sign in with Stellar"): the session cookie is sent
+ * automatically on same-origin requests, so client fetches do not need to
+ * attach a Bearer token. This hook therefore resolves to `undefined`, and the
+ * shared `authorizationHeaders(undefined)` helpers no-op — every data hook
+ * keeps working unchanged, just authenticated via the cookie instead.
+ */
 export function useAccessToken(): () => Promise<string | undefined> {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- PRIVY_ENABLED is constant per build.
-  return PRIVY_ENABLED ? usePrivyAccessToken() : useDemoAccessToken();
+  return React.useCallback(async () => undefined, []);
 }
