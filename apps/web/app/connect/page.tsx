@@ -4,10 +4,18 @@ import * as React from "react";
 import { ArrowRight, Loader2, Mail, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useStellarWallet } from "@/components/site/stellar-wallet-provider";
-import { PRIVY_ENABLED, useAuth } from "@/lib/auth/use-auth";
+import { useAuth } from "@/lib/auth/use-auth";
 import { useLoginDestination } from "@/lib/auth/use-login-destination";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { Button } from "@/components/ui/button";
+
+/**
+ * Toggle the secondary email/social (Privy) login button on the connect page.
+ * Hidden by default: Stellar is the only on-chain identity this app supports,
+ * and Privy cannot generate a Stellar wallet. Flip to `true` to re-expose the
+ * email path (the Privy provider/useAuth code stays intact regardless).
+ */
+const EMAIL_LOGIN_ENABLED = false;
 
 /**
  * Sign-in page. The primary flow is "Connect Stellar Wallet" — connecting a
@@ -94,30 +102,34 @@ export default function ConnectPage() {
             </Button>
           )}
 
-          <div className="flex items-center gap-3 py-1">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
+          {/* Email/social login (Privy) is hidden for now: Stellar is the only
+              on-chain identity this app supports, and Privy cannot generate a
+              Stellar wallet. The Privy code (provider, useAuth) is kept intact
+              and can be re-exposed by removing this flag. */}
+          {EMAIL_LOGIN_ENABLED ? (
+            <>
+              <div className="flex items-center gap-3 py-1">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
 
-          {PRIVY_ENABLED ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={() => void privyLogin()}
-              disabled={identityConnecting}
-            >
-              {identityConnecting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Mail className="size-4" />
-              )}
-              Continue with email
-            </Button>
-          ) : (
-            <p className="text-xs text-muted-foreground">Email login is not configured.</p>
-          )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => void privyLogin()}
+                disabled={identityConnecting}
+              >
+                {identityConnecting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Mail className="size-4" />
+                )}
+                Continue with email
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
     </AuthShell>
