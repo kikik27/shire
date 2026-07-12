@@ -46,7 +46,7 @@ async function authenticatedUserId(
   const authenticated = await authenticate(request);
   const user = await profiles.resolveUser(
     authenticated.privyUserId,
-    authenticated.mode === "privy" ? authenticated.walletAddress : undefined,
+    authenticated.walletAddress,
   );
   return user.id;
 }

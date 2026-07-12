@@ -16,7 +16,7 @@ import { createProfileRouteHandlers } from "../lib/server/profile-route";
 const candidateProfile = {
   displayName: "Candidate One",
   bio: "Experienced protocol engineer building secure web3 products.",
-  skills: ["TypeScript", "Solidity"],
+  skills: ["TypeScript", "Soroban"],
   roleTargets: ["Protocol Engineer"],
   experienceLevel: "SENIOR",
   portfolioUrl: "",
@@ -40,10 +40,10 @@ const recruiterProfile = {
 
 function authenticated(
   privyUserId = "did:privy:user-1",
-  walletAddress?: string,
+  walletAddress = "GTESTAUTH",
 ) {
   return async () =>
-    ({ mode: "privy", privyUserId, walletAddress }) as const;
+    ({ mode: "stellar", privyUserId, walletAddress }) as const;
 }
 
 function jsonRequest(method: string, body?: unknown) {

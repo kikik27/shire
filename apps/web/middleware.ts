@@ -2,23 +2,23 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const protectedPrefixes = ["/candidate", "/recruiter", "/admin", "/dashboard"];
 
-function hasPrivySession(request: NextRequest) {
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID && !process.env.PRIVY_APP_SECRET) {
-    return true;
-  }
-  return Boolean(
-    request.cookies.get("privy-id-token")?.value ||
-      request.cookies.get("privy-token")?.value ||
-      request.headers.get("authorization"),
-  );
+/**
+ * Edge middleware: gate protected dashboard routes on the "Sign in with
+ * Stellar" session cookie. Users without a valid `shire_session` are redirected
+ * to /connect. The cookie's contents are verified server-side in each API route
+ * (resolveAuthenticatedUser); this middleware only checks presence for the
+ * redirect UX.
+ */
+function hasSession(request: NextRequest) {
+  return Boolean(request.cookies.get("shire_session")?.value);
 }
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const protectedPath = protectedPrefixes.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );
-  if (!protectedPath || hasPrivySession(request)) {
+  if (!protectedPath || hasSession(request)) {
     return NextResponse.next();
   }
 

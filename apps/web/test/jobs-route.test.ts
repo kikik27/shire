@@ -12,7 +12,7 @@ import { createInMemoryProfileRepository } from "../lib/server/profile-repositor
 import { createInMemoryRecommendationsRepository } from "../lib/server/recommendations-repository";
 
 function authenticated(privyUserId = "did:privy:recruiter") {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 function jsonRequest(method: string, body?: unknown) {
@@ -32,7 +32,7 @@ const jobPayload = {
   salaryRange: "$120k-$160k",
   jobType: "FULL_TIME",
   experienceLevel: "SENIOR",
-  skillsRequired: ["TypeScript", "Solidity"],
+  skillsRequired: ["TypeScript", "Soroban"],
   candidateStakeRequired: false,
 } satisfies CreateJobInput;
 

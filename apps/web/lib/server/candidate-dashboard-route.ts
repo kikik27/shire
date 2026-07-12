@@ -38,9 +38,7 @@ export function createCandidateDashboardRouteHandlers(
       const authenticated = await authenticate(request);
       const user = await profiles().resolveUser(
         authenticated.privyUserId,
-        authenticated.mode === "privy"
-          ? authenticated.walletAddress
-          : undefined,
+        authenticated.walletAddress,
       );
       return NextResponse.json(
         await dashboard().getCandidateDashboard(user.id),

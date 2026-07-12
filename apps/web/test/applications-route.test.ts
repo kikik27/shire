@@ -7,7 +7,7 @@ import { createInMemoryJobsRepository } from "../lib/server/jobs-repository";
 import { createInMemoryProfileRepository } from "../lib/server/profile-repository";
 
 function authenticated(privyUserId = "did:privy:candidate") {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 function jsonRequest(method: string, url: string, body?: unknown) {
@@ -27,14 +27,14 @@ const jobPayload = {
   salaryRange: "$120k-$160k",
   jobType: "FULL_TIME" as const,
   experienceLevel: "SENIOR" as const,
-  skillsRequired: ["TypeScript", "Solidity"],
+  skillsRequired: ["TypeScript", "Soroban"],
   candidateStakeRequired: false,
 };
 
 const candidateProfile = {
   displayName: "Alex Candidate",
   bio: "Experienced protocol engineer building production systems.",
-  skills: ["TypeScript", "Solidity"],
+  skills: ["TypeScript", "Soroban"],
   roleTargets: ["Protocol Engineer"],
   experienceLevel: "SENIOR" as const,
   githubUrl: "https://github.com/alex",
@@ -144,7 +144,7 @@ test("recruiter job applications GET requires job ownership", async () => {
           candidate: {
             displayName: "Alex Candidate",
             headline: "Protocol Engineer",
-            skills: ["TypeScript", "Solidity"],
+            skills: ["TypeScript", "Soroban"],
             location: "Jakarta",
             githubUrl: "https://github.com/alex",
           },
@@ -193,7 +193,7 @@ test("recruiter applications GET returns candidate summaries only for owned jobs
   assert.deepEqual(body.applications[0].candidate, {
     displayName: "Alex Candidate",
     headline: "Protocol Engineer",
-    skills: ["TypeScript", "Solidity"],
+    skills: ["TypeScript", "Soroban"],
     location: "Jakarta",
     githubUrl: "https://github.com/alex",
   });

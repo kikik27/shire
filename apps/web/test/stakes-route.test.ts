@@ -13,7 +13,7 @@ const input = {
   ownerUserId: "user-1",
   type: "APPLICATION" as const,
   amount: 10,
-  token: "cUSD" as const,
+  token: "XLM" as const,
   idempotencyKey: "application:job-1",
   jobId: "job-1",
 };
@@ -73,7 +73,7 @@ test("stake route accepts owned jobs and rejects foreign jobs", async () => {
   const handlers = createStakesRouteHandlers({
     authorization: {
       authenticate: async () =>
-        ({ mode: "privy", privyUserId: "did:privy:recruiter" }) as const,
+        ({ mode: "stellar", privyUserId: "did:privy:recruiter", walletAddress: "GTESTAUTH" }) as const,
       users,
     },
     stakesRepository: createInMemoryStakesRepository(),
@@ -86,7 +86,7 @@ test("stake route accepts owned jobs and rejects foreign jobs", async () => {
       body: JSON.stringify({
         type: "JOB_POST",
         amount: 25,
-        token: "cUSD",
+        token: "XLM",
         idempotencyKey: `job:${jobId}:publish`,
         jobId,
       }),

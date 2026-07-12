@@ -125,7 +125,7 @@ export default function RecruiterJobDetailPage({
         </div>
         {job.candidateStakeRequired && (
           <p className="mt-1 text-xs text-muted-foreground">
-            Candidates must stake {job.candidateStakeAmount ?? 5} cUSD to apply.
+            Candidates must stake {job.candidateStakeAmount ?? 5} XLM to apply.
           </p>
         )}
       </div>
@@ -216,7 +216,7 @@ export default function RecruiterJobDetailPage({
         open={stakeOpen}
         onOpenChange={setStakeOpen}
         title="Stake to publish job"
-        description={`Lock cUSD in platform escrow to activate "${job.title}".`}
+        description={`Lock XLM in platform escrow to activate "${job.title}".`}
         amount={10}
         adjustable
         min={5}
@@ -227,13 +227,13 @@ export default function RecruiterJobDetailPage({
           await createStake.mutateAsync({
             type: "JOB_POST",
             amount,
-            token: "cUSD",
+            token: "XLM",
             idempotencyKey: `job:${job.id}:publish`,
             jobId: job.id,
           });
           await publishJob.mutateAsync(job.id);
           toast.success("Job activated with platform escrow", {
-            description: `${formatToken(amount, "cUSD")} recorded for this listing.`,
+            description: `${formatToken(amount, "XLM")} recorded for this listing.`,
           });
         }}
       />

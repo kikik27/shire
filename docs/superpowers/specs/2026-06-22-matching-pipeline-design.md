@@ -1,5 +1,10 @@
 # Real Matching Pipeline — Design & ADR
 
+> **Historical note (2026-07):** The "out of scope" reference to `wagmi/viem`
+> and `ShireEscrow.sol` is obsolete. The on-chain layer is **Stellar/Soroban**
+> (Rust) with `@stellar/freighter-api` (wallet) and `@stellar/stellar-sdk`
+> (signing). The matching-pipeline design itself is unchanged.
+
 > Companion to 2026-06-21-agent-cleanup-security-design.md. Scope: `packages/shared`,
 > `apps/web`, `apps/agent`. Onchain escrow remains out of scope.
 

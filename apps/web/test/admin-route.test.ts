@@ -12,7 +12,7 @@ import { createInMemoryJobsRepository } from "../lib/server/jobs-repository";
 import { createInMemoryStakesRepository } from "../lib/server/stakes-repository";
 
 function authenticated(privyUserId: string) {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 test("admin routes reject non-admin users", async () => {
@@ -44,7 +44,7 @@ test("admin stake transitions are persisted with an audit record", async () => {
     ownerUserId: "user-1",
     type: "JOB_POST",
     amount: 25,
-    token: "cUSD",
+    token: "XLM",
     idempotencyKey: "job:job-1",
     jobId: "job-1",
   });
@@ -134,7 +134,7 @@ test("admin dispute resolution settles the linked stake and audits both", async 
     ownerUserId: "user-1",
     type: "APPLICATION",
     amount: 10,
-    token: "cUSD",
+    token: "XLM",
     idempotencyKey: "application:1",
   });
   const disputes = createInMemoryDisputesRepository();

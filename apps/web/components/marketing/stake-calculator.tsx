@@ -31,7 +31,7 @@ export function StakeCalculator() {
             <span className="font-mono text-3xl font-semibold tabular-nums text-primary">
               {amount.toLocaleString()}
             </span>
-            <span className="ml-1 text-sm text-muted-foreground">cUSD</span>
+            <span className="ml-1 text-sm text-muted-foreground">XLM</span>
           </div>
         </div>
 
@@ -41,12 +41,12 @@ export function StakeCalculator() {
           max={MAX}
           step={STEP}
           onValueChange={(v) => setAmount(v[0])}
-          aria-label="Stake amount in cUSD"
+          aria-label="Stake amount in XLM"
           className="mt-6"
         />
         <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-          <span>{MIN} cUSD</span>
-          <span>{MAX} cUSD</span>
+          <span>{MIN} XLM</span>
+          <span>{MAX} XLM</span>
         </div>
 
         {/* outcomes */}
@@ -59,7 +59,7 @@ export function StakeCalculator() {
               <p className="text-sm font-semibold text-foreground">Hire succeeds</p>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 <span className="font-mono font-medium text-success">
-                  +{amount.toLocaleString()} cUSD
+                  +{amount.toLocaleString()} XLM
                 </span>{" "}
                 refunded to you, automatically.
               </p>
@@ -73,7 +73,7 @@ export function StakeCalculator() {
               <p className="text-sm font-semibold text-foreground">Resolver rules against you</p>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 <span className="font-mono font-medium text-destructive">
-                  −{amount.toLocaleString()} cUSD
+                  −{amount.toLocaleString()} XLM
                 </span>{" "}
                 released to the other side.
               </p>

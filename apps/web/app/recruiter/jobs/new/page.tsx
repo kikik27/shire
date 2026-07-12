@@ -36,13 +36,13 @@ export default function NewJobPage() {
     await createStake.mutateAsync({
       type: "JOB_POST",
       amount,
-      token: "cUSD",
+      token: "XLM",
       idempotencyKey: `job:${draft.id}:publish`,
       jobId: draft.id,
     });
     await publishJob.mutateAsync(draft.id);
     toast.success("Job posted with platform escrow.", {
-      description: `${draft.title} is live with ${amount} cUSD locked.`,
+      description: `${draft.title} is live with ${amount} XLM locked.`,
     });
     router.push(`/recruiter/jobs/${draft.id}`);
   }
@@ -66,7 +66,7 @@ export default function NewJobPage() {
           open={stakeOpen}
           onOpenChange={setStakeOpen}
           title="Stake to activate your job"
-          description={`Lock cUSD in platform escrow to publish "${draft.title}". Refunded when the role closes without a valid dispute.`}
+          description={`Lock XLM in platform escrow to publish "${draft.title}". Refunded when the role closes without a valid dispute.`}
           amount={10}
           adjustable
           min={5}

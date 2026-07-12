@@ -47,10 +47,10 @@ function persistedJob(
     salaryRange: "$140k-$180k",
     jobType: "FULL_TIME",
     experienceLevel: "SENIOR",
-    skillsRequired: ["TypeScript", "Solidity"],
+    skillsRequired: ["TypeScript", "Soroban"],
     status: "ACTIVE",
     stakeAmount: 100,
-    stakeToken: "cUSD",
+    stakeToken: "XLM",
     candidateStakeRequired: false,
     riskLevel: "LOW",
     riskScore: 12,
@@ -85,7 +85,7 @@ test("candidate can chat about a real active job with trusted job context", asyn
     context.system,
     /"description":"Build trusted protocol integrations\."/,
   );
-  assert.match(context.system, /"skillsRequired":\["TypeScript","Solidity"\]/);
+  assert.match(context.system, /"skillsRequired":\["TypeScript","Soroban"\]/);
   assert.match(context.system, /"status":"ACTIVE"/);
   assert.doesNotMatch(context.system, /Browser-controlled title/);
 });

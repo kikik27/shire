@@ -26,7 +26,7 @@ export function StakeDialog({
   title,
   description,
   amount,
-  token = "cUSD",
+  token = "XLM",
   adjustable = false,
   min = 1,
   max = 50,

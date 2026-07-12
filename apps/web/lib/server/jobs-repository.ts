@@ -242,7 +242,7 @@ export function createInMemoryJobsRepository(): JobsRepository {
         skillsRequired: input.skillsRequired,
         status: "DRAFT",
         stakeAmount: 0,
-        stakeToken: "cUSD",
+        stakeToken: "XLM",
         candidateStakeRequired: input.candidateStakeRequired,
         candidateStakeAmount: input.candidateStakeAmount,
         riskLevel: "UNKNOWN",

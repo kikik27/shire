@@ -91,9 +91,7 @@ export async function resolveAuthorizedUser(
   const identity = await dependencies.authenticate(request);
   return dependencies.users.resolveUser(
     identity.privyUserId,
-    identity.mode === "privy" || identity.mode === "stellar"
-      ? identity.walletAddress
-      : undefined,
+    identity.walletAddress,
   );
 }
 

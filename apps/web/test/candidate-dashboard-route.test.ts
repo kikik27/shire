@@ -57,7 +57,7 @@ test("candidate dashboard returns persisted counts and top recommendations", asy
   let requestedCandidateUserId: string | undefined;
   const handlers = createCandidateDashboardRouteHandlers({
     resolveAuthenticatedUser: async () =>
-      ({ mode: "privy", privyUserId: "did:privy:candidate" }) as const,
+      ({ mode: "stellar", privyUserId: "did:privy:candidate", walletAddress: "GTESTAUTH" }) as const,
     profileRepository: profiles,
     candidateDashboardRepository: {
       async getCandidateDashboard(candidateUserId) {

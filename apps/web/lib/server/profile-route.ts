@@ -160,7 +160,7 @@ export function createProfileRouteHandlers(
       const store = repository();
       const user = await store.resolveUser(
         authenticatedUser.privyUserId,
-        authenticatedUser.mode === "privy" ? authenticatedUser.walletAddress : undefined,
+        authenticatedUser.walletAddress,
       );
       const storedProfile = await store.getProfile(user.id, role);
       if (storedProfile === null) {
@@ -199,7 +199,7 @@ export function createProfileRouteHandlers(
           const store = dependencies.repository;
           const user = await store.resolveUser(
             authenticatedUser.privyUserId,
-            authenticatedUser.mode === "privy" ? authenticatedUser.walletAddress : undefined,
+            authenticatedUser.walletAddress,
           );
           const existing = await store.getProfile(user.id, role);
           const metrics = existing
@@ -215,12 +215,12 @@ export function createProfileRouteHandlers(
               completedHires: metrics.completedHires,
               disputeCount: metrics.disputeCount,
             },
-            authenticatedUser.mode === "privy" ? authenticatedUser.walletAddress : undefined,
+            authenticatedUser.walletAddress,
           );
         } else {
           saved = await saveRecruiterProfileAtomically(
             authenticatedUser.privyUserId,
-            authenticatedUser.mode === "privy" ? authenticatedUser.walletAddress : undefined,
+            authenticatedUser.walletAddress,
             parsed.data as Record<string, unknown>,
             dependencies.database ?? createDatabase(),
           );
@@ -230,7 +230,7 @@ export function createProfileRouteHandlers(
           authenticatedUser.privyUserId,
           role,
           parsed.data,
-          authenticatedUser.mode === "privy" ? authenticatedUser.walletAddress : undefined,
+          authenticatedUser.walletAddress,
         );
       }
       const persisted = responseSchema.safeParse(saved.profile);

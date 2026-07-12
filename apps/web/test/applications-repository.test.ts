@@ -16,7 +16,7 @@ const jobInput = {
   salaryRange: "$120k-$160k",
   jobType: "FULL_TIME" as const,
   experienceLevel: "SENIOR" as const,
-  skillsRequired: ["TypeScript", "Solidity"],
+  skillsRequired: ["TypeScript", "Soroban"],
   candidateStakeRequired: false,
 };
 

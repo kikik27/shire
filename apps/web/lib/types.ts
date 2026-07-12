@@ -1,7 +1,8 @@
 /**
  * Shared domain types for the Shire "Stake n Hiring" app.
- * These mirror the onchain registry/stake-vault structs and the backend schema so the
- * frontend can be swapped from the demo store to real wagmi/API calls without reshaping data.
+ * These mirror the onchain escrow structs and the backend schema so the
+ * frontend can be swapped from the demo store to real Stellar/Soroban calls
+ * (via @stellar/freighter-api) without reshaping data.
  */
 
 import type {
@@ -71,7 +72,7 @@ export type JobType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "FREELANCE" | "IN
 export type ExperienceLevel = "INTERN" | "JUNIOR" | "MID" | "SENIOR" | "LEAD";
 
 // --- Entities ---
-export type TokenSymbol = "cUSD" | "USDC" | "XLM";
+export type TokenSymbol = "XLM" | "USDC";
 
 export type CandidateProfile = {
   displayName: string;

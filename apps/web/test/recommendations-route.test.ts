@@ -15,7 +15,7 @@ import {
 } from "../lib/server/recommendations-repository";
 
 function authenticated(privyUserId = "did:privy:candidate") {
-  return async () => ({ mode: "privy", privyUserId }) as const;
+  return async () => ({ mode: "stellar", privyUserId, walletAddress: "GTESTAUTH" }) as const;
 }
 
 function getRequest(url: string) {

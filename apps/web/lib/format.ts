@@ -6,7 +6,7 @@ export function truncateAddress(address?: string | null, size = 4): string {
   return `${address.slice(0, size + 2)}…${address.slice(-size)}`;
 }
 
-export function formatToken(amount: number, token: TokenSymbol = "cUSD"): string {
+export function formatToken(amount: number, token: TokenSymbol = "XLM"): string {
   const decimals = 2;
   return `${amount.toLocaleString(undefined, {
     minimumFractionDigits: amount % 1 === 0 ? 0 : decimals,

@@ -10,7 +10,7 @@ export const navLinks = [
 export const heroChips = [
   "Frontend Engineer",
   "Product Designer",
-  "Solidity Developer",
+  "Soroban Developer",
   "Data Analyst",
   "Growth Marketer",
   "DevOps Engineer",
@@ -35,7 +35,7 @@ export const heroSteps: HeroStep[] = [
     id: "stake",
     num: "2",
     title: "Stake",
-    detail: "250 cUSD locked in escrow",
+    detail: "250 XLM locked in escrow",
   },
   {
     id: "settle",
@@ -177,7 +177,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "Do I need crypto experience to use Shire?",
-    a: "No. You sign in with email or Google and Shire sets up your account. The staking flow is a single approval, amounts show in USD-pegged cUSD, and you always approve before anything happens.",
+    a: "No. You sign in with email or Google and Shire sets up your account. The staking flow is a single approval, amounts show in USD-pegged XLM, and you always approve before anything happens.",
   },
   {
     q: "Can I be both a candidate and a company?",

@@ -1,8 +1,7 @@
 import {
-  AuthenticatedUserConfigurationError,
   AuthenticatedUserError,
+  AuthenticatedUserConfigurationError,
   resolveAuthenticatedUser,
-  type AuthenticatedUserDependencies,
 } from "./authenticated-user";
 
 export { AuthenticatedUserError as CandidateAuthenticationError };
@@ -10,9 +9,6 @@ export {
   AuthenticatedUserConfigurationError as CandidateAuthenticationConfigurationError,
 };
 
-export async function resolveCandidateIdentity(
-  request: Request,
-  dependencies?: AuthenticatedUserDependencies,
-) {
-  return (await resolveAuthenticatedUser(request, dependencies)).privyUserId;
+export async function resolveCandidateIdentity(request: Request) {
+  return (await resolveAuthenticatedUser(request)).privyUserId;
 }

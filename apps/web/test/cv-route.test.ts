@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveCandidateIdentity } from "../lib/server/candidate-identity";
 import {
   AuthenticatedUserError,
 } from "../lib/server/authenticated-user";
@@ -15,24 +14,10 @@ import {
 } from "../app/api/candidates/me/cv/jobs/[jobId]/route";
 import { createInMemoryProfileRepository } from "../lib/server/profile-repository";
 
-test("uses demo identity when Privy server auth is not configured", async () => {
-  assert.equal(
-    await resolveCandidateIdentity(new Request("http://localhost"), {
-      appId: undefined,
-      appSecret: undefined,
-      nodeEnv: "development",
-      verifyAccessToken: async () => ({ userId: "unused" }),
-    }),
-    "demo-user",
-  );
-});
-
-test("CV upload maps Privy configuration failures to a stable 500", async () => {
+test("CV upload rejects a request without a Stellar session (401)", async () => {
   await withEnvironment(
     {
       NODE_ENV: "production",
-      NEXT_PUBLIC_PRIVY_APP_ID: undefined,
-      PRIVY_APP_SECRET: undefined,
       SHIRE_AGENT_INTERNAL_URL: "http://agent.local",
       SHIRE_AGENT_SERVICE_TOKEN: "service-secret",
     },
@@ -44,20 +29,16 @@ test("CV upload maps Privy configuration failures to a stable 500", async () => 
         }),
       );
 
-      assert.equal(response.status, 500);
-      assert.deepEqual(await response.json(), {
-        error: "authentication-configuration-error",
-      });
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: "unauthorized" });
     },
   );
 });
 
-test("CV status maps partial Privy configuration to a stable 500", async () => {
+test("CV status rejects a request without a Stellar session (401)", async () => {
   await withEnvironment(
     {
-      NODE_ENV: "development",
-      NEXT_PUBLIC_PRIVY_APP_ID: "app-id",
-      PRIVY_APP_SECRET: undefined,
+      NODE_ENV: "production",
       SHIRE_AGENT_INTERNAL_URL: "http://agent.local",
       SHIRE_AGENT_SERVICE_TOKEN: "service-secret",
     },
@@ -65,31 +46,6 @@ test("CV status maps partial Privy configuration to a stable 500", async () => {
       const response = await GET(
         new Request("http://localhost/api/candidates/me/cv/jobs/job-1"),
         { params: Promise.resolve({ jobId: "job-1" }) },
-      );
-
-      assert.equal(response.status, 500);
-      assert.deepEqual(await response.json(), {
-        error: "authentication-configuration-error",
-      });
-    },
-  );
-});
-
-test("CV upload maps a missing token to 401", async () => {
-  await withEnvironment(
-    {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_PRIVY_APP_ID: "app-id",
-      PRIVY_APP_SECRET: "secret",
-      SHIRE_AGENT_INTERNAL_URL: "http://agent.local",
-      SHIRE_AGENT_SERVICE_TOKEN: "service-secret",
-    },
-    async () => {
-      const response = await POST(
-        new Request("http://localhost/api/candidates/me/cv", {
-          method: "POST",
-          body: new FormData(),
-        }),
       );
 
       assert.equal(response.status, 401);
@@ -158,8 +114,9 @@ test("authenticated CV requests map missing agent configuration to stable 500", 
       const repository = createInMemoryProfileRepository();
       const post = createCandidateCvPostHandler({
         resolveAuthenticatedUser: async () => ({
-          mode: "privy",
+          mode: "stellar",
           privyUserId: "did:privy:user-1",
+          walletAddress: "GTESTAUTH",
         }),
         repository,
       });
@@ -188,8 +145,9 @@ test("malformed CV multipart requests return stable 400", async () => {
     async () => {
       const post = createCandidateCvPostHandler({
         resolveAuthenticatedUser: async () => ({
-          mode: "privy",
+          mode: "stellar",
           privyUserId: "did:privy:user-1",
+          walletAddress: "GTESTAUTH",
         }),
         repository: createInMemoryProfileRepository(),
       });
@@ -220,8 +178,9 @@ test("CV upload forwards the internal Shire user UUID as candidateId", async () 
 
   const post = createCandidateCvPostHandler({
     resolveAuthenticatedUser: async () => ({
-      mode: "privy",
-      privyUserId: "did:privy:user-1",
+      mode: "stellar",
+          privyUserId: "did:privy:user-1",
+          walletAddress: "GTESTAUTH",
     }),
     repository,
     fetch: async (_input, init) => {
@@ -270,8 +229,9 @@ test("CV polling checks ownership with the internal Shire user UUID", async () =
 
   const get = createCandidateCvJobGetHandler({
     resolveAuthenticatedUser: async () => ({
-      mode: "privy",
-      privyUserId: "did:privy:user-1",
+      mode: "stellar",
+          privyUserId: "did:privy:user-1",
+          walletAddress: "GTESTAUTH",
     }),
     repository,
     fetch: async (input) => {
@@ -347,8 +307,9 @@ test("CV polling returns only public delayed and failed fields", async () => {
       ];
       const get = createCandidateCvJobGetHandler({
         resolveAuthenticatedUser: async () => ({
-          mode: "privy",
+          mode: "stellar",
           privyUserId: "did:privy:user-1",
+          walletAddress: "GTESTAUTH",
         }),
         repository,
         fetch: async () => Response.json(responses.shift()),
@@ -388,8 +349,9 @@ test("CV polling rejects non-JSON upstream responses", async () => {
     async () => {
       const get = createCandidateCvJobGetHandler({
         resolveAuthenticatedUser: async () => ({
-          mode: "privy",
+          mode: "stellar",
           privyUserId: "did:privy:user-1",
+          walletAddress: "GTESTAUTH",
         }),
         repository: createInMemoryProfileRepository(),
         fetch: async () =>

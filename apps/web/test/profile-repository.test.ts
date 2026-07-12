@@ -4,10 +4,10 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import {
-  AuthenticatedUserConfigurationError,
   AuthenticatedUserError,
   resolveAuthenticatedUser,
 } from "../lib/server/authenticated-user";
+import { signSessionToken, SESSION_COOKIE_NAME } from "../lib/server/session-token";
 import {
   closeSharedDatabase,
   createDatabase,
@@ -25,95 +25,37 @@ import {
   type ProfileTransactionStore,
 } from "../lib/server/profile-repository";
 
-function requestWithBearer(token: string, body?: unknown) {
+/** Build a Request carrying a valid session cookie for the given address. */
+async function requestWithSession(address: string) {
+  const token = await signSessionToken(address);
   return new Request("http://localhost", {
-    method: body === undefined ? "GET" : "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
   });
 }
 
-const configuredDependencies = {
-  appId: "app-id",
-  appSecret: "secret",
-  verifyAccessToken: async () => ({ userId: "did:privy:real-user" }),
-};
-
-test("verified Privy identity is returned instead of browser identity", async () => {
-  const identity = await resolveAuthenticatedUser(
-    requestWithBearer("token", {
-      userId: "did:privy:browser-controlled",
-    }),
-    configuredDependencies,
-  );
+test("a valid Stellar session resolves to the wallet identity", async () => {
+  const address = "GTESTSESSION1234";
+  const identity = await resolveAuthenticatedUser(await requestWithSession(address));
 
   assert.deepEqual(identity, {
-    mode: "privy",
-    privyUserId: "did:privy:real-user",
+    mode: "stellar",
+    privyUserId: `stellar:${address}`,
+    walletAddress: address,
   });
 });
 
-test("configured Privy rejects a missing token", async () => {
+test("a request without a session cookie is rejected", async () => {
   await assert.rejects(
-    resolveAuthenticatedUser(
-      new Request("http://localhost"),
-      configuredDependencies,
-    ),
+    resolveAuthenticatedUser(new Request("http://localhost")),
     AuthenticatedUserError,
   );
 });
 
-test("configured Privy rejects an invalid token", async () => {
-  await assert.rejects(
-    resolveAuthenticatedUser(requestWithBearer("invalid"), {
-      ...configuredDependencies,
-      verifyAccessToken: async () => {
-        throw new Error("invalid token");
-      },
-    }),
-    AuthenticatedUserError,
-  );
-});
-
-test("demo identity is allowed only when both Privy credentials are absent", async () => {
-  assert.deepEqual(
-    await resolveAuthenticatedUser(new Request("http://localhost"), {
-      appId: undefined,
-      appSecret: undefined,
-      nodeEnv: "development",
-      verifyAccessToken: async () => ({ userId: "unused" }),
-    }),
-    { mode: "demo", privyUserId: "demo-user" },
-  );
-});
-
-test("production rejects missing Privy configuration", async () => {
-  await assert.rejects(
-    resolveAuthenticatedUser(new Request("http://localhost"), {
-      appId: undefined,
-      appSecret: undefined,
-      nodeEnv: "production",
-      verifyAccessToken: async () => ({ userId: "unused" }),
-    }),
-    AuthenticatedUserConfigurationError,
-  );
-});
-
-test("partial Privy configuration is distinct from authentication failure", async () => {
-  await assert.rejects(
-    resolveAuthenticatedUser(new Request("http://localhost"), {
-      appId: "app-id",
-      appSecret: undefined,
-      nodeEnv: "development",
-      verifyAccessToken: async () => ({ userId: "unused" }),
-    }),
-    (error: unknown) =>
-      error instanceof AuthenticatedUserConfigurationError &&
-      !(error instanceof AuthenticatedUserError),
-  );
+test("a request with an invalid (tampered) session cookie is rejected", async () => {
+  const request = new Request("http://localhost", {
+    headers: { cookie: `${SESSION_COOKIE_NAME}=not-a-real-token` },
+  });
+  await assert.rejects(resolveAuthenticatedUser(request), AuthenticatedUserError);
 });
 
 test("database creation is lazy, configurable, and closeable", async () => {
