@@ -17,6 +17,37 @@ Shire is being designed to solve a narrow, practical problem:
 - support dispute summarization and operational review
 - settle marketplace flows with stablecoins on Stellar instead of speculative token flows
 
+## Stellar Wallet Integration
+
+The web app integrates a Stellar wallet layer (`@stellar/freighter-api`) that
+also acts as a sign-in method. Connecting a Freighter wallet signs a timestamped
+challenge, the server verifies the ed25519 signature (`@stellar/stellar-sdk`),
+and a session cookie is issued — so "connect wallet" **is** the login.
+
+What the wallet layer provides:
+
+- **Connect Wallet** — Freighter permission flow (`requestAccess`) returning the public key.
+- **Address retrieval** — the connected `G...` address is shown in the header menu and connect page.
+- **Balance** — native XLM balance is read from Horizon and shown in the wallet menu.
+- **Testnet faucet** — one-click `Claim test XLM` via Friendbot, funded to the connected address.
+- **Signing** — `signMessage` (proof-of-ownership) and `signTransaction` (XDR) demos.
+- **Hybrid sign-in** — email/social via Privy remains as a secondary path.
+
+Privy is kept for email/social identity; the Stellar wallet is the on-chain
+identity and escrow layer. Both resolve through a single server-side chokepoint
+(`resolveAuthenticatedUser`) so every API route works for either path.
+
+### Screenshots
+
+**Wallet connected + balance (Stellar Testnet):**
+the connect page shows the connected `G...` address; opening the wallet menu
+shows the XLM balance funded by Friendbot.
+
+![Wallet connected with XLM balance](docs/assets/wallet-connected.png)
+
+> The wallet menu popup exposes the address, the XLM balance, the faucet action,
+> and the signing tabs — all gated behind a connected Freighter wallet.
+
 ## Architecture
 
 ```mermaid
@@ -94,12 +125,39 @@ This is the source of truth for reducing hallucination and keeping the runtime a
 
 - Node.js `20+`
 - npm `11+`
+- **Freighter** browser extension (for the Stellar wallet features — install from [freighter.app](https://freighter.app), then set its network to **Testnet**)
+- PostgreSQL (the web app owns the schema; see `apps/web/.env.example`)
 
 ### Install
 
 ```bash
 npm install
 ```
+
+### Environment
+
+Copy the env templates and fill in the required values:
+
+```bash
+cp apps/web/.env.example apps/web/.env
+cp apps/agent/.env.example apps/agent/.env
+```
+
+For the Stellar wallet / sign-in flow you need at least:
+
+```bash
+# apps/web/.env
+NEXT_PUBLIC_STELLAR_NETWORK=TESTNET
+NEXT_PUBLIC_STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+NEXT_PUBLIC_STELLAR_FRIENDBOT_URL=https://horizon-testnet.stellar.org/friendbot
+
+# HMAC secret for the "Sign in with Stellar" session cookie
+SESSION_SECRET=node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Privy (`NEXT_PUBLIC_PRIVY_APP_ID` / `PRIVY_APP_SECRET`) is optional — when unset,
+the email/social login button is hidden and only the Stellar wallet flow is
+available.
 
 ### Run the Monorepo
 
@@ -117,6 +175,19 @@ Note:
 - the root dev command uses a small Node orchestrator in [`scripts/dev.mjs`](scripts/dev.mjs) instead of Turbo for persistent dev processes on this Windows environment
 - the agent runtime defaults to port `3010`
 - the web app typically uses Next.js default dev behavior on port `3000`
+
+#### Trying the Stellar wallet flow
+
+1. Open `http://localhost:3000/connect`.
+2. Click **Connect Stellar Wallet** — Freighter asks for permission; approve it.
+3. Freighter then prompts you to sign a sign-in challenge — approve it to create
+   the session.
+4. You're redirected to the dashboard. Click the wallet chip in the header to
+   open the wallet menu popup.
+5. On the **Faucet** tab, click **Claim test XLM** — Friendbot funds your
+   address and the XLM balance appears.
+6. On the **Signing** tab, try **Sign message** / **Sign transaction** to see
+   the wallet's signing capability.
 
 ### Build
 
