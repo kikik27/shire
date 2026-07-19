@@ -8,6 +8,11 @@ coverage/
 .turbo/
 *.tsbuildinfo
 
+# Foundry build outputs
+contracts/target/
+contracts/cache/
+contracts/out/
+
 # Logs
 *.log
 npm-debug.log*
