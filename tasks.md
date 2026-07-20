@@ -58,8 +58,10 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` todo
 - [ ] Applications can reach an "agreed" state using the existing DB-tracked (simulated) stake
 
 ### Phase 2 — Stellar/Soroban chain foundation
-- [ ] `ShireEscrow` (Soroban/Rust): create / accept+stake / complete / refund / dispute /
-      resolve + tests + Stellar testnet deploy
+- [x] `ShireEscrow` (Soroban/Rust): create / accept+stake / mark+confirm complete / refund /
+      dispute / resolve + tests + Stellar testnet deploy — `contracts/shire-escrow`, deployed at
+      `CDQUMSY3F4NWYZXDCQKSMP6SYK5CLY4L67M335BWFAH32SWTG3W2I5ZQ` (testnet). Resolver is currently
+      the deployer key (`shire-deployer`) — swap for a real resolver identity before mainnet.
 - [ ] Stellar Wallets Kit wallet connector (Freighter, xBull, Albedo, Lobstr) alongside Privy
       (Privy stays login/identity only)
 - [ ] Apply & Stake / Company Accept & Stake UI against the deployed contract, tx status UI

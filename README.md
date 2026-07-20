@@ -276,16 +276,23 @@ The Soroban (Rust/WASM) workspace lives in:
 
 - [contracts](contracts)
 
-The current contract direction is:
+`ShireEscrow` ([contracts/shire-escrow](contracts/shire-escrow)) implements the marketplace
+escrow: `create_application`, `company_accept_and_stake`, `mark_completed` /
+`confirm_completed`, `refund_expired`, `open_dispute`, `resolve_dispute`, settled in a
+stablecoin (any Stellar Asset Contract, e.g. USDC). It is deployed to Stellar testnet:
 
-- marketplace escrow
-- stablecoin settlement
-- Stellar deployment target
+```
+CDQUMSY3F4NWYZXDCQKSMP6SYK5CLY4L67M335BWFAH32SWTG3W2I5ZQ
+```
+
+initialized with the `shire-deployer` testnet key as the interim dispute resolver — replace
+that with a real resolver identity before any mainnet deploy.
 
 This repository is not positioning onchain staking as the primary product path.
-The current web flow records platform escrow state in Postgres. It does not
-prove that funds have settled on Stellar. Contract settlement and chain
-reconciliation remain a separate operational step.
+The current web flow still records platform escrow state in Postgres and is not yet wired to
+call the deployed contract. It does not prove that funds have settled on Stellar. UI
+integration (wallet connector, stake calls, tx status) and chain reconciliation remain
+separate steps — see `tasks.md` Phase 2/3.
 
 ## Testing
 

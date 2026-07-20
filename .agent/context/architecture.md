@@ -1989,6 +1989,11 @@ Funds are verifiably locked in the contract (checkable via Stellar Expert).
 UI displays live transaction status.
 ```
 
+Status: tasks 1–2 done. `ShireEscrow` is implemented in `contracts/shire-escrow` and deployed
+to Stellar testnet at `CDQUMSY3F4NWYZXDCQKSMP6SYK5CLY4L67M335BWFAH32SWTG3W2I5ZQ`, initialized
+with the `shire-deployer` testnet key as the interim resolver (swap for a real resolver
+identity before mainnet). Tasks 3–5 (wallet connector, stake UI, tx status UI) are still open.
+
 ## Phase 3 — Chain-dependent product features
 
 Read chain state back into the product and close the dispute loop. Depends entirely on
