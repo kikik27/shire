@@ -28,6 +28,24 @@ const STORAGE_KEY = "shire.stellar.address";
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 const NETWORK_NAME = "Stellar Testnet";
 
+/**
+ * Freighter's `signMessage` returns different shapes across extension
+ * versions: newer ones return an already-encoded string, older ones return a
+ * Buffer-like object. `String(buffer)` (or JSON.stringify-ing it directly)
+ * mangles the raw signature bytes instead of encoding them, which makes the
+ * server-side verification fail silently. Encode explicitly instead.
+ */
+function encodeSignature(signedMessage: unknown): string {
+  if (typeof signedMessage === "string") return signedMessage;
+  if (
+    signedMessage &&
+    typeof (signedMessage as { toString?: unknown }).toString === "function"
+  ) {
+    return (signedMessage as { toString: (encoding: string) => string }).toString("base64");
+  }
+  throw new Error("Unrecognized signature format returned by wallet.");
+}
+
 export type StellarWalletState = {
   /** Connected public key (G...) or null. */
   address: string | null;
@@ -96,28 +114,38 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
         throw new Error(error.message || "Freighter denied access.");
       }
       if (!addr) throw new Error("No address returned by Freighter.");
+
+      // Sign a timestamped challenge and POST it to the server, which
+      // verifies the signature and sets a session cookie. This IS the login
+      // step, so the wallet is only considered "connected" once it succeeds
+      // — otherwise callers would redirect into pages that require auth
+      // without a valid session, surfacing as a later, confusing 401.
+      const message = `Shire sign-in @${new Date().toISOString()}`;
+      const { signedMessage, error: signError } = await freighterSignMessage(message, {
+        networkPassphrase: NETWORK_PASSPHRASE,
+        address: addr,
+      });
+      if (signError) {
+        throw new Error(signError.message || "Freighter rejected the sign-in request.");
+      }
+      if (!signedMessage) throw new Error("No signature returned by Freighter.");
+
+      const res = await fetch("/api/auth/stellar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          address: addr,
+          message,
+          signature: encodeSignature(signedMessage),
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Sign-in failed (${res.status}).`);
+      }
+
       setAddress(addr);
       window.localStorage.setItem(STORAGE_KEY, addr);
-
-      // Auto sign-in: sign a timestamped challenge and POST it to the server,
-      // which verifies the signature and sets a session cookie. This makes
-      // "connect wallet" also the login step. Failure here doesn't block the
-      // wallet connection itself — the user can retry via the menu.
-      try {
-        const message = `Shire sign-in @${new Date().toISOString()}`;
-        const { signedMessage } = await freighterSignMessage(message, {
-          networkPassphrase: NETWORK_PASSPHRASE,
-          address: addr,
-        });
-        await fetch("/api/auth/stellar", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address: addr, message, signature: signedMessage }),
-        });
-      } catch {
-        // Sign-in challenge rejected by the user or failed — the wallet stays
-        // connected; signing in can be retried from the wallet menu.
-      }
     } finally {
       setConnecting(false);
     }
@@ -144,7 +172,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
       });
       if (error) throw new Error(error.message || "Freighter rejected the message.");
       if (!signedMessage) throw new Error("No signature returned by Freighter.");
-      return { signedMessage: String(signedMessage), signerAddress };
+      return { signedMessage: encodeSignature(signedMessage), signerAddress };
     },
     [address],
   );
