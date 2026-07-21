@@ -1,5 +1,9 @@
 # Shire
 
+[![CI](https://github.com/kikik27/shire/actions/workflows/ci.yml/badge.svg)](https://github.com/kikik27/shire/actions/workflows/ci.yml)
+
+**Live demo:** [stakenhire.xyz](https://stakenhire.xyz)
+
 Shire is an AI-assisted hiring marketplace monorepo built around three core surfaces:
 
 - a public web product for candidates and companies
@@ -287,6 +291,18 @@ CDQUMSY3F4NWYZXDCQKSMP6SYK5CLY4L67M335BWFAH32SWTG3W2I5ZQ
 
 initialized with the `shire-deployer` testnet key as the interim dispute resolver — replace
 that with a real resolver identity before any mainnet deploy.
+
+Verified live on testnet (full `create_application` → `company_accept_and_stake` →
+`mark_completed` → `confirm_completed` lifecycle, stakes locked and released correctly):
+
+| Call | Tx hash |
+|---|---|
+| `create_application` | [`81e029b7634b6545f61b9d2e1807f2393df040a9d2dc360aca1dae3c63c5bb6c`](https://stellar.expert/explorer/testnet/tx/81e029b7634b6545f61b9d2e1807f2393df040a9d2dc360aca1dae3c63c5bb6c) |
+| `company_accept_and_stake` | [`06583fe714081eb4a440d3edf817169245a4a73e2ee982bbd78b6ecbc0445bca`](https://stellar.expert/explorer/testnet/tx/06583fe714081eb4a440d3edf817169245a4a73e2ee982bbd78b6ecbc0445bca) |
+| `mark_completed` | [`521bb0602f9f4a098f7d3abf4779504e2577a53e6d991bdc4ee57bf1f0e44e67`](https://stellar.expert/explorer/testnet/tx/521bb0602f9f4a098f7d3abf4779504e2577a53e6d991bdc4ee57bf1f0e44e67) |
+| `confirm_completed` | [`c4607b9ea2ab74ad34f65d791c4f3f4033c0034980045c7567441bcd0fae0e24`](https://stellar.expert/explorer/testnet/tx/c4607b9ea2ab74ad34f65d791c4f3f4033c0034980045c7567441bcd0fae0e24) |
+
+Or inspect the contract directly on [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDQUMSY3F4NWYZXDCQKSMP6SYK5CLY4L67M335BWFAH32SWTG3W2I5ZQ).
 
 This repository is not positioning onchain staking as the primary product path.
 The current web flow still records platform escrow state in Postgres and is not yet wired to
