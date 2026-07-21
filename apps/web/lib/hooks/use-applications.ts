@@ -30,6 +30,7 @@ function toApplication(application: ApiApplication): RecruiterApplication {
     riskScore: application.riskScore,
     stakeTx: application.stakeTx,
     stakeAmount: application.stakeAmount,
+    onchainApplicationId: application.onchainApplicationId,
     candidate: application.candidate,
     job: application.job,
     appliedAt: application.createdAt,
@@ -110,10 +111,14 @@ export function useApplyJob() {
       jobId,
       message,
       stakeAmount,
+      stakeTx,
+      onchainApplicationId,
     }: {
       jobId: string;
       message: string;
       stakeAmount?: number;
+      stakeTx?: string;
+      onchainApplicationId?: string;
     }) => {
       const accessToken = await getAccessToken();
       const response = await fetch(`/api/candidate/applications/${jobId}`, {
@@ -122,7 +127,7 @@ export function useApplyJob() {
           ...authorizationHeaders(accessToken),
           "content-type": "application/json",
         },
-        body: JSON.stringify({ message, stakeAmount }),
+        body: JSON.stringify({ message, stakeAmount, stakeTx, onchainApplicationId }),
       });
       return (await readApplicationsResponse(response)) as Application;
     },

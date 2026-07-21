@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -184,6 +185,10 @@ export const applications = pgTable(
     riskScore: integer("risk_score").default(0).notNull(),
     stakeTx: text("stake_tx"),
     stakeAmount: numeric("stake_amount", { precision: 12, scale: 2 }),
+    // The ShireEscrow (Soroban) contract's application id (u64), set once the
+    // candidate's create_application call confirms onchain. Postgres ids stay
+    // uuid; this is a separate join key into the chain's numeric id space.
+    onchainApplicationId: bigint("onchain_application_id", { mode: "bigint" }),
     ...timestamps,
   },
   (table) => [uniqueIndex("applications_job_candidate_unique").on(table.jobId, table.candidateUserId)],

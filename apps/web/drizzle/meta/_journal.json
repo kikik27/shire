@@ -36,6 +36,13 @@
       "when": 1782990796135,
       "tag": "0004_yellow_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784637980904,
+      "tag": "0005_classy_spirit",
+      "breakpoints": true
     }
   ]
 }

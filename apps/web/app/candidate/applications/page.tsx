@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { MatchScoreBadge } from "@/components/trust/scores";
+import { OnchainStakeStatus } from "@/components/stake/onchain-stake-status";
 import { timeAgo } from "@/lib/format";
 
 export default function CandidateApplicationsPage() {
@@ -84,6 +85,11 @@ export default function CandidateApplicationsPage() {
                   <MatchScoreBadge score={app.matchScore} />
                 </div>
               </div>
+              <OnchainStakeStatus
+                onchainApplicationId={app.onchainApplicationId}
+                stakeTx={app.stakeTx}
+                className="mt-3"
+              />
             </div>
           ))}
         </div>

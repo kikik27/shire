@@ -29,6 +29,9 @@ export type PersistedApplication = {
   riskScore: number;
   stakeTx?: string;
   stakeAmount?: number;
+  /** ShireEscrow (Soroban) application id (u64), as a string — set once the
+   * candidate's onchain stake confirms. See lib/stellar/escrow.ts. */
+  onchainApplicationId?: string;
   createdAt: number;
   updatedAt: number;
   candidate?: CandidateApplicationSummary;
@@ -39,6 +42,7 @@ export type ApplyToJobInput = {
   message: string;
   stakeAmount?: number;
   stakeTx?: string;
+  onchainApplicationId?: string;
 };
 
 export interface ApplicationsRepository {
@@ -89,6 +93,7 @@ function mapApplication(row: typeof applications.$inferSelect): PersistedApplica
     riskScore: row.riskScore,
     stakeTx: row.stakeTx ?? undefined,
     stakeAmount: numericValue(row.stakeAmount),
+    onchainApplicationId: row.onchainApplicationId?.toString(),
     createdAt: toTimestamp(row.createdAt),
     updatedAt: toTimestamp(row.updatedAt),
   };
@@ -161,6 +166,10 @@ export function createDrizzleApplicationsRepository(
             stakeTx: input.stakeTx,
             stakeAmount:
               input.stakeAmount === undefined ? null : String(input.stakeAmount),
+            onchainApplicationId:
+              input.onchainApplicationId === undefined
+                ? null
+                : BigInt(input.onchainApplicationId),
           })
           .returning();
         if (!row) {
@@ -350,6 +359,7 @@ export function createInMemoryApplicationsRepository(
         riskScore: job.riskScore,
         stakeTx: input.stakeTx,
         stakeAmount: input.stakeAmount,
+        onchainApplicationId: input.onchainApplicationId,
         createdAt: now,
         updatedAt: now,
       };

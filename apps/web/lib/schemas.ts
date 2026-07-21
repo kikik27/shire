@@ -96,6 +96,10 @@ export const applyJobSchema = z.strictObject({
   message: z.string().min(10, "Add a short note for the recruiter").max(1000),
   stakeAmount: z.coerce.number().min(0).optional(),
   stakeTx: z.string().min(1).optional(),
+  onchainApplicationId: z
+    .string()
+    .regex(/^\d+$/, "onchainApplicationId must be a numeric string")
+    .optional(),
 });
 
 export type ApplyJobValues = z.output<typeof applyJobSchema>;

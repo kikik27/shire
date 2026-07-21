@@ -24,6 +24,10 @@ import {
 } from "@/components/ui/dialog";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { formatToken } from "@/lib/format";
+import { createApplicationOnchain, xlmToStroops, EscrowError } from "@/lib/stellar/escrow";
+
+/** How long a stake stays open for a company to accept before it's refundable. */
+const APPLICATION_STAKE_WINDOW_SECONDS = 14 * 24 * 60 * 60;
 
 export function ApplyButton({ job, className }: { job: Job; className?: string }) {
   const { data: applications = [] } = useMyApplications();
@@ -31,11 +35,12 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
   const createStake = useCreatePlatformStake();
   const { data: stakes = [] } = usePlatformStakes();
   const application = applications.find((a) => a.jobId === job.id);
-  const { isConnected, connect } = useWallet();
+  const { isConnected, connect, address, signTransaction } = useWallet();
 
   const [open, setOpen] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [stakingOnchain, setStakingOnchain] = React.useState(false);
 
   const needsStake = Boolean(
     job.candidateStakeRequired && job.candidateStakeAmount,
@@ -92,10 +97,47 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
     }
     setSubmitting(true);
     try {
+      let stakeTx: string | undefined;
+      let onchainApplicationId: string | undefined;
+
+      // Native-XLM jobs stake for real, onchain, in the deployed ShireEscrow
+      // contract — Freighter prompts the candidate to approve the transfer.
+      // Non-native stake tokens aren't wired to the contract yet, so those
+      // fall back to the platform-only (simulated) escrow record below.
+      if (needsStake && address && job.stakeToken === "XLM") {
+        setStakingOnchain(true);
+        try {
+          const deadline = BigInt(
+            Math.floor(Date.now() / 1000) + APPLICATION_STAKE_WINDOW_SECONDS,
+          );
+          const result = await createApplicationOnchain({
+            applicantAddress: address,
+            jobId: job.id,
+            applicantStakeStroops: xlmToStroops(job.candidateStakeAmount!),
+            deadlineUnixSeconds: deadline,
+            signTransaction,
+          });
+          stakeTx = result.hash;
+          onchainApplicationId = result.onchainApplicationId.toString();
+        } catch (error) {
+          toast.error("Onchain stake failed", {
+            description:
+              error instanceof EscrowError || error instanceof Error
+                ? error.message
+                : "The wallet did not confirm the stake transaction.",
+          });
+          return;
+        } finally {
+          setStakingOnchain(false);
+        }
+      }
+
       const createdApplication = await applyJob.mutateAsync({
         jobId: job.id,
         message: message.trim() || "I'd love to be considered for this role.",
         stakeAmount: needsStake ? job.candidateStakeAmount : undefined,
+        stakeTx,
+        onchainApplicationId,
       });
       if (needsStake) {
         try {
@@ -111,7 +153,9 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
       setOpen(false);
       toast.success("Application sent", {
         description: needsStake
-          ? `Recorded ${formatToken(job.candidateStakeAmount!, job.stakeToken)} in platform escrow.`
+          ? stakeTx
+            ? `${formatToken(job.candidateStakeAmount!, job.stakeToken)} locked onchain in ShireEscrow.`
+            : `Recorded ${formatToken(job.candidateStakeAmount!, job.stakeToken)} in platform escrow.`
           : undefined,
       });
     } catch (error) {
@@ -158,14 +202,20 @@ export function ApplyButton({ job, className }: { job: Job; className?: string }
               This role requires a {formatToken(job.candidateStakeAmount!, job.stakeToken)} stake
             </p>
             <p className="text-muted-foreground">
-              Recorded in platform escrow and refundable under the dispute policy.
+              {job.stakeToken === "XLM"
+                ? "Locked onchain in the ShireEscrow contract and refundable under the dispute policy."
+                : "Recorded in platform escrow and refundable under the dispute policy."}
             </p>
           </div>
         )}
 
         <DialogFooter>
           <Button onClick={submit} disabled={submitting} size="lg" className="w-full">
-            {submitting ? (
+            {stakingOnchain ? (
+              <>
+                <Loader2 className="size-4 animate-spin" /> Confirm in wallet…
+              </>
+            ) : submitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" /> Submitting…
               </>

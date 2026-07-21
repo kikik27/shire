@@ -15,6 +15,7 @@ import { ApplicationStatusBadge } from "@/components/applications/application-st
 import { ApplicationTimeline } from "@/components/applications/application-timeline";
 import { RecruiterRecommendations } from "@/components/dashboard/recommendation-list";
 import { StakeDialog } from "@/components/stake/stake-dialog";
+import { OnchainStakeStatus } from "@/components/stake/onchain-stake-status";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -195,6 +196,11 @@ export default function RecruiterJobDetailPage({
                         <ApplicationStatusBadge status={app.status} />
                         <MatchScoreBadge score={app.matchScore} />
                       </div>
+                      <OnchainStakeStatus
+                        onchainApplicationId={app.onchainApplicationId}
+                        stakeTx={app.stakeTx}
+                        className="mt-2"
+                      />
                     </div>
                   </div>
 

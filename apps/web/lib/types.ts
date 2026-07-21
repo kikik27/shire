@@ -138,6 +138,8 @@ export type Application = {
   stakeId?: string;
   stakeTx?: string;
   stakeAmount?: number;
+  /** ShireEscrow (Soroban) application id (u64, as a string). */
+  onchainApplicationId?: string;
   appliedAt: number;
   updatedAt: number;
 };
