@@ -13,10 +13,20 @@ import { Button } from "@/components/ui/button";
  * a Freighter wallet also signs in (signs a challenge → server sets a session
  * cookie). Email/social login was removed because Privy cannot generate a
  * Stellar wallet.
+ *
+ * Navigation into the app is gated on `authenticated` (a valid server session
+ * cookie), NOT just `isConnected` (Freighter remembers site permission across
+ * refreshes). A refresh can leave the wallet "connected" while the session has
+ * expired — navigating then would land the user on pages whose API calls 401.
  */
 export default function ConnectPage() {
-  const { isConnected: walletConnected, connecting: walletConnecting, connect: connectWallet, address } =
-    useStellarWallet();
+  const {
+    isConnected: walletConnected,
+    authenticated,
+    connecting: walletConnecting,
+    connect: connectWallet,
+    address,
+  } = useStellarWallet();
   const { goToLoginDestination } = useLoginDestination();
 
   async function onConnectWallet() {
@@ -29,12 +39,17 @@ export default function ConnectPage() {
     }
   }
 
-  // As soon as the wallet connects (sign-in completes), land the user on their
-  // dashboard (or onboarding if they have no profile yet).
+  // Only leave the sign-in page once we actually have a valid server session.
+  // A connected-but-unauthenticated wallet (session expired on refresh) must
+  // re-connect, otherwise protected API calls 401.
   React.useEffect(() => {
-    if (!walletConnected) return;
+    if (!authenticated) return;
     return goToLoginDestination("push");
-  }, [walletConnected, goToLoginDestination]);
+  }, [authenticated, goToLoginDestination]);
+
+  // Connected but session invalid/expired → prompt re-connect instead of
+  // silently navigating into 401s.
+  const sessionExpired = walletConnected && !authenticated;
 
   return (
     <AuthShell back={{ href: "/", label: "Back home" }}>
@@ -48,7 +63,7 @@ export default function ConnectPage() {
         </p>
 
         <div className="mt-7 space-y-3">
-          {walletConnected ? (
+          {authenticated ? (
             <>
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
                 <span className="text-muted-foreground">Wallet connected</span>
@@ -59,6 +74,34 @@ export default function ConnectPage() {
               <Button size="lg" className="w-full" onClick={() => goToLoginDestination("push")}>
                 Continue
                 <ArrowRight className="size-4" />
+              </Button>
+            </>
+          ) : sessionExpired ? (
+            <>
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground">Wallet</span>
+                <span className="font-mono text-xs">
+                  {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : ""}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Your session has expired. Reconnect to continue.
+              </p>
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={onConnectWallet}
+                disabled={walletConnecting}
+              >
+                {walletConnecting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Reconnecting…
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="size-4" /> Reconnect Wallet
+                  </>
+                )}
               </Button>
             </>
           ) : (

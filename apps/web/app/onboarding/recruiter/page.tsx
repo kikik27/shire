@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { getProfile, ProfileNotFoundError } from "@/lib/profile-client";
+import { getProfile, ProfileUnauthorizedError } from "@/lib/profile-client";
 import type { RecruiterProfile } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AuthShell } from "@/components/layout/auth-shell";
@@ -12,6 +13,7 @@ import { RecruiterProfileForm } from "@/components/profile/recruiter-profile-for
 
 export default function OnboardingRecruiterPage() {
   const accessToken = useAccessToken();
+  const router = useRouter();
   const [initialProfile, setInitialProfile] = React.useState<RecruiterProfile | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -23,12 +25,15 @@ export default function OnboardingRecruiterPage() {
       setError(null);
       try {
         const token = await accessToken();
+        // null = not onboarded yet → render the empty form. Not an error.
         const profile = await getProfile<RecruiterProfile>("recruiter", token);
         if (!cancelled) setInitialProfile(profile);
       } catch (loadError) {
         if (cancelled) return;
-        if (loadError instanceof ProfileNotFoundError) {
-          setInitialProfile(null);
+        if (loadError instanceof ProfileUnauthorizedError) {
+          // Session expired/missing — send back to sign-in rather than stranding
+          // the user on a page whose every API call 401s.
+          router.replace("/connect");
           return;
         }
         setError(
@@ -45,7 +50,7 @@ export default function OnboardingRecruiterPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, router]);
 
   return (
     <AuthShell back={{ href: "/onboarding", label: "Back" }} step="2 of 3">

@@ -1,4 +1,16 @@
-import { Keypair } from "@stellar/stellar-sdk";
+import { hash, Keypair } from "@stellar/stellar-sdk";
+
+/**
+ * Domain-separation prefix Freighter prepends to every `signMessage` payload
+ * before hashing, mirroring the extension's SEP-53 `encodeSep53Message`:
+ *
+ *   sign( sha256( "Stellar Signed Message:\n" + message ) )
+ *
+ * Without this prefix, verification of real Freighter signatures always fails
+ * with a misleading "Invalid signature" 401, which in turn blocks the session
+ * cookie and cascades into 401s on every downstream API route.
+ */
+const SIGN_MESSAGE_PREFIX = "Stellar Signed Message:\n";
 
 /**
  * Verify a Stellar (ed25519) signature produced by Freighter's `signMessage`.
@@ -97,8 +109,19 @@ export function verifyStellarChallenge(input: StellarChallengeInput): boolean {
   const messageBytes = Buffer.from(message, "utf8");
   const signatureBytes = Buffer.from(decodeSignature(signature));
 
+  // Freighter's `signMessage` (extension's `signBlob` → `encodeSep53Message`)
+  // signs sha256( "Stellar Signed Message:\n" + message ), NOT the raw bytes
+  // nor sha256(message). Reconstruct that exact preimage. We also still accept
+  // a raw-bytes signature for backwards compatibility / test keypairs that sign
+  // the message directly.
+  const signedPayload = hash(
+    Buffer.concat([Buffer.from(SIGN_MESSAGE_PREFIX, "utf8"), messageBytes]),
+  );
   try {
-    return keypair.verify(messageBytes, signatureBytes);
+    return (
+      keypair.verify(signedPayload, signatureBytes) ||
+      keypair.verify(messageBytes, signatureBytes)
+    );
   } catch {
     return false;
   }

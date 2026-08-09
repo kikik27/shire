@@ -164,10 +164,10 @@ export function createProfileRouteHandlers(
       );
       const storedProfile = await store.getProfile(user.id, role);
       if (storedProfile === null) {
-        return NextResponse.json(
-          { error: "profile-not-found" },
-          { status: 404 },
-        );
+        // Not-onboarded is a normal state, not an error. Return an empty profile
+        // so the client can render the onboarding/empty form without treating a
+        // missing profile as a 404 failure.
+        return NextResponse.json({ profile: null });
       }
       const parsed = responseSchema.safeParse(storedProfile);
       if (!parsed.success) {

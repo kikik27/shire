@@ -231,7 +231,7 @@ test("PUT atomically resolves the Privy user and saves the role profile", async 
   assert.equal(atomicSaveCalls, 1);
 });
 
-test("GET returns 404 when the requested role has no profile", async () => {
+test("GET returns 200 with a null profile when the user has not onboarded yet", async () => {
   const repository = createInMemoryProfileRepository();
   await repository.resolveUser("did:privy:user-1");
   const handlers = createProfileRouteHandlers("candidate", {
@@ -241,8 +241,10 @@ test("GET returns 404 when the requested role has no profile", async () => {
 
   const response = await handlers.GET(jsonRequest("GET"));
 
-  assert.equal(response.status, 404);
-  assert.deepEqual(await response.json(), { error: "profile-not-found" });
+  // Not-onboarded is a normal state, not an error — return an empty profile so
+  // clients render the onboarding/empty form without treating it as a 404.
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { profile: null });
 });
 
 test("GET validates stored profile payloads before returning them", async () => {

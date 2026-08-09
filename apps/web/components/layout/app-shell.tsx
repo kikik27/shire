@@ -30,10 +30,11 @@ function useAccountLabel(role: AppRole) {
         const token = await accessToken();
         if (role === "candidate") {
           const profile = await getProfile<CandidateProfile>("candidate", token);
-          if (!cancelled) setLabel(profile.displayName);
+          // null = not onboarded yet — fall back to the generic role label.
+          if (!cancelled && profile) setLabel(profile.displayName);
         } else {
           const profile = await getProfile<RecruiterProfile>("recruiter", token);
-          if (!cancelled) setLabel(profile.companyName);
+          if (!cancelled && profile) setLabel(profile.companyName);
         }
       } catch {
         if (!cancelled) setLabel(roleMeta[role].label);

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { getProfile, ProfileNotFoundError } from "@/lib/profile-client";
+import { getProfile } from "@/lib/profile-client";
 import type { RecruiterProfile } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PageHeader } from "@/components/shared/page-header";
@@ -26,13 +26,16 @@ export default function RecruiterProfilePage() {
       try {
         const token = await accessToken();
         const profile = await getProfile<RecruiterProfile>("recruiter", token);
-        if (!cancelled) setInitialProfile(profile);
-      } catch (loadError) {
         if (cancelled) return;
-        if (loadError instanceof ProfileNotFoundError) {
+        // null = not onboarded yet → send to onboarding instead of rendering an
+        // empty edit form outside the guided flow.
+        if (profile === null) {
           router.replace("/onboarding/recruiter");
           return;
         }
+        setInitialProfile(profile);
+      } catch (loadError) {
+        if (cancelled) return;
         setError(
           loadError instanceof Error
             ? loadError.message

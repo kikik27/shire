@@ -1,11 +1,36 @@
 import { NextResponse } from "next/server";
 
 import { verifyStellarChallenge, StellarAuthError } from "@/lib/server/stellar-auth";
-import { createSession, clearSession } from "@/lib/server/session";
+import {
+  createSession,
+  clearSession,
+  readSession as readSessionFromRequest,
+} from "@/lib/server/session";
 import { createDatabase } from "@/lib/server/db";
 import { createDrizzleProfileRepository } from "@/lib/server/profile-repository";
 
 export const runtime = "nodejs";
+
+/**
+ * GET /api/auth/stellar
+ *
+ * Reports whether the current request carries a valid `shire_session` cookie.
+ * Used by the wallet provider on mount to distinguish "wallet is connected"
+ * (Freighter remembers permission) from "session is authenticated" (a valid
+ * server cookie exists). Without this, a refresh restores the wallet address
+ * and lets the user navigate into protected pages whose API calls then 401
+ * because no cookie was ever (re-)issued.
+ */
+export async function GET(request: Request) {
+  const session = await readSessionFromRequest(request);
+  if (!session) {
+    return NextResponse.json(
+      { authenticated: false, address: null },
+      { status: 401 },
+    );
+  }
+  return NextResponse.json({ authenticated: true, address: session.address });
+}
 
 type SignInBody = {
   address?: unknown;
@@ -64,7 +89,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create user." }, { status: 500 });
   }
 
-  await createSession(address);
+  try {
+    await createSession(address);
+  } catch {
+    // createSession signs the JWT with SESSION_SECRET; if it is unset/invalid
+    // (e.g. not configured in production) jose throws here. Surface a clear
+    // 500 instead of crashing the route handler with an opaque error.
+    return NextResponse.json(
+      { error: "Failed to start session." },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true, address });
 }
 

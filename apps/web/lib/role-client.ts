@@ -1,8 +1,4 @@
-import {
-  getProfile,
-  ProfileNotFoundError,
-  type ProfileRole,
-} from "./profile-client";
+import { getProfile, type ProfileRole } from "./profile-client";
 
 export type ActiveRoleState = {
   candidate: boolean;
@@ -11,7 +7,7 @@ export type ActiveRoleState = {
 
 export const switchableRoles = ["candidate", "recruiter"] as const;
 export type SwitchableRole = (typeof switchableRoles)[number];
-export type OnboardingChoice = SwitchableRole | "both";
+type OnboardingChoice = SwitchableRole | "both";
 
 const roleHomes = {
   candidate: "/candidate",
@@ -28,15 +24,10 @@ async function isRoleActive(
   accessToken?: string,
   fetcher: typeof fetch = fetch,
 ) {
-  try {
-    await getProfile(role, accessToken, fetcher);
-    return true;
-  } catch (error) {
-    if (error instanceof ProfileNotFoundError) {
-      return false;
-    }
-    throw error;
-  }
+  // A null profile means the user has not onboarded that role yet — i.e. the
+  // role is inactive. Any auth/server error still propagates from getProfile.
+  const profile = await getProfile(role, accessToken, fetcher);
+  return profile !== null;
 }
 
 export async function getActiveRoleState(

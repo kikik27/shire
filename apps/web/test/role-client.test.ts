@@ -40,7 +40,8 @@ test("candidate profile activates only candidate", async () => {
     if (String(input).endsWith("/candidate")) {
       return jsonResponse(200, { profile: candidateProfile });
     }
-    return jsonResponse(404, { error: "profile-not-found" });
+    // Not-onboarded recruiter is a normal state: 200 with a null profile.
+    return jsonResponse(200, { profile: null });
   };
 
   assert.deepEqual(await getActiveRoleState("token", fetcher), {

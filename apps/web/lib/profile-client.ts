@@ -19,12 +19,6 @@ export class ProfileForbiddenError extends ProfileClientError {
   }
 }
 
-export class ProfileNotFoundError extends ProfileClientError {
-  constructor() {
-    super("Profile not found.");
-  }
-}
-
 export class ProfileServerError extends ProfileClientError {
   constructor() {
     super("Profile service failed.");
@@ -67,10 +61,17 @@ function clearProfileCache(role?: ProfileRole, accessToken?: string) {
   profileCache.clear();
 }
 
-async function readProfileResponse<T>(response: Response): Promise<T> {
+/**
+ * Parse a GET/PUT profile response.
+ *
+ * A profile that has not been created yet is a normal state ("not onboarded"),
+ * not an error: the server returns `200 { profile: null }`, and we resolve to
+ * `null` so callers can render an empty/onboarding form. Only authentication,
+ * server, and malformed-shape failures throw.
+ */
+async function readProfileResponse<T>(response: Response): Promise<T | null> {
   if (response.status === 401) throw new ProfileUnauthorizedError();
   if (response.status === 403) throw new ProfileForbiddenError();
-  if (response.status === 404) throw new ProfileNotFoundError();
   if (response.status >= 500) throw new ProfileServerError();
   if (!response.ok) throw new ProfileClientError("Profile request failed.");
 
@@ -81,24 +82,22 @@ async function readProfileResponse<T>(response: Response): Promise<T> {
     throw new InvalidProfileResponseError();
   }
 
-  if (
-    !body ||
-    typeof body !== "object" ||
-    !("profile" in body) ||
-    body.profile === undefined ||
-    body.profile === null
-  ) {
+  if (!body || typeof body !== "object" || !("profile" in body)) {
     throw new InvalidProfileResponseError();
   }
 
-  return body.profile as T;
+  const profile = (body as { profile: unknown }).profile;
+  if (profile === null) return null;
+  if (profile === undefined) throw new InvalidProfileResponseError();
+
+  return profile as T;
 }
 
 export async function getProfile<T>(
   role: ProfileRole,
   accessToken?: string,
   fetcher: typeof fetch = fetch,
-): Promise<T> {
+): Promise<T | null> {
   if (fetcher !== fetch) {
     const response = await fetcher(profileUrl(role), {
       method: "GET",
@@ -111,7 +110,7 @@ export async function getProfile<T>(
   const key = profileCacheKey(role, accessToken);
   const cached = profileCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.promise as Promise<T>;
+    return cached.promise as Promise<T | null>;
   }
 
   const promise = fetcher(profileUrl(role), {
@@ -150,5 +149,5 @@ export async function saveProfile<TResponse, TPayload = TResponse>(
 
   const saved = await readProfileResponse<TResponse>(response);
   clearProfileCache(role, accessToken);
-  return saved;
+  return saved as TResponse;
 }

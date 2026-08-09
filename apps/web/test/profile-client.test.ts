@@ -5,7 +5,6 @@ import {
   getProfile,
   InvalidProfileResponseError,
   ProfileForbiddenError,
-  ProfileNotFoundError,
   ProfileServerError,
   ProfileUnauthorizedError,
   saveProfile,
@@ -70,14 +69,12 @@ test("saves a role profile with a Privy bearer token", async () => {
   assert.equal(calls[0]?.init?.body, JSON.stringify(candidateProfile));
 });
 
-test("maps 404 to ProfileNotFoundError", async () => {
+test("resolves to null when the profile is not onboarded yet", async () => {
   const fetcher: typeof fetch = async () =>
-    jsonResponse(404, { error: "profile-not-found" });
+    jsonResponse(200, { profile: null });
 
-  await assert.rejects(
-    getProfile("recruiter", "privy-token", fetcher),
-    ProfileNotFoundError,
-  );
+  const profile = await getProfile("recruiter", "privy-token", fetcher);
+  assert.equal(profile, null);
 });
 
 test("maps 401 and 403 to stable typed errors", async () => {

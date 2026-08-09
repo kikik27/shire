@@ -51,7 +51,15 @@ export type StellarWalletState = {
   address: string | null;
   isConnected: boolean;
   connecting: boolean;
-  /** Whether the kit finished initializing on the client. */
+  /**
+   * Whether the server session cookie is valid for this address. Distinct from
+   * isConnected: Freighter remembers site permission across refreshes, so a
+   * wallet can be "connected" while the session has expired/never existed.
+   * Navigation into protected pages must wait on `authenticated`, not
+   * `isConnected`, or their API calls 401.
+   */
+  authenticated: boolean;
+  /** Whether the provider finished its mount-time restore + session check. */
   ready: boolean;
   networkPassphrase: string;
   networkName: string;
@@ -66,14 +74,37 @@ const StellarWalletContext = React.createContext<StellarWalletState | null>(null
 export function StellarWalletProvider({ children }: { children: React.ReactNode }) {
   const [address, setAddress] = React.useState<string | null>(null);
   const [connecting, setConnecting] = React.useState(false);
+  const [authenticated, setAuthenticated] = React.useState(false);
   const [ready, setReady] = React.useState(false);
 
-  // On mount, check whether Freighter already authorised this site and restore
-  // the address. Freighter persists permission, so a refresh keeps the wallet.
+  /**
+   * Ask the server whether the current `shire_session` cookie is valid. Freighter
+   * persists site permission across refreshes, so a wallet can be "connected"
+   * (address known) without a valid session. We must NOT treat a restored
+   * address as authenticated — that would let the user walk into protected pages
+   * whose API calls 401.
+   */
+  const checkSession = React.useCallback(async (addr: string): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/auth/stellar", { method: "GET" });
+      if (!res.ok) return false;
+      const body = (await res.json().catch(() => ({}))) as {
+        authenticated?: unknown;
+        address?: unknown;
+      };
+      return body.authenticated === true && body.address === addr;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // On mount, restore the wallet address if Freighter still permits this site,
+  // then validate the server session. Only authenticated if BOTH hold.
   React.useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      let restoredAddress: string | null = null;
       try {
         const [conn, allowed] = await Promise.all([
           freighterIsConnected(),
@@ -84,25 +115,34 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
         if (conn.isConnected && allowed.isAllowed) {
           const { address: addr, error } = await getAddress();
           if (!cancelled && !error && addr) {
-            setAddress(addr);
+            restoredAddress = addr;
             window.localStorage.setItem(STORAGE_KEY, addr);
           }
         } else {
-          // Fall back to a cached address (will be re-validated on connect).
+          // Fall back to a cached address (will be re-validated below).
           const cached = window.localStorage.getItem(STORAGE_KEY);
-          if (!cancelled && cached) setAddress(cached);
+          if (cached) restoredAddress = cached;
         }
       } catch {
         // Freighter not installed / unavailable — stay disconnected.
-      } finally {
-        if (!cancelled) setReady(true);
       }
+
+      if (cancelled) return;
+
+      if (restoredAddress) {
+        setAddress(restoredAddress);
+        // A connected wallet is NOT enough — confirm the session cookie is
+        // still valid. If it expired/never existed, the user must sign in again.
+        const ok = await checkSession(restoredAddress);
+        if (!cancelled) setAuthenticated(ok);
+      }
+      if (!cancelled) setReady(true);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [checkSession]);
 
   const connect = React.useCallback(async () => {
     setConnecting(true);
@@ -145,6 +185,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
       }
 
       setAddress(addr);
+      setAuthenticated(true);
       window.localStorage.setItem(STORAGE_KEY, addr);
     } finally {
       setConnecting(false);
@@ -154,6 +195,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
   const disconnect = React.useCallback(async () => {
     // Clear the server session (logout) and the cached address.
     setAddress(null);
+    setAuthenticated(false);
     window.localStorage.removeItem(STORAGE_KEY);
     try {
       await fetch("/api/auth/stellar", { method: "DELETE" });
@@ -196,6 +238,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
     () => ({
       address,
       isConnected: Boolean(address),
+      authenticated,
       connecting,
       ready,
       networkPassphrase: NETWORK_PASSPHRASE,
@@ -205,7 +248,16 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
       signMessage,
       signTransaction,
     }),
-    [address, connecting, ready, connect, disconnect, signMessage, signTransaction],
+    [
+      address,
+      authenticated,
+      connecting,
+      ready,
+      connect,
+      disconnect,
+      signMessage,
+      signTransaction,
+    ],
   );
 
   return (

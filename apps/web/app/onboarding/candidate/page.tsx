@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { AlertCircle } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useAccessToken } from "@/lib/auth/use-access-token";
-import { getProfile, ProfileNotFoundError } from "@/lib/profile-client";
+import { getProfile, ProfileUnauthorizedError } from "@/lib/profile-client";
 import type { CandidateProfile } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AuthShell } from "@/components/layout/auth-shell";
@@ -14,6 +14,7 @@ import { CandidateProfileForm } from "@/components/profile/candidate-profile-for
 
 function CandidateOnboardingContent() {
   const accessToken = useAccessToken();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [draft, setDraft] = React.useState<CandidateProfile | null>(null);
   const [initialProfile, setInitialProfile] = React.useState<CandidateProfile | null>(null);
@@ -27,12 +28,15 @@ function CandidateOnboardingContent() {
       setError(null);
       try {
         const token = await accessToken();
+        // null = not onboarded yet → render the empty form. Not an error.
         const profile = await getProfile<CandidateProfile>("candidate", token);
         if (!cancelled) setInitialProfile(profile);
       } catch (loadError) {
         if (cancelled) return;
-        if (loadError instanceof ProfileNotFoundError) {
-          setInitialProfile(null);
+        if (loadError instanceof ProfileUnauthorizedError) {
+          // Session expired/missing — send back to sign-in rather than stranding
+          // the user on a page whose every API call 401s.
+          router.replace("/connect");
           return;
         }
         setError(
@@ -49,7 +53,7 @@ function CandidateOnboardingContent() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, router]);
 
   const redirectTo = searchParams.get("next") === "/onboarding/recruiter"
     ? "/onboarding/recruiter"
